@@ -1,0 +1,106 @@
+package com.ecommerce.service;
+
+import com.ecommerce.dto.request.LoginRequest;
+import com.ecommerce.dto.request.RegisterRequest;
+import com.ecommerce.dto.response.AuthResponse;
+import com.ecommerce.dto.response.UserResponse;
+import com.ecommerce.entity.Role;
+import com.ecommerce.entity.User;
+import com.ecommerce.exception.BadRequestException;
+import com.ecommerce.exception.DuplicateResourceException;
+import com.ecommerce.repository.UserRepository;
+import com.ecommerce.security.JwtTokenProvider;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class AuthService {
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final AuthenticationManager authenticationManager;
+
+    public AuthResponse register(RegisterRequest request) {
+        if (userRepository.existsByEmail(request.email())) {
+            throw new DuplicateResourceException("Email already registered");
+        }
+
+        User user = User.builder()
+                .firstName(request.firstName())
+                .lastName(request.lastName())
+                .email(request.email())
+                .password(passwordEncoder.encode(request.password()))
+                .phone(request.phone())
+                .role(Role.CUSTOMER)
+                .build();
+
+        user = userRepository.save(user);
+
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getEmail());
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());
+
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .user(mapToUserResponse(user))
+                .build();
+    }
+
+    public AuthResponse login(LoginRequest request) {
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.email(), request.password())
+        );
+
+        User user = (User) authentication.getPrincipal();
+        String accessToken = jwtTokenProvider.generateAccessToken(authentication);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());
+
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .user(mapToUserResponse(user))
+                .build();
+    }
+
+    public AuthResponse refreshToken(String refreshToken) {
+        if (!jwtTokenProvider.validateToken(refreshToken)) {
+            throw new BadRequestException("Invalid refresh token");
+        }
+
+        String email = jwtTokenProvider.getEmailFromToken(refreshToken);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new BadRequestException("User not found"));
+
+        String newAccessToken = jwtTokenProvider.generateAccessToken(email);
+        String newRefreshToken = jwtTokenProvider.generateRefreshToken(email);
+
+        return AuthResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(newRefreshToken)
+                .user(mapToUserResponse(user))
+                .build();
+    }
+
+    public UserResponse getCurrentUser(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new BadRequestException("User not found"));
+        return mapToUserResponse(user);
+    }
+
+    private UserResponse mapToUserResponse(User user) {
+        return new UserResponse(
+                user.getId(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getEmail(),
+                user.getPhone(),
+                user.getRole().name()
+        );
+    }
+}
