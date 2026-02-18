@@ -69,10 +69,12 @@ public class ProductService {
                 .active(request.active() == null || request.active())
                 .build();
 
-        if (request.categoryId() != null) {
-            Category category = categoryRepository.findById(request.categoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Category", "id", request.categoryId()));
-            product.setCategory(category);
+        if (request.categoryIds() != null && !request.categoryIds().isEmpty()) {
+            List<Category> categories = categoryRepository.findAllById(request.categoryIds());
+            if (categories.size() != request.categoryIds().size()) {
+                throw new ResourceNotFoundException("One or more categories not found");
+            }
+            product.setCategories(categories);
         }
 
         return mapToResponse(productRepository.save(product));
@@ -93,10 +95,12 @@ public class ProductService {
         if (request.featured() != null) product.setFeatured(request.featured());
         if (request.active() != null) product.setActive(request.active());
 
-        if (request.categoryId() != null) {
-            Category category = categoryRepository.findById(request.categoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Category", "id", request.categoryId()));
-            product.setCategory(category);
+        if (request.categoryIds() != null) {
+            List<Category> categories = categoryRepository.findAllById(request.categoryIds());
+            if (categories.size() != request.categoryIds().size()) {
+                throw new ResourceNotFoundException("One or more categories not found");
+            }
+            product.setCategories(categories);
         }
 
         return mapToResponse(productRepository.save(product));
@@ -118,11 +122,9 @@ public class ProductService {
     }
 
     private ProductResponse mapToResponse(Product product) {
-        CategoryResponse categoryResponse = null;
-        if (product.getCategory() != null) {
-            Category cat = product.getCategory();
-            categoryResponse = new CategoryResponse(cat.getId(), cat.getName(), cat.getDescription(), cat.getImageUrl(), cat.getSlug());
-        }
+        List<CategoryResponse> categoryResponses = product.getCategories().stream()
+                .map(cat -> new CategoryResponse(cat.getId(), cat.getName(), cat.getDescription(), cat.getImageUrl(), cat.getSlug()))
+                .toList();
 
         return new ProductResponse(
                 product.getId(),
@@ -137,7 +139,7 @@ public class ProductService {
                 product.getSlug(),
                 product.isFeatured(),
                 product.isActive(),
-                categoryResponse,
+                categoryResponses,
                 product.getCreatedAt()
         );
     }

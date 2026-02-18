@@ -31,7 +31,7 @@ public class Category {
     @Column(unique = true)
     private String slug;
 
-    @OneToMany(mappedBy = "category", fetch = FetchType.LAZY)
+    @ManyToMany(mappedBy = "categories", fetch = FetchType.LAZY)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @Builder.Default

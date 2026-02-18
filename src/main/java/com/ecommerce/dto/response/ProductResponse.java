@@ -17,6 +17,6 @@ public record ProductResponse(
     String slug,
     boolean featured,
     boolean active,
-    CategoryResponse category,
+    List<CategoryResponse> categories,
     LocalDateTime createdAt
 ) {}

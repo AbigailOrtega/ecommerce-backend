@@ -11,12 +11,14 @@ import com.ecommerce.exception.DuplicateResourceException;
 import com.ecommerce.repository.UserRepository;
 import com.ecommerce.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -27,10 +29,13 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
 
     public AuthResponse register(RegisterRequest request) {
+        log.debug("Checking if email already exists: {}", request.email());
         if (userRepository.existsByEmail(request.email())) {
+            log.warn("Registration failed - email already registered: {}", request.email());
             throw new DuplicateResourceException("Email already registered");
         }
 
+        log.debug("Creating new user with role CUSTOMER");
         User user = User.builder()
                 .firstName(request.firstName())
                 .lastName(request.lastName())
@@ -41,10 +46,13 @@ public class AuthService {
                 .build();
 
         user = userRepository.save(user);
+        log.info("User saved to database with id: {}", user.getId());
 
+        log.debug("Generating JWT tokens for user: {}", user.getEmail());
         String accessToken = jwtTokenProvider.generateAccessToken(user.getEmail());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());
 
+        log.info("Registration completed successfully for user: {}", user.getEmail());
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
@@ -53,14 +61,20 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request) {
+        log.debug("Authenticating user: {}", request.email());
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.email(), request.password())
         );
+        log.debug("Authentication successful for: {}", request.email());
 
         User user = (User) authentication.getPrincipal();
+        log.debug("User retrieved - id: {}, role: {}", user.getId(), user.getRole());
+
+        log.debug("Generating JWT tokens");
         String accessToken = jwtTokenProvider.generateAccessToken(authentication);
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());
 
+        log.info("Login completed successfully for user: {} (role: {})", user.getEmail(), user.getRole());
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)

@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -28,14 +30,18 @@ public class AuthController {
     @PostMapping("/register")
     @Operation(summary = "Register a new user")
     public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
+        log.info("Register request received for email: {}", request.email());
         AuthResponse response = authService.register(request);
+        log.info("Registration successful for email: {}", request.email());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Registration successful", response));
     }
 
     @PostMapping("/login")
     @Operation(summary = "Login with email and password")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
+        log.info("Login request received for email: {}", request.email());
         AuthResponse response = authService.login(request);
+        log.info("Login successful for email: {}", request.email());
         return ResponseEntity.ok(ApiResponse.success("Login successful", response));
     }
 

@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,6 +21,15 @@ import java.util.Map;
 public class PaymentController {
 
     private final PaymentService paymentService;
+
+    @Value("${app.stripe.public-key:}")
+    private String stripePublicKey;
+
+    @GetMapping("/stripe/config")
+    @Operation(summary = "Get Stripe publishable key")
+    public ResponseEntity<ApiResponse<Map<String, String>>> getStripeConfig() {
+        return ResponseEntity.ok(ApiResponse.success(Map.of("publishableKey", stripePublicKey)));
+    }
 
     @PostMapping("/stripe/create-intent")
     @Operation(summary = "Create Stripe payment intent")

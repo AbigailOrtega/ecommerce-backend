@@ -15,7 +15,8 @@ import java.util.Optional;
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpecificationExecutor<Product> {
     Optional<Product> findBySlug(String slug);
-    Page<Product> findByCategoryId(Long categoryId, Pageable pageable);
+    @Query("SELECT p FROM Product p JOIN p.categories c WHERE c.id = :categoryId")
+    Page<Product> findByCategoryId(@Param("categoryId") Long categoryId, Pageable pageable);
     Page<Product> findByActiveTrue(Pageable pageable);
     Page<Product> findByFeaturedTrueAndActiveTrue(Pageable pageable);
 

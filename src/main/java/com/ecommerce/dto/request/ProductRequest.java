@@ -17,7 +17,7 @@ public record ProductRequest(
     @Min(0) Integer stockQuantity,
     String imageUrl,
     List<String> images,
-    Long categoryId,
+    List<Long> categoryIds,
     Boolean featured,
     Boolean active
 ) {}

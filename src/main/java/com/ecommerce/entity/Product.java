@@ -61,10 +61,15 @@ public class Product {
     @Builder.Default
     private boolean active = true;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_id")
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "product_categories",
+            joinColumns = @JoinColumn(name = "product_id"),
+            inverseJoinColumns = @JoinColumn(name = "category_id")
+    )
     @ToString.Exclude
-    private Category category;
+    @Builder.Default
+    private List<Category> categories = new ArrayList<>();
 
     @Column(updatable = false)
     private LocalDateTime createdAt;

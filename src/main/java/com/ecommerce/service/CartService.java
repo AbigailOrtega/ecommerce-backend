@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -107,18 +108,16 @@ public class CartService {
 
     private CartItemResponse mapToResponse(CartItem cartItem) {
         Product product = cartItem.getProduct();
-        CategoryResponse categoryResponse = null;
-        if (product.getCategory() != null) {
-            Category cat = product.getCategory();
-            categoryResponse = new CategoryResponse(cat.getId(), cat.getName(), cat.getDescription(), cat.getImageUrl(), cat.getSlug());
-        }
+        List<CategoryResponse> categoryResponses = product.getCategories().stream()
+                .map(cat -> new CategoryResponse(cat.getId(), cat.getName(), cat.getDescription(), cat.getImageUrl(), cat.getSlug()))
+                .toList();
 
         ProductResponse productResponse = new ProductResponse(
                 product.getId(), product.getName(), product.getDescription(),
                 product.getPrice(), product.getCompareAtPrice(), product.getSku(),
                 product.getStockQuantity(), product.getImageUrl(), product.getImages(),
                 product.getSlug(), product.isFeatured(), product.isActive(),
-                categoryResponse, product.getCreatedAt()
+                categoryResponses, product.getCreatedAt()
         );
 
         BigDecimal subtotal = product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));

@@ -18,6 +18,7 @@ import java.util.Optional;
 public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByUserIdOrderByCreatedAtDesc(Long userId);
     Optional<Order> findByOrderNumber(String orderNumber);
+    Optional<Order> findByPaymentId(String paymentId);
     Page<Order> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     @Query("SELECT COUNT(o) FROM Order o WHERE o.status = :status")
