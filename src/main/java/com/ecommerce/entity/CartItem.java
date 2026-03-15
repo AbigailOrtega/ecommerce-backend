@@ -29,6 +29,10 @@ public class CartItem {
     @Column(nullable = false)
     private Integer quantity;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "selected_size_id")
+    private ProductSize selectedSize;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 

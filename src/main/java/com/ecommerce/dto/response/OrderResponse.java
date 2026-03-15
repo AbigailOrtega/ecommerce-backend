@@ -21,6 +21,10 @@ public class OrderResponse {
     private UserResponse user;
     private List<OrderItemResponse> items;
     private BigDecimal totalAmount;
+    private BigDecimal discountAmount;
+    private String couponCode;
+    private BigDecimal shippingCost;
+    private String shippingMethodName;
     private String status;
     private String paymentMethod;
     private String paymentId;
@@ -32,4 +36,13 @@ public class OrderResponse {
     private String notes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String shippingType;
+    private String pickupLocationName;
+    private String pickupTimeSlotLabel;
+    private String skydropxRateId;
+    private String skydropxShipmentId;
+    private String trackingNumber;
+    private String carrierName;
+    private String labelUrl;
+    private String shipmentStatus;
 }

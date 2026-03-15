@@ -2,6 +2,8 @@ package com.ecommerce.service;
 
 import com.ecommerce.dto.request.LoginRequest;
 import com.ecommerce.dto.request.RegisterRequest;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import com.ecommerce.dto.response.AuthResponse;
 import com.ecommerce.dto.response.UserResponse;
 import com.ecommerce.entity.Role;
@@ -27,6 +29,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthenticationManager authenticationManager;
+    private final EmailService emailService;
 
     public AuthResponse register(RegisterRequest request) {
         log.debug("Checking if email already exists: {}", request.email());
@@ -47,6 +50,8 @@ public class AuthService {
 
         user = userRepository.save(user);
         log.info("User saved to database with id: {}", user.getId());
+
+        emailService.sendWelcomeEmail(user);
 
         log.debug("Generating JWT tokens for user: {}", user.getEmail());
         String accessToken = jwtTokenProvider.generateAccessToken(user.getEmail());
@@ -105,6 +110,28 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new BadRequestException("User not found"));
         return mapToUserResponse(user);
+    }
+
+    public void forgotPassword(String email) {
+        userRepository.findByEmail(email).ifPresent(user -> {
+            String token = UUID.randomUUID().toString();
+            user.setResetToken(token);
+            user.setResetTokenExpiry(LocalDateTime.now().plusMinutes(30));
+            userRepository.save(user);
+            emailService.sendPasswordResetEmail(user.getEmail(), user.getFirstName(), token);
+        });
+    }
+
+    public void resetPassword(String token, String newPassword) {
+        User user = userRepository.findByResetToken(token)
+                .orElseThrow(() -> new BadRequestException("Invalid or expired token"));
+        if (!user.getResetTokenExpiry().isAfter(LocalDateTime.now())) {
+            throw new BadRequestException("Invalid or expired token");
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setResetToken(null);
+        user.setResetTokenExpiry(null);
+        userRepository.save(user);
     }
 
     private UserResponse mapToUserResponse(User user) {

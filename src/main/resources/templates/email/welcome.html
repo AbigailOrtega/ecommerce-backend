@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>¡Bienvenido!</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f4f4f4; color: #333; }
+        .wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header { background-color: #1a1a2e; padding: 36px 40px; text-align: center; }
+        .header h1 { color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+        .header p { color: #a0a0b0; font-size: 13px; margin-top: 4px; }
+        .body { padding: 40px; }
+        .greeting { font-size: 22px; font-weight: 600; color: #1a1a2e; margin-bottom: 16px; }
+        .text { font-size: 15px; line-height: 1.7; color: #555; margin-bottom: 20px; }
+        .highlight-box { background: #f0f4ff; border-left: 4px solid #4361ee; border-radius: 4px; padding: 16px 20px; margin: 24px 0; }
+        .highlight-box p { font-size: 14px; color: #4361ee; font-weight: 500; }
+        .btn { display: inline-block; margin: 8px 0; padding: 14px 32px; background-color: #4361ee; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 15px; font-weight: 600; letter-spacing: 0.3px; }
+        .btn:hover { background-color: #3451d1; }
+        .divider { border: none; border-top: 1px solid #eeeeee; margin: 32px 0; }
+        .features { display: table; width: 100%; margin: 24px 0; }
+        .feature { display: table-cell; text-align: center; padding: 0 12px; vertical-align: top; }
+        .feature-icon { font-size: 28px; margin-bottom: 10px; }
+        .feature-title { font-size: 13px; font-weight: 600; color: #1a1a2e; margin-bottom: 4px; }
+        .feature-desc { font-size: 12px; color: #888; }
+        .footer { background-color: #f8f8f8; padding: 24px 40px; text-align: center; border-top: 1px solid #eeeeee; }
+        .footer p { font-size: 12px; color: #999; line-height: 1.6; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="header">
+        <h1>E-Commerce Store</h1>
+        <p>Tu tienda favorita en línea</p>
+    </div>
+    <div class="body">
+        <p class="greeting">¡Hola, <span th:text="${firstName}">Usuario</span>!</p>
+        <p class="text">
+            Nos alegra tenerte con nosotros. Tu cuenta ha sido creada exitosamente y ya puedes
+            comenzar a explorar nuestra colección de productos.
+        </p>
+
+        <div class="highlight-box">
+            <p>&#10003; Tu cuenta está registrada con: <strong th:text="${email}">email@example.com</strong></p>
+        </div>
+
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">&#128722;</div>
+                <div class="feature-title">Compra fácil</div>
+                <div class="feature-desc">Proceso de pago rápido y seguro</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">&#128666;</div>
+                <div class="feature-title">Envío rápido</div>
+                <div class="feature-desc">Seguimiento en tiempo real</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">&#128274;</div>
+                <div class="feature-title">Pago seguro</div>
+                <div class="feature-desc">Stripe y PayPal protegidos</div>
+            </div>
+        </div>
+
+        <hr class="divider">
+
+        <p class="text">¿Listo para empezar a explorar?</p>
+        <a href="#" class="btn">Ver productos</a>
+    </div>
+    <div class="footer">
+        <p>Si no creaste esta cuenta, puedes ignorar este correo.</p>
+        <p style="margin-top:8px;">© 2025 E-Commerce Store. Todos los derechos reservados.</p>
+    </div>
+</div>
+</body>
+</html>

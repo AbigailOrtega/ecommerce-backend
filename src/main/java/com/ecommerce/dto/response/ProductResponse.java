@@ -18,5 +18,9 @@ public record ProductResponse(
     boolean featured,
     boolean active,
     List<CategoryResponse> categories,
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    List<ProductColorResponse> colors,
+    BigDecimal discountedPrice,
+    BigDecimal activePromotionDiscount,
+    String activePromotionName
 ) {}

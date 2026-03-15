@@ -2,19 +2,26 @@ package com.ecommerce.service;
 
 import com.ecommerce.dto.request.ProductRequest;
 import com.ecommerce.dto.response.CategoryResponse;
+import com.ecommerce.dto.response.ProductColorResponse;
 import com.ecommerce.dto.response.ProductResponse;
-import com.ecommerce.entity.Category;
-import com.ecommerce.entity.Product;
+import com.ecommerce.dto.response.ProductSizeResponse;
+import com.ecommerce.entity.*;
 import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.repository.CategoryRepository;
 import com.ecommerce.repository.ProductRepository;
+import com.ecommerce.repository.PromotionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +29,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final PromotionRepository promotionRepository;
 
     public Page<ProductResponse> getAllProducts(Pageable pageable) {
         return productRepository.findByActiveTrue(pageable).map(this::mapToResponse);
@@ -77,7 +85,9 @@ public class ProductService {
             product.setCategories(categories);
         }
 
-        return mapToResponse(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        applyColors(saved, request);
+        return mapToResponse(productRepository.save(saved));
     }
 
     @Transactional
@@ -103,17 +113,47 @@ public class ProductService {
             product.setCategories(categories);
         }
 
+        applyColors(product, request);
         return mapToResponse(productRepository.save(product));
     }
 
     @Transactional
     public void deleteProduct(Long id) {
-        Product product = findProductById(id);
-        productRepository.delete(product);
+        productRepository.delete(findProductById(id));
     }
 
     public Page<ProductResponse> getAllProductsAdmin(Pageable pageable) {
         return productRepository.findAll(pageable).map(this::mapToResponse);
+    }
+
+    private void applyColors(Product product, ProductRequest request) {
+        if (request.colors() == null) return;
+        product.getColors().clear();
+        for (var cr : request.colors()) {
+            if (cr.name() == null || cr.name().isBlank()) continue;
+            ProductColor color = ProductColor.builder()
+                    .product(product)
+                    .name(cr.name())
+                    .images(cr.images() != null ? new ArrayList<>(cr.images()) : new ArrayList<>())
+                    .build();
+            if (cr.sizes() != null) {
+                for (var sr : cr.sizes()) {
+                    if (sr.name() == null || sr.name().isBlank()) continue;
+                    color.getSizes().add(ProductSize.builder()
+                            .color(color)
+                            .name(sr.name())
+                            .stock(sr.stock() != null ? sr.stock() : 0)
+                            .build());
+                }
+            }
+            product.getColors().add(color);
+        }
+        // Set product imageUrl to first color's first image if not set
+        if ((product.getImageUrl() == null || product.getImageUrl().isBlank())
+                && !product.getColors().isEmpty()
+                && !product.getColors().get(0).getImages().isEmpty()) {
+            product.setImageUrl(product.getColors().get(0).getImages().get(0));
+        }
     }
 
     private Product findProductById(Long id) {
@@ -125,6 +165,25 @@ public class ProductService {
         List<CategoryResponse> categoryResponses = product.getCategories().stream()
                 .map(cat -> new CategoryResponse(cat.getId(), cat.getName(), cat.getDescription(), cat.getImageUrl(), cat.getSlug()))
                 .toList();
+
+        List<ProductColorResponse> colorResponses = product.getColors().stream()
+                .map(c -> new ProductColorResponse(
+                        c.getId(),
+                        c.getName(),
+                        c.getImages(),
+                        c.getSizes().stream()
+                                .map(s -> new ProductSizeResponse(s.getId(), s.getName(), s.getStock()))
+                                .toList()
+                ))
+                .toList();
+
+        Optional<Promotion> promo = promotionRepository
+                .findBestActivePromotion(product.getId(), LocalDate.now());
+        BigDecimal discountedPrice = promo.map(p ->
+                product.getPrice().multiply(BigDecimal.ONE
+                        .subtract(p.getDiscountPercent().divide(BigDecimal.valueOf(100))))
+                        .setScale(2, RoundingMode.HALF_UP)
+        ).orElse(null);
 
         return new ProductResponse(
                 product.getId(),
@@ -140,7 +199,11 @@ public class ProductService {
                 product.isFeatured(),
                 product.isActive(),
                 categoryResponses,
-                product.getCreatedAt()
+                product.getCreatedAt(),
+                colorResponses,
+                discountedPrice,
+                promo.map(Promotion::getDiscountPercent).orElse(null),
+                promo.map(Promotion::getName).orElse(null)
         );
     }
 }

@@ -61,6 +61,31 @@ public class Order {
 
     private String notes;
 
+    private String couponCode;
+
+    @Builder.Default
+    @Column(precision = 10, scale = 2)
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(precision = 10, scale = 2)
+    private BigDecimal shippingCost = BigDecimal.ZERO;
+
+    private String shippingMethodName;
+
+    private String shippingType;           // "NATIONAL" or "PICKUP"
+    private String pickupLocationName;     // e.g. "Sucursal Centro, Reforma 42"
+    private String pickupTimeSlotLabel;    // e.g. "Lunes 10:00 – 14:00"
+
+    // ── Skydropx ─────────────────────────────────────────────────────────────
+    private String skydropxRateId;         // rate chosen by customer at checkout
+    private String skydropxShipmentId;
+    private String trackingNumber;
+    private String carrierName;
+    @Column(length = 1024)
+    private String labelUrl;
+    private String shipmentStatus;        // e.g. "pending", "in_transit", "delivered"
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 

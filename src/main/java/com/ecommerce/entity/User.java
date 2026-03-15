@@ -61,6 +61,9 @@ public class User implements UserDetails {
 
     private LocalDateTime updatedAt;
 
+    private String resetToken;
+    private LocalDateTime resetTokenExpiry;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

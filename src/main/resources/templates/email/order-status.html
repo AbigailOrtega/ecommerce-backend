@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Actualización de Pedido</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f4f4f4; color: #333; }
+        .wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header { background-color: #1a1a2e; padding: 36px 40px; text-align: center; }
+        .header h1 { color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+        .header p { color: #a0a0b0; font-size: 13px; margin-top: 4px; }
+        .body { padding: 40px; }
+        .greeting { font-size: 20px; font-weight: 600; color: #1a1a2e; margin-bottom: 12px; }
+        .text { font-size: 15px; line-height: 1.7; color: #555; margin-bottom: 24px; }
+        .status-card { border-radius: 8px; padding: 24px; text-align: center; margin-bottom: 32px; }
+        .status-card.PENDING    { background: #fff3e0; }
+        .status-card.CONFIRMED  { background: #e3f2fd; }
+        .status-card.PROCESSING { background: #f3e5f5; }
+        .status-card.SHIPPED    { background: #e8f5e9; }
+        .status-card.DELIVERED  { background: #e8f5e9; }
+        .status-card.CANCELLED  { background: #fce4ec; }
+        .status-card.REFUNDED   { background: #fce4ec; }
+        .status-icon { font-size: 40px; margin-bottom: 12px; }
+        .status-title { font-size: 22px; font-weight: 700; }
+        .status-card.PENDING    .status-title { color: #e65100; }
+        .status-card.CONFIRMED  .status-title { color: #1565c0; }
+        .status-card.PROCESSING .status-title { color: #6a1b9a; }
+        .status-card.SHIPPED    .status-title { color: #2e7d32; }
+        .status-card.DELIVERED  .status-title { color: #1b5e20; }
+        .status-card.CANCELLED  .status-title { color: #b71c1c; }
+        .status-card.REFUNDED   .status-title { color: #880e4f; }
+        .status-subtitle { font-size: 13px; color: #888; margin-top: 4px; }
+        .section-title { font-size: 13px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+        .info-grid { display: table; width: 100%; margin-bottom: 20px; }
+        .info-cell { display: table-cell; width: 50%; vertical-align: top; padding-right: 16px; }
+        .info-label { font-size: 12px; color: #999; margin-bottom: 2px; }
+        .info-value { font-size: 14px; font-weight: 600; color: #1a1a2e; }
+        .items-summary { background: #f8f8f8; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; }
+        .item-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px solid #eeeeee; }
+        .item-row:last-child { border-bottom: none; }
+        .item-row.total { font-weight: 700; color: #1a1a2e; padding-top: 10px; font-size: 15px; }
+        .timeline { margin: 24px 0; }
+        .timeline-step { display: flex; align-items: center; margin-bottom: 16px; }
+        .timeline-dot { width: 12px; height: 12px; border-radius: 50%; background: #e0e0e0; margin-right: 14px; flex-shrink: 0; }
+        .timeline-dot.done { background: #4361ee; }
+        .timeline-label { font-size: 13px; color: #aaa; }
+        .timeline-label.done { color: #333; font-weight: 500; }
+        .divider { border: none; border-top: 1px solid #eeeeee; margin: 28px 0; }
+        .footer { background-color: #f8f8f8; padding: 24px 40px; text-align: center; border-top: 1px solid #eeeeee; }
+        .footer p { font-size: 12px; color: #999; line-height: 1.6; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="header">
+        <h1>E-Commerce Store</h1>
+        <p>Actualización de tu pedido</p>
+    </div>
+    <div class="body">
+        <p class="greeting">Hola, <span th:text="${firstName}">Usuario</span></p>
+        <p class="text">Tu pedido <strong th:text="'#' + ${order.orderNumber}">#ORD-00000000</strong> ha cambiado de estado.</p>
+
+        <!-- Status Card -->
+        <div class="status-card" th:classappend="${order.status}">
+            <div class="status-icon">
+                <th:block th:switch="${order.status}">
+                    <span th:case="'PENDING'">&#9200;</span>
+                    <span th:case="'CONFIRMED'">&#10003;</span>
+                    <span th:case="'PROCESSING'">&#9881;</span>
+                    <span th:case="'SHIPPED'">&#128666;</span>
+                    <span th:case="'DELIVERED'">&#127873;</span>
+                    <span th:case="'CANCELLED'">&#10005;</span>
+                    <span th:case="'REFUNDED'">&#8629;</span>
+                    <span th:case="*">&#8226;</span>
+                </th:block>
+            </div>
+            <p class="status-title" th:text="${statusLabel}">Estado</p>
+            <p class="status-subtitle" th:text="${#temporals.format(order.updatedAt, 'dd/MM/yyyy HH:mm')}">Fecha</p>
+        </div>
+
+        <!-- Timeline -->
+        <p class="section-title">Progreso del pedido</p>
+        <div class="timeline">
+            <div class="timeline-step">
+                <div class="timeline-dot done"></div>
+                <span class="timeline-label done">Pedido recibido</span>
+            </div>
+            <div class="timeline-step">
+                <div class="timeline-dot" th:classappend="${order.status == 'CONFIRMED' or order.status == 'PROCESSING' or order.status == 'SHIPPED' or order.status == 'DELIVERED'} ? 'done' : ''"></div>
+                <span class="timeline-label" th:classappend="${order.status == 'CONFIRMED' or order.status == 'PROCESSING' or order.status == 'SHIPPED' or order.status == 'DELIVERED'} ? 'done' : ''">Confirmado</span>
+            </div>
+            <div class="timeline-step">
+                <div class="timeline-dot" th:classappend="${order.status == 'PROCESSING' or order.status == 'SHIPPED' or order.status == 'DELIVERED'} ? 'done' : ''"></div>
+                <span class="timeline-label" th:classappend="${order.status == 'PROCESSING' or order.status == 'SHIPPED' or order.status == 'DELIVERED'} ? 'done' : ''">En proceso</span>
+            </div>
+            <div class="timeline-step">
+                <div class="timeline-dot" th:classappend="${order.status == 'SHIPPED' or order.status == 'DELIVERED'} ? 'done' : ''"></div>
+                <span class="timeline-label" th:classappend="${order.status == 'SHIPPED' or order.status == 'DELIVERED'} ? 'done' : ''">Enviado</span>
+            </div>
+            <div class="timeline-step">
+                <div class="timeline-dot" th:classappend="${order.status == 'DELIVERED'} ? 'done' : ''"></div>
+                <span class="timeline-label" th:classappend="${order.status == 'DELIVERED'} ? 'done' : ''">Entregado</span>
+            </div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- Order Summary -->
+        <p class="section-title">Resumen del pedido</p>
+        <div class="items-summary">
+            <div class="item-row" th:each="item : ${order.items}">
+                <span>
+                    <span th:text="${item.productName}">Producto</span>
+                    <span style="color:#aaa;" th:text="' x' + ${item.quantity}"></span>
+                </span>
+                <span th:text="'$' + ${#numbers.formatDecimal(item.subtotal, 1, 2)}">$0.00</span>
+            </div>
+            <!-- Subtotal (show when discount or shipping exists) -->
+            <div class="item-row" th:if="${(order.discountAmount != null and order.discountAmount > 0) or (order.shippingCost != null and order.shippingCost > 0)}"
+                 style="color:#555;font-size:13px;">
+                <span>Subtotal</span>
+                <span th:text="'$' + ${#numbers.formatDecimal(order.totalAmount + (order.discountAmount != null ? order.discountAmount : 0) - (order.shippingCost != null ? order.shippingCost : 0), 1, 2)}">$0.00</span>
+            </div>
+            <!-- Coupon discount -->
+            <div class="item-row" th:if="${order.discountAmount != null and order.discountAmount > 0}"
+                 style="color:#2e7d32;font-size:13px;">
+                <span>
+                    Descuento
+                    <span th:if="${order.couponCode != null}"
+                          style="background:#e8f5e9;font-size:11px;padding:1px 6px;border-radius:8px;font-weight:700;margin-left:4px;"
+                          th:text="${order.couponCode}"></span>
+                </span>
+                <span th:text="'-$' + ${#numbers.formatDecimal(order.discountAmount, 1, 2)}">-$0.00</span>
+            </div>
+            <!-- Shipping cost -->
+            <div class="item-row" th:if="${order.shippingCost != null and order.shippingCost > 0}"
+                 style="color:#555;font-size:13px;">
+                <span>
+                    Envío
+                    <span th:if="${order.shippingMethodName != null}"
+                          style="background:#f0f0f0;font-size:11px;padding:1px 6px;border-radius:8px;margin-left:4px;"
+                          th:text="${order.shippingMethodName}"></span>
+                </span>
+                <span th:text="'+$' + ${#numbers.formatDecimal(order.shippingCost, 1, 2)}">+$0.00</span>
+            </div>
+            <div class="item-row total">
+                <span>Total</span>
+                <span th:text="'$' + ${#numbers.formatDecimal(order.totalAmount, 1, 2)}">$0.00</span>
+            </div>
+        </div>
+
+        <!-- Shipping / Pickup -->
+        <th:block th:if="${order.shippingType == 'PICKUP'}">
+            <p class="section-title">Punto de retiro</p>
+            <div class="info-grid">
+                <div class="info-cell">
+                    <p class="info-label">Ubicación</p>
+                    <p class="info-value" th:text="${order.pickupLocationName}">-</p>
+                </div>
+                <div class="info-cell">
+                    <p class="info-label">Horario</p>
+                    <p class="info-value" th:text="${order.pickupTimeSlotLabel}">-</p>
+                </div>
+            </div>
+        </th:block>
+        <th:block th:unless="${order.shippingType == 'PICKUP'}">
+            <p class="section-title">Envío a</p>
+            <div class="info-grid">
+                <div class="info-cell">
+                    <p class="info-label">Dirección</p>
+                    <p class="info-value" th:text="${order.shippingAddress}">-</p>
+                </div>
+                <div class="info-cell">
+                    <p class="info-label">Ciudad</p>
+                    <p class="info-value" th:text="${order.shippingCity + ', ' + order.shippingState}">-</p>
+                </div>
+            </div>
+        </th:block>
+    </div>
+    <div class="footer">
+        <p>¿Tienes alguna pregunta sobre tu pedido? Contáctanos respondiendo este correo.</p>
+        <p style="margin-top:8px;">© 2025 E-Commerce Store. Todos los derechos reservados.</p>
+    </div>
+</div>
+</body>
+</html>

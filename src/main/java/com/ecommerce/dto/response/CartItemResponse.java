@@ -6,5 +6,7 @@ public record CartItemResponse(
     Long id,
     ProductResponse product,
     Integer quantity,
-    BigDecimal subtotal
+    BigDecimal subtotal,
+    String selectedColorName,
+    String selectedSizeName
 ) {}

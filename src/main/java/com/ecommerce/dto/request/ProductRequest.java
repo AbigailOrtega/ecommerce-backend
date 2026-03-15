@@ -19,5 +19,6 @@ public record ProductRequest(
     List<String> images,
     List<Long> categoryIds,
     Boolean featured,
-    Boolean active
+    Boolean active,
+    List<ProductColorRequest> colors
 ) {}

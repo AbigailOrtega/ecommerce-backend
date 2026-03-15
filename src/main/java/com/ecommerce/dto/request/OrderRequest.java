@@ -3,12 +3,17 @@ package com.ecommerce.dto.request;
 import jakarta.validation.constraints.NotBlank;
 
 public record OrderRequest(
-    @NotBlank String shippingAddress,
-    @NotBlank String shippingCity,
-    @NotBlank String shippingState,
-    @NotBlank String shippingZipCode,
-    @NotBlank String shippingCountry,
+    String shippingAddress,
+    String shippingCity,
+    String shippingState,
+    String shippingZipCode,
+    String shippingCountry,
     @NotBlank String paymentMethod,
     String paymentId,
-    String notes
+    String notes,
+    String couponCode,
+    @NotBlank String shippingType,   // "NATIONAL" or "PICKUP"
+    Long pickupLocationId,           // required when PICKUP
+    Long pickupTimeSlotId,           // required when PICKUP
+    String skydropxRateId            // optional – Skydropx rate selected by customer
 ) {}

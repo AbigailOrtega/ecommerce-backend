@@ -41,6 +41,12 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @GetMapping("/paypal/config")
+    @Operation(summary = "Get PayPal client ID")
+    public ResponseEntity<ApiResponse<Map<String, String>>> getPayPalConfig() {
+        return ResponseEntity.ok(ApiResponse.success(Map.of("clientId", paymentService.getPayPalClientId())));
+    }
+
     @PostMapping("/paypal/create-order")
     @Operation(summary = "Create PayPal order")
     public ResponseEntity<ApiResponse<Map<String, Object>>> createPayPalOrder(
@@ -48,5 +54,22 @@ public class PaymentController {
         BigDecimal amount = new BigDecimal(request.get("amount").toString());
         Map<String, Object> response = paymentService.createPayPalOrder(amount);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/paypal/capture-order")
+    @Operation(summary = "Capture PayPal order")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> capturePayPalOrder(
+            @RequestBody Map<String, Object> request) {
+        String orderId = request.get("orderId").toString();
+        Map<String, Object> response = paymentService.capturePayPalOrder(orderId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/paypal/confirm-payment")
+    @Operation(summary = "Confirm order after successful PayPal capture")
+    public ResponseEntity<ApiResponse<Void>> confirmPayPalPayment(
+            @RequestBody Map<String, String> request) {
+        paymentService.confirmPayPalPayment(request.get("orderNumber"), request.get("captureId"));
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

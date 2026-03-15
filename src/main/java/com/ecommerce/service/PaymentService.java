@@ -4,9 +4,15 @@ import com.ecommerce.entity.Order;
 import com.ecommerce.entity.OrderItem;
 import com.ecommerce.entity.OrderStatus;
 import com.ecommerce.entity.Product;
+import com.ecommerce.entity.ProductSize;
 import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.ProductRepository;
+import com.ecommerce.repository.ProductSizeRepository;
+import com.paypal.core.PayPalEnvironment;
+import com.paypal.core.PayPalHttpClient;
+import com.paypal.http.HttpResponse;
+import com.paypal.orders.*;
 import com.stripe.Stripe;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
@@ -21,10 +27,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +38,7 @@ public class PaymentService {
 
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
+    private final ProductSizeRepository productSizeRepository;
 
     @Value("${app.stripe.secret-key:}")
     private String stripeSecretKey;
@@ -40,11 +46,38 @@ public class PaymentService {
     @Value("${app.stripe.webhook-secret:}")
     private String webhookSecret;
 
+    @Value("${app.paypal.client-id:}")
+    private String paypalClientId;
+
+    @Value("${app.paypal.client-secret:}")
+    private String paypalClientSecret;
+
+    @Value("${app.paypal.mode:sandbox}")
+    private String paypalMode;
+
+    private PayPalHttpClient paypalClient;
+
     @PostConstruct
     public void init() {
         if (stripeSecretKey != null && !stripeSecretKey.isBlank()) {
             Stripe.apiKey = stripeSecretKey;
         }
+        if (paypalClientId != null && !paypalClientId.isBlank()
+                && paypalClientSecret != null && !paypalClientSecret.isBlank()) {
+            PayPalEnvironment environment = "live".equalsIgnoreCase(paypalMode)
+                    ? new PayPalEnvironment.Live(paypalClientId, paypalClientSecret)
+                    : new PayPalEnvironment.Sandbox(paypalClientId, paypalClientSecret);
+            paypalClient = new PayPalHttpClient(environment);
+            log.info("PayPal client initialized in {} mode", paypalMode);
+        }
+    }
+
+    public boolean isPayPalConfigured() {
+        return paypalClient != null;
+    }
+
+    public String getPayPalClientId() {
+        return paypalClientId;
     }
 
     public boolean isStripeConfigured() {
@@ -116,8 +149,14 @@ public class PaymentService {
         for (OrderItem item : order.getItems()) {
             if (item.getProduct() != null) {
                 Product product = item.getProduct();
-                product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                productRepository.save(product);
+                if (product.getColors().isEmpty()) {
+                    product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
+                    productRepository.save(product);
+                } else if (item.getSelectedSize() != null) {
+                    ProductSize size = item.getSelectedSize();
+                    size.setStock(size.getStock() + item.getQuantity());
+                    productSizeRepository.save(size);
+                }
             }
         }
         orderRepository.save(order);
@@ -140,20 +179,94 @@ public class PaymentService {
         for (OrderItem item : order.getItems()) {
             if (item.getProduct() != null) {
                 Product product = item.getProduct();
-                product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                productRepository.save(product);
+                if (product.getColors().isEmpty()) {
+                    product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
+                    productRepository.save(product);
+                } else if (item.getSelectedSize() != null) {
+                    ProductSize size = item.getSelectedSize();
+                    size.setStock(size.getStock() + item.getQuantity());
+                    productSizeRepository.save(size);
+                }
             }
         }
         orderRepository.save(order);
         log.info("Order {} refunded via webhook, stock restored", order.getOrderNumber());
     }
 
+    @Transactional
+    public void confirmPayPalPayment(String orderNumber, String captureId) {
+        Order order = orderRepository.findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new RuntimeException("Order not found: " + orderNumber));
+        if (order.getStatus() == OrderStatus.CONFIRMED) {
+            log.info("Order {} already confirmed", orderNumber);
+            return;
+        }
+        order.setPaymentId(captureId);
+        order.setStatus(OrderStatus.CONFIRMED);
+        orderRepository.save(order);
+        log.info("Order {} confirmed via PayPal capture: {}", orderNumber, captureId);
+    }
+
     public Map<String, Object> createPayPalOrder(BigDecimal amount) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("orderId", "PAYPAL-" + System.currentTimeMillis());
-        response.put("amount", amount);
-        response.put("status", "CREATED");
-        log.info("PayPal order created for amount: {}", amount);
-        return response;
+        if (!isPayPalConfigured()) {
+            throw new BadRequestException("PayPal is not configured. Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET.");
+        }
+
+        OrdersCreateRequest request = new OrdersCreateRequest();
+        request.prefer("return=representation");
+        request.requestBody(new OrderRequest()
+                .checkoutPaymentIntent("CAPTURE")
+                .purchaseUnits(List.of(
+                        new PurchaseUnitRequest()
+                                .amountWithBreakdown(new AmountWithBreakdown()
+                                        .currencyCode("USD")
+                                        .value(amount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()))
+                )));
+
+        try {
+            HttpResponse<com.paypal.orders.Order> response = paypalClient.execute(request);
+            com.paypal.orders.Order order = response.result();
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("orderId", order.id());
+            result.put("status", order.status());
+            log.info("PayPal order created: {}", order.id());
+            return result;
+        } catch (IOException e) {
+            log.error("PayPal create order error: {}", e.getMessage());
+            throw new RuntimeException("Failed to create PayPal order: " + e.getMessage());
+        }
+    }
+
+    public Map<String, Object> capturePayPalOrder(String orderId) {
+        if (!isPayPalConfigured()) {
+            throw new BadRequestException("PayPal is not configured.");
+        }
+
+        OrdersCaptureRequest request = new OrdersCaptureRequest(orderId);
+        request.prefer("return=representation");
+
+        try {
+            HttpResponse<com.paypal.orders.Order> response = paypalClient.execute(request);
+            com.paypal.orders.Order order = response.result();
+
+            String captureId = null;
+            if (order.purchaseUnits() != null && !order.purchaseUnits().isEmpty()) {
+                var captures = order.purchaseUnits().get(0).payments().captures();
+                if (captures != null && !captures.isEmpty()) {
+                    captureId = captures.get(0).id();
+                }
+            }
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("orderId", order.id());
+            result.put("status", order.status());
+            result.put("captureId", captureId);
+            log.info("PayPal order captured: {} status: {}", order.id(), order.status());
+            return result;
+        } catch (IOException e) {
+            log.error("PayPal capture order error: {}", e.getMessage());
+            throw new RuntimeException("Failed to capture PayPal order: " + e.getMessage());
+        }
     }
 }

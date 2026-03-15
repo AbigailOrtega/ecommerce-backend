@@ -8,5 +8,7 @@ public record OrderItemResponse(
     String productName,
     BigDecimal productPrice,
     Integer quantity,
-    BigDecimal subtotal
+    BigDecimal subtotal,
+    String selectedColorName,
+    String selectedSizeName
 ) {}

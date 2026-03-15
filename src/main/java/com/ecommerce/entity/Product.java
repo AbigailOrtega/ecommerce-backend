@@ -61,6 +61,10 @@ public class Product {
     @Builder.Default
     private boolean active = true;
 
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<ProductColor> colors = new ArrayList<>();
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "product_categories",

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmación de Pedido</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f4f4f4; color: #333; }
+        .wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header { background-color: #1a1a2e; padding: 36px 40px; text-align: center; }
+        .header h1 { color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+        .header p { color: #a0a0b0; font-size: 13px; margin-top: 4px; }
+        .body { padding: 40px; }
+        .greeting { font-size: 20px; font-weight: 600; color: #1a1a2e; margin-bottom: 12px; }
+        .text { font-size: 15px; line-height: 1.7; color: #555; margin-bottom: 20px; }
+        .order-badge { display: inline-block; background: #e8f5e9; color: #2e7d32; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-bottom: 24px; }
+        .section-title { font-size: 13px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+        .info-grid { display: table; width: 100%; margin-bottom: 28px; }
+        .info-cell { display: table-cell; width: 50%; vertical-align: top; padding-right: 16px; }
+        .info-label { font-size: 12px; color: #999; margin-bottom: 2px; }
+        .info-value { font-size: 14px; font-weight: 600; color: #1a1a2e; }
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+        .items-table th { font-size: 12px; color: #999; text-transform: uppercase; padding: 8px 0; border-bottom: 2px solid #eeeeee; text-align: left; }
+        .items-table td { padding: 14px 0; border-bottom: 1px solid #f5f5f5; font-size: 14px; vertical-align: top; }
+        .item-name { font-weight: 600; color: #1a1a2e; }
+        .item-variant { font-size: 12px; color: #888; margin-top: 2px; }
+        .item-qty { color: #555; }
+        .item-price { font-weight: 600; color: #1a1a2e; text-align: right; }
+        .total-row { padding: 16px 0 0; }
+        .total-label { font-size: 16px; font-weight: 700; color: #1a1a2e; }
+        .total-value { font-size: 20px; font-weight: 700; color: #4361ee; text-align: right; }
+        .address-box { background: #f8f8f8; border-radius: 6px; padding: 16px 20px; margin-bottom: 28px; }
+        .address-box p { font-size: 14px; color: #555; line-height: 1.7; }
+        .status-badge { display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; background: #fff3e0; color: #e65100; }
+        .divider { border: none; border-top: 1px solid #eeeeee; margin: 28px 0; }
+        .footer { background-color: #f8f8f8; padding: 24px 40px; text-align: center; border-top: 1px solid #eeeeee; }
+        .footer p { font-size: 12px; color: #999; line-height: 1.6; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="header">
+        <h1>E-Commerce Store</h1>
+        <p>Confirmación de pedido</p>
+    </div>
+    <div class="body">
+        <p class="greeting">¡Gracias, <span th:text="${firstName}">Usuario</span>!</p>
+        <p class="text">Tu pedido ha sido recibido y está siendo procesado. Te notificaremos cuando cambie de estado.</p>
+
+        <div>
+            <span class="order-badge">&#10003; Pedido confirmado</span>
+        </div>
+
+        <!-- Order Info -->
+        <p class="section-title">Información del pedido</p>
+        <div class="info-grid">
+            <div class="info-cell">
+                <p class="info-label">Número de pedido</p>
+                <p class="info-value" th:text="${order.orderNumber}">#ORD-00000000</p>
+            </div>
+            <div class="info-cell">
+                <p class="info-label">Estado</p>
+                <span class="status-badge">Pendiente</span>
+            </div>
+        </div>
+        <div class="info-grid">
+            <div class="info-cell">
+                <p class="info-label">Método de pago</p>
+                <p class="info-value" th:text="${order.paymentMethod}">-</p>
+            </div>
+            <div class="info-cell">
+                <p class="info-label">Fecha</p>
+                <p class="info-value" th:text="${#temporals.format(order.createdAt, 'dd/MM/yyyy HH:mm')}">-</p>
+            </div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- Items -->
+        <p class="section-title">Productos</p>
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Cant.</th>
+                    <th style="text-align:right;">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="item : ${order.items}">
+                    <td>
+                        <p class="item-name" th:text="${item.productName}">Producto</p>
+                        <p class="item-variant" th:if="${item.selectedColorName != null or item.selectedSizeName != null}">
+                            <span th:if="${item.selectedColorName != null}" th:text="'Color: ' + ${item.selectedColorName}"></span>
+                            <span th:if="${item.selectedColorName != null and item.selectedSizeName != null}"> | </span>
+                            <span th:if="${item.selectedSizeName != null}" th:text="'Talla: ' + ${item.selectedSizeName}"></span>
+                        </p>
+                        <p class="item-variant" th:text="'$' + ${#numbers.formatDecimal(item.productPrice, 1, 2)} + ' c/u'"></p>
+                    </td>
+                    <td class="item-qty" th:text="${item.quantity}">1</td>
+                    <td class="item-price" th:text="'$' + ${#numbers.formatDecimal(item.subtotal, 1, 2)}">$0.00</td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <!-- Subtotal (items before discount/shipping) — only when there's a discount or shipping -->
+                <tr th:if="${(order.discountAmount != null and order.discountAmount > 0) or (order.shippingCost != null and order.shippingCost > 0)}">
+                    <td colspan="2" style="font-size:13px;color:#555;padding:8px 0 2px;">Subtotal</td>
+                    <td style="font-size:13px;color:#555;text-align:right;padding:8px 0 2px;"
+                        th:text="'$' + ${#numbers.formatDecimal(order.totalAmount + (order.discountAmount != null ? order.discountAmount : 0) - (order.shippingCost != null ? order.shippingCost : 0), 1, 2)}">$0.00</td>
+                </tr>
+                <!-- Coupon discount -->
+                <tr th:if="${order.discountAmount != null and order.discountAmount > 0}">
+                    <td colspan="2" style="font-size:13px;color:#2e7d32;padding:2px 0;">
+                        Descuento
+                        <span th:if="${order.couponCode != null}"
+                              style="background:#e8f5e9;color:#2e7d32;font-size:11px;padding:1px 6px;border-radius:8px;font-weight:700;margin-left:4px;"
+                              th:text="${order.couponCode}"></span>
+                    </td>
+                    <td style="font-size:13px;color:#2e7d32;text-align:right;padding:2px 0;font-weight:600;"
+                        th:text="'-$' + ${#numbers.formatDecimal(order.discountAmount, 1, 2)}">-$0.00</td>
+                </tr>
+                <!-- Shipping cost -->
+                <tr th:if="${order.shippingCost != null and order.shippingCost > 0}">
+                    <td colspan="2" style="font-size:13px;color:#555;padding:2px 0;">
+                        Envío
+                        <span th:if="${order.shippingMethodName != null}"
+                              style="background:#f0f0f0;color:#555;font-size:11px;padding:1px 6px;border-radius:8px;margin-left:4px;"
+                              th:text="${order.shippingMethodName}"></span>
+                    </td>
+                    <td style="font-size:13px;color:#555;text-align:right;padding:2px 0;"
+                        th:text="'+$' + ${#numbers.formatDecimal(order.shippingCost, 1, 2)}">+$0.00</td>
+                </tr>
+                <tr class="total-row">
+                    <td colspan="2" class="total-label">Total</td>
+                    <td class="total-value" th:text="'$' + ${#numbers.formatDecimal(order.totalAmount, 1, 2)}">$0.00</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <hr class="divider">
+
+        <!-- Shipping Address / Pickup -->
+        <th:block th:if="${order.shippingType == 'PICKUP'}">
+            <p class="section-title">Punto de retiro</p>
+            <div class="address-box">
+                <p class="info-label">Ubicación</p>
+                <p class="info-value" th:text="${order.pickupLocationName}">-</p>
+                <p class="info-label" style="margin-top:8px;">Horario</p>
+                <p class="info-value" th:text="${order.pickupTimeSlotLabel}">-</p>
+            </div>
+        </th:block>
+        <th:block th:unless="${order.shippingType == 'PICKUP'}">
+            <p class="section-title">Dirección de envío</p>
+            <div class="address-box">
+                <p th:text="${order.shippingAddress}">Dirección</p>
+                <p th:text="${order.shippingCity + ', ' + order.shippingState + ' ' + order.shippingZipCode}">Ciudad, Estado CP</p>
+                <p th:text="${order.shippingCountry}">País</p>
+            </div>
+        </th:block>
+    </div>
+    <div class="footer">
+        <p>¿Tienes alguna pregunta? Contáctanos respondiendo este correo.</p>
+        <p style="margin-top:8px;">© 2025 E-Commerce Store. Todos los derechos reservados.</p>
+    </div>
+</div>
+</body>
+</html>

@@ -1,7 +1,9 @@
 package com.ecommerce.controller;
 
+import com.ecommerce.dto.request.ForgotPasswordRequest;
 import com.ecommerce.dto.request.LoginRequest;
 import com.ecommerce.dto.request.RegisterRequest;
+import com.ecommerce.dto.request.ResetPasswordRequest;
 import com.ecommerce.dto.response.ApiResponse;
 import com.ecommerce.dto.response.AuthResponse;
 import com.ecommerce.dto.response.UserResponse;
@@ -51,6 +53,20 @@ public class AuthController {
         String refreshToken = request.get("refreshToken");
         AuthResponse response = authService.refreshToken(refreshToken);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/forgot-password")
+    @Operation(summary = "Request password reset email")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request.email());
+        return ResponseEntity.ok(ApiResponse.<Void>success("If an account with that email exists, a reset link has been sent.", null));
+    }
+
+    @PostMapping("/reset-password")
+    @Operation(summary = "Reset password using token")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request.token(), request.newPassword());
+        return ResponseEntity.ok(ApiResponse.<Void>success("Password has been reset successfully.", null));
     }
 
     @GetMapping("/me")

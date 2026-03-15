@@ -62,7 +62,9 @@ public class AnalyticsService {
                 .map(item -> new OrderItemResponse(item.getId(),
                         item.getProduct() != null ? item.getProduct().getId() : null,
                         item.getProductName(), item.getProductPrice(),
-                        item.getQuantity(), item.getSubtotal()))
+                        item.getQuantity(), item.getSubtotal(),
+                        item.getSelectedSize() != null ? item.getSelectedSize().getColor().getName() : null,
+                        item.getSelectedSize() != null ? item.getSelectedSize().getName() : null))
                 .toList();
 
         return OrderResponse.builder()
