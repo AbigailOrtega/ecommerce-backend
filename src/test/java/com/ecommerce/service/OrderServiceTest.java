@@ -5,6 +5,7 @@ import com.ecommerce.dto.response.OrderResponse;
 import com.ecommerce.entity.*;
 import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.repository.*;
+import com.ecommerce.repository.PromotionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -36,6 +37,7 @@ class OrderServiceTest {
     @Mock private GoogleMapsService googleMapsService;
     @Mock private PickupLocationService pickupLocationService;
     @Mock private PickupTimeSlotRepository pickupTimeSlotRepository;
+    @Mock private PromotionRepository promotionRepository;
 
     @InjectMocks private OrderService orderService;
 
@@ -90,6 +92,7 @@ class OrderServiceTest {
             when(shippingConfigService.getOrCreate()).thenReturn(freeShippingConfig);
             when(googleMapsService.calculateDistanceKm(anyString(), anyString(), anyString()))
                     .thenReturn(0.0);
+            when(promotionRepository.findBestActivePromotion(any(), any())).thenReturn(java.util.Optional.empty());
             when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
                 Order o = inv.getArgument(0);
                 o.setId(200L);

@@ -45,7 +45,8 @@ public class ShippingConfigService {
                 cfg.getNationalBasePrice(),
                 cfg.getNationalPricePerKm(),
                 cfg.getOriginAddress(),
-                cfg.getPickupCost()
+                cfg.getPickupCost(),
+                cfg.getWhatsappNumber()
         );
     }
 
@@ -74,7 +75,8 @@ public class ShippingConfigService {
                 cfg.getSkydropxDefaultLength(),
                 cfg.getSkydropxDefaultWidth(),
                 cfg.getSkydropxDefaultHeight(),
-                cfg.isSkydropxSandbox()
+                cfg.isSkydropxSandbox(),
+                cfg.getWhatsappNumber()
         );
     }
 
@@ -107,6 +109,7 @@ public class ShippingConfigService {
         if (request.skydropxDefaultWidth() != null) cfg.setSkydropxDefaultWidth(request.skydropxDefaultWidth());
         if (request.skydropxDefaultHeight() != null) cfg.setSkydropxDefaultHeight(request.skydropxDefaultHeight());
         if (request.skydropxSandbox() != null) cfg.setSkydropxSandbox(request.skydropxSandbox());
+        if (request.whatsappNumber() != null) cfg.setWhatsappNumber(request.whatsappNumber().isBlank() ? null : request.whatsappNumber().trim());
 
         repository.save(cfg);
         if (credentialsChanged) skydropxService.invalidateTokenCache();

@@ -34,6 +34,7 @@ public class EmailService {
             Context context = new Context();
             context.setVariable("firstName", user.getFirstName());
             context.setVariable("email", user.getEmail());
+            context.setVariable("frontendUrl", frontendUrl);
 
             String html = templateEngine.process("email/welcome", context);
             sendEmail(user.getEmail(), "¡Bienvenido a nuestra tienda!", html);
@@ -55,6 +56,21 @@ public class EmailService {
             log.info("Order confirmation email sent to: {} for order: {}", user.getEmail(), order.getOrderNumber());
         } catch (Exception e) {
             log.error("Failed to send order confirmation email to: {}", user.getEmail(), e);
+        }
+    }
+
+    @Async
+    public void sendGuestOrderConfirmationEmail(String email, String firstName, OrderResponse order) {
+        try {
+            Context context = new Context();
+            context.setVariable("firstName", firstName);
+            context.setVariable("order", order);
+
+            String html = templateEngine.process("email/order-confirmation", context);
+            sendEmail(email, "Confirmación de tu pedido #" + order.getOrderNumber(), html);
+            log.info("Guest order confirmation email sent to: {} for order: {}", email, order.getOrderNumber());
+        } catch (Exception e) {
+            log.error("Failed to send guest order confirmation email to: {}", email, e);
         }
     }
 
@@ -88,6 +104,21 @@ public class EmailService {
         } catch (Exception e) {
             log.error("Failed to send password reset email to: {}", email, e);
         }
+    }
+
+    /**
+     * Synchronous (no @Async), no try/catch — lets the real SMTP error propagate
+     * to the caller so the admin can see exactly what went wrong.
+     */
+    public void sendTestEmail(String toEmail) throws MessagingException {
+        Context context = new Context();
+        context.setVariable("firstName", "Test");
+        context.setVariable("email", toEmail);
+        context.setVariable("frontendUrl", frontendUrl);
+
+        String html = templateEngine.process("email/welcome", context);
+        sendEmail(toEmail, "Correo de prueba — E-Commerce Store", html);
+        log.info("Test email sent to: {}", toEmail);
     }
 
     private void sendEmail(String to, String subject, String htmlContent) throws MessagingException {

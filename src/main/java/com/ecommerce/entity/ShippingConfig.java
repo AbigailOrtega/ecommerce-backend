@@ -55,6 +55,9 @@ public class ShippingConfig {
     private String skydropxSenderEmail;
     private String skydropxSenderPhone;
 
+    // ── General ───────────────────────────────────────────────────────────────
+    private String whatsappNumber; // E.164 without '+', e.g. 5215512345678
+
     // Dimensiones de paquete por defecto
     @Builder.Default
     private Double skydropxDefaultWeight = 1.0;

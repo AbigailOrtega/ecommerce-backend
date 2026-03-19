@@ -3,13 +3,16 @@ package com.ecommerce.service;
 import com.ecommerce.dto.request.LoginRequest;
 import com.ecommerce.dto.request.RegisterRequest;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import com.ecommerce.dto.response.AuthResponse;
 import com.ecommerce.dto.response.UserResponse;
+import com.ecommerce.entity.Order;
 import com.ecommerce.entity.Role;
 import com.ecommerce.entity.User;
 import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.exception.DuplicateResourceException;
+import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.UserRepository;
 import com.ecommerce.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +29,7 @@ import org.springframework.stereotype.Service;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final OrderRepository orderRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthenticationManager authenticationManager;
@@ -51,6 +55,7 @@ public class AuthService {
         user = userRepository.save(user);
         log.info("User saved to database with id: {}", user.getId());
 
+        linkGuestOrdersToUser(user);
         emailService.sendWelcomeEmail(user);
 
         log.debug("Generating JWT tokens for user: {}", user.getEmail());
@@ -74,6 +79,8 @@ public class AuthService {
 
         User user = (User) authentication.getPrincipal();
         log.debug("User retrieved - id: {}, role: {}", user.getId(), user.getRole());
+
+        linkGuestOrdersToUser(user);
 
         log.debug("Generating JWT tokens");
         String accessToken = jwtTokenProvider.generateAccessToken(authentication);
@@ -132,6 +139,12 @@ public class AuthService {
         user.setResetToken(null);
         user.setResetTokenExpiry(null);
         userRepository.save(user);
+    }
+
+    private void linkGuestOrdersToUser(User user) {
+        List<Order> orders = orderRepository.findByGuestEmailAndUserIsNullOrderByCreatedAtDesc(user.getEmail());
+        orders.forEach(o -> { o.setUser(user); o.setGuestEmail(null); });
+        if (!orders.isEmpty()) orderRepository.saveAll(orders);
     }
 
     private UserResponse mapToUserResponse(User user) {

@@ -28,4 +28,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     BigDecimal sumTotalRevenue();
 
     List<Order> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    List<Order> findByGuestEmailAndUserIsNullOrderByCreatedAtDesc(String guestEmail);
 }

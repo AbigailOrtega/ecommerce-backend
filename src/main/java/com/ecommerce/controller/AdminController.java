@@ -19,6 +19,7 @@ import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.UserRepository;
 import com.ecommerce.service.AnalyticsService;
+import com.ecommerce.service.EmailService;
 import com.ecommerce.service.OrderService;
 import com.ecommerce.service.ProductService;
 import com.ecommerce.service.CouponService;
@@ -54,6 +55,7 @@ import java.util.List;
 public class AdminController {
 
     private final AnalyticsService analyticsService;
+    private final EmailService emailService;
     private final OrderService orderService;
     private final ProductService productService;
     private final PromotionService promotionService;
@@ -398,6 +400,16 @@ public class AdminController {
         headers.setContentType(MediaType.APPLICATION_PDF);
         headers.setContentDispositionFormData("attachment", "guia-" + order.getOrderNumber() + ".pdf");
         return ResponseEntity.ok().headers(headers).body(pdf);
+    }
+
+    // --- Email diagnostics ---
+
+    @PostMapping("/test-email")
+    @Operation(summary = "Send a synchronous test email — returns the real SMTP error if delivery fails")
+    public ResponseEntity<ApiResponse<String>> sendTestEmail(
+            @RequestParam(defaultValue = "") String to) throws jakarta.mail.MessagingException {
+        emailService.sendTestEmail(to.isBlank() ? "aby.ortega.94@gmail.com" : to);
+        return ResponseEntity.ok(ApiResponse.success("Test email sent to " + (to.isBlank() ? "aby.ortega.94@gmail.com" : to)));
     }
 
     @DeleteMapping("/orders/{id}/skydropx/shipment")

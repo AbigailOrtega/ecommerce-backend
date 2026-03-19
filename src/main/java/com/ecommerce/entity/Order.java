@@ -25,9 +25,14 @@ public class Order {
     private String orderNumber;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = true)
     @ToString.Exclude
     private User user;
+
+    private String guestEmail;
+    private String guestFirstName;
+    private String guestLastName;
+    private String guestPhone;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

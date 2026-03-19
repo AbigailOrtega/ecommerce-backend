@@ -1,5 +1,6 @@
 package com.ecommerce.controller;
 
+import com.ecommerce.dto.request.GuestOrderRequest;
 import com.ecommerce.dto.request.OrderRequest;
 import com.ecommerce.dto.response.ApiResponse;
 import com.ecommerce.dto.response.OrderResponse;
@@ -24,6 +25,13 @@ import java.util.List;
 public class OrderController {
 
     private final OrderService orderService;
+
+    @PostMapping("/guest")
+    @Operation(summary = "Create a guest order without authentication")
+    public ResponseEntity<ApiResponse<OrderResponse>> createGuestOrder(@Valid @RequestBody GuestOrderRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Order placed successfully", orderService.createGuestOrder(request)));
+    }
 
     @PostMapping
     @Operation(summary = "Create a new order from cart")

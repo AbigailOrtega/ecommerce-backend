@@ -8,5 +8,6 @@ public record ShippingConfigResponse(
     BigDecimal nationalBasePrice,
     BigDecimal nationalPricePerKm,
     String originAddress,
-    BigDecimal pickupCost
+    BigDecimal pickupCost,
+    String whatsappNumber
 ) {}

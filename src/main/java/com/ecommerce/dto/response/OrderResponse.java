@@ -45,4 +45,8 @@ public class OrderResponse {
     private String carrierName;
     private String labelUrl;
     private String shipmentStatus;
+    private String guestEmail;
+    private String guestFirstName;
+    private String guestLastName;
+    private String guestPhone;
 }
