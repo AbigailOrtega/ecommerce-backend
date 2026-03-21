@@ -3,7 +3,6 @@ package com.ecommerce.controller;
 import com.ecommerce.config.SecurityConfig;
 import com.ecommerce.dto.request.CouponRequest;
 import com.ecommerce.dto.request.PickupLocationRequest;
-import com.ecommerce.dto.request.PickupTimeSlotRequest;
 import com.ecommerce.dto.request.PromoBannerRequest;
 import com.ecommerce.dto.request.PromotionRequest;
 import com.ecommerce.dto.request.ShippingConfigRequest;
@@ -13,7 +12,6 @@ import com.ecommerce.dto.response.CouponResponse;
 import com.ecommerce.dto.response.DashboardStatsResponse;
 import com.ecommerce.dto.response.OrderResponse;
 import com.ecommerce.dto.response.PickupLocationResponse;
-import com.ecommerce.dto.response.PickupTimeSlotResponse;
 import com.ecommerce.dto.response.PromoBannerResponse;
 import com.ecommerce.dto.response.PromotionResponse;
 import com.ecommerce.dto.response.ReviewResponse;
@@ -30,6 +28,11 @@ import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.UserRepository;
 import com.ecommerce.security.JwtAuthFilter;
+import com.ecommerce.dto.response.InventoryItem;
+import com.ecommerce.dto.response.ProductSalesItem;
+import com.ecommerce.dto.response.SalesDataPoint;
+import com.ecommerce.dto.response.SalesReportResponse;
+import com.ecommerce.dto.response.UpcomingScheduleResponse;
 import com.ecommerce.service.AnalyticsService;
 import com.ecommerce.service.CouponService;
 import com.ecommerce.service.EmailService;
@@ -38,6 +41,7 @@ import com.ecommerce.service.PickupLocationService;
 import com.ecommerce.service.ProductService;
 import com.ecommerce.service.PromoBannerService;
 import com.ecommerce.service.PromotionService;
+import com.ecommerce.service.ReportService;
 import com.ecommerce.service.ReviewService;
 import com.ecommerce.service.ShippingConfigService;
 import com.ecommerce.service.SkydropxService;
@@ -101,6 +105,7 @@ class AdminControllerTest {
 
     // ── All service / repository dependencies must be mocked ─────────────────
     @MockBean AnalyticsService analyticsService;
+    @MockBean ReportService reportService;
     @MockBean EmailService emailService;
     @MockBean OrderService orderService;
     @MockBean ProductService productService;
@@ -186,12 +191,9 @@ class AdminControllerTest {
 
     private PickupLocationResponse stubPickupLocation(Long id) {
         return new PickupLocationResponse(id, "Sucursal Centro", "Calle 5 de Mayo 10",
-                "Ciudad de México", "CDMX", true, Collections.emptyList());
+                "Ciudad de México", "CDMX", true);
     }
 
-    private PickupTimeSlotResponse stubTimeSlot(Long id) {
-        return new PickupTimeSlotResponse(id, "Lunes 10:00 – 14:00", true);
-    }
 
     private ShippingConfigAdminResponse stubShippingConfig() {
         return new ShippingConfigAdminResponse(
@@ -838,51 +840,194 @@ class AdminControllerTest {
 
     // ─── POST /api/admin/pickup-locations/{id}/time-slots ────────────────────
 
+    // ─── GET /api/admin/reports/sales ────────────────────────────────────────
+
     @Nested
-    @DisplayName("POST /api/admin/pickup-locations/{id}/time-slots")
-    class AddTimeSlot {
+    @DisplayName("GET /api/admin/reports/sales")
+    class GetSalesReport {
 
         @Test
-        @DisplayName("returns 200 with created time slot")
-        void addTimeSlot_200() throws Exception {
-            when(pickupLocationService.addTimeSlot(anyLong(), any())).thenReturn(stubTimeSlot(1L));
+        @DisplayName("returns 200 with sales report for default period (month)")
+        void getSalesReport_200_defaultPeriod() throws Exception {
+            SalesReportResponse report = new SalesReportResponse(
+                    "Este mes",
+                    List.of(new SalesDataPoint("2025-03-01", 3, java.math.BigDecimal.valueOf(1500))),
+                    java.math.BigDecimal.valueOf(1500), 3L);
+            when(reportService.getSalesReport("month")).thenReturn(report);
 
-            PickupTimeSlotRequest req = new PickupTimeSlotRequest("Lunes 10:00 – 14:00");
-
-            mockMvc.perform(post("/api/admin/pickup-locations/1/time-slots")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(req)))
+            mockMvc.perform(get("/api/admin/reports/sales").param("period", "month"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data.label").value("Lunes 10:00 – 14:00"))
-                    .andExpect(jsonPath("$.data.active").value(true));
+                    .andExpect(jsonPath("$.success").value(true))
+                    .andExpect(jsonPath("$.data.period").value("Este mes"))
+                    .andExpect(jsonPath("$.data.totalOrders").value(3))
+                    .andExpect(jsonPath("$.data.data").isArray());
         }
 
         @Test
-        @DisplayName("returns 400 when label is blank")
-        void addTimeSlot_400_blankLabel() throws Exception {
-            mockMvc.perform(post("/api/admin/pickup-locations/1/time-slots")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("{\"label\":\"\"}"))
-                    .andExpect(status().isBadRequest());
+        @DisplayName("returns 200 with weekly report")
+        void getSalesReport_200_week() throws Exception {
+            SalesReportResponse report = new SalesReportResponse(
+                    "Última semana", List.of(),
+                    java.math.BigDecimal.ZERO, 0L);
+            when(reportService.getSalesReport("week")).thenReturn(report);
+
+            mockMvc.perform(get("/api/admin/reports/sales").param("period", "week"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.period").value("Última semana"));
         }
     }
 
-    // ─── DELETE /api/admin/pickup-locations/{lid}/time-slots/{sid} ───────────
+    // ─── GET /api/admin/reports/products/top-selling ──────────────────────────
 
     @Nested
-    @DisplayName("DELETE /api/admin/pickup-locations/{lid}/time-slots/{sid}")
-    class DeleteTimeSlot {
+    @DisplayName("GET /api/admin/reports/products/top-selling")
+    class GetTopSellingProducts {
 
         @Test
-        @DisplayName("returns 200 on successful delete")
-        void deleteTimeSlot_200() throws Exception {
-            doNothing().when(pickupLocationService).deleteTimeSlot(5L);
+        @DisplayName("returns 200 with list of top-selling products")
+        void getTopSelling_200() throws Exception {
+            List<ProductSalesItem> items = List.of(
+                    new ProductSalesItem(1L, "Camiseta", 100L, java.math.BigDecimal.valueOf(2999), 20));
+            when(reportService.getTopSellingProducts(20)).thenReturn(items);
 
-            mockMvc.perform(delete("/api/admin/pickup-locations/1/time-slots/5"))
+            mockMvc.perform(get("/api/admin/reports/products/top-selling"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.success").value(true));
+                    .andExpect(jsonPath("$.data").isArray())
+                    .andExpect(jsonPath("$.data[0].productName").value("Camiseta"))
+                    .andExpect(jsonPath("$.data[0].unitsSold").value(100));
+        }
 
-            verify(pickupLocationService).deleteTimeSlot(5L);
+        @Test
+        @DisplayName("returns 200 with empty list when no sales data")
+        void getTopSelling_200_empty() throws Exception {
+            when(reportService.getTopSellingProducts(20)).thenReturn(List.of());
+
+            mockMvc.perform(get("/api/admin/reports/products/top-selling"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data").isArray())
+                    .andExpect(jsonPath("$.data").isEmpty());
         }
     }
+
+    // ─── GET /api/admin/reports/products/least-selling ───────────────────────
+
+    @Nested
+    @DisplayName("GET /api/admin/reports/products/least-selling")
+    class GetLeastSellingProducts {
+
+        @Test
+        @DisplayName("returns 200 with list of least-selling products")
+        void getLeastSelling_200() throws Exception {
+            List<ProductSalesItem> items = List.of(
+                    new ProductSalesItem(2L, "Pantalón", 0L, java.math.BigDecimal.ZERO, 5));
+            when(reportService.getLeastSellingProducts(20)).thenReturn(items);
+
+            mockMvc.perform(get("/api/admin/reports/products/least-selling"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data[0].unitsSold").value(0));
+        }
+    }
+
+    // ─── GET /api/admin/reports/inventory ────────────────────────────────────
+
+    @Nested
+    @DisplayName("GET /api/admin/reports/inventory")
+    class GetInventoryReport {
+
+        @Test
+        @DisplayName("returns 200 with full inventory list")
+        void getInventory_200() throws Exception {
+            List<InventoryItem> items = List.of(
+                    new InventoryItem(1L, "Camiseta", "SKU-1", 50,
+                            java.math.BigDecimal.valueOf(29.99), true));
+            when(reportService.getInventoryReport()).thenReturn(items);
+
+            mockMvc.perform(get("/api/admin/reports/inventory"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data[0].name").value("Camiseta"))
+                    .andExpect(jsonPath("$.data[0].stock").value(50));
+        }
+
+        @Test
+        @DisplayName("returns 200 with empty list when no products")
+        void getInventory_200_empty() throws Exception {
+            when(reportService.getInventoryReport()).thenReturn(List.of());
+
+            mockMvc.perform(get("/api/admin/reports/inventory"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data").isEmpty());
+        }
+    }
+
+    // ─── GET /api/admin/reports/out-of-stock ─────────────────────────────────
+
+    @Nested
+    @DisplayName("GET /api/admin/reports/out-of-stock")
+    class GetOutOfStockProducts {
+
+        @Test
+        @DisplayName("returns 200 with zero-stock products only")
+        void getOutOfStock_200() throws Exception {
+            List<InventoryItem> items = List.of(
+                    new InventoryItem(3L, "Agotado", "SKU-3", 0,
+                            java.math.BigDecimal.TEN, true));
+            when(reportService.getOutOfStockProducts()).thenReturn(items);
+
+            mockMvc.perform(get("/api/admin/reports/out-of-stock"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data[0].stock").value(0));
+        }
+
+        @Test
+        @DisplayName("returns 200 with empty list when all products have stock")
+        void getOutOfStock_200_empty() throws Exception {
+            when(reportService.getOutOfStockProducts()).thenReturn(List.of());
+
+            mockMvc.perform(get("/api/admin/reports/out-of-stock"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data").isEmpty());
+        }
+    }
+
+    // ─── GET /api/admin/orders/upcoming-schedule ──────────────────────────────
+
+    @Nested
+    @DisplayName("GET /api/admin/orders/upcoming-schedule")
+    class GetUpcomingSchedule {
+
+        @Test
+        @DisplayName("returns 200 with shipments and pickup groups")
+        void getUpcomingSchedule_200() throws Exception {
+            OrderResponse shipment = stubOrder(1L);
+            UpcomingScheduleResponse schedule = new UpcomingScheduleResponse(
+                    List.of(shipment),
+                    List.of(new UpcomingScheduleResponse.PickupGroupResponse(
+                            "Sucursal Norte", List.of(stubOrder(2L)))));
+            when(orderService.getUpcomingSchedule()).thenReturn(schedule);
+
+            mockMvc.perform(get("/api/admin/orders/upcoming-schedule"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.success").value(true))
+                    .andExpect(jsonPath("$.data.shipments").isArray())
+                    .andExpect(jsonPath("$.data.shipments[0].orderNumber").value("ORD-001"))
+                    .andExpect(jsonPath("$.data.pickups").isArray())
+                    .andExpect(jsonPath("$.data.pickups[0].locationName").value("Sucursal Norte"))
+                    .andExpect(jsonPath("$.data.pickups[0].orders").isArray());
+        }
+
+        @Test
+        @DisplayName("returns 200 with empty schedule when no active orders")
+        void getUpcomingSchedule_200_empty() throws Exception {
+            UpcomingScheduleResponse empty = new UpcomingScheduleResponse(List.of(), List.of());
+            when(orderService.getUpcomingSchedule()).thenReturn(empty);
+
+            mockMvc.perform(get("/api/admin/orders/upcoming-schedule"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.shipments").isEmpty())
+                    .andExpect(jsonPath("$.data.pickups").isEmpty());
+        }
+    }
+
+    // ─── POST /api/admin/pickup-locations/{id}/time-slots ────────────────────
+
 }

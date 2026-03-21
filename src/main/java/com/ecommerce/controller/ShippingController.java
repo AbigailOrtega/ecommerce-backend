@@ -1,6 +1,7 @@
 package com.ecommerce.controller;
 
 import com.ecommerce.dto.response.ApiResponse;
+import com.ecommerce.dto.response.PickupAvailabilityResponse;
 import com.ecommerce.dto.response.PickupLocationResponse;
 import com.ecommerce.dto.response.ShippingCalculateResponse;
 import com.ecommerce.dto.response.ShippingConfigResponse;
@@ -12,10 +13,11 @@ import com.ecommerce.service.SkydropxService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -39,6 +41,23 @@ public class ShippingController {
     @Operation(summary = "Get active pickup locations")
     public ResponseEntity<ApiResponse<List<PickupLocationResponse>>> getPickupLocations() {
         return ResponseEntity.ok(ApiResponse.success(pickupLocationService.getActiveLocations()));
+    }
+
+    @GetMapping("/pickup/{locationId}/available-dates")
+    @Operation(summary = "Get available pickup dates for a location within a date range")
+    public ResponseEntity<ApiResponse<List<String>>> getAvailableDates(
+            @PathVariable Long locationId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(ApiResponse.success(pickupLocationService.getAvailableDates(locationId, from, to)));
+    }
+
+    @GetMapping("/pickup/{locationId}/slots")
+    @Operation(summary = "Get available time slots for a specific pickup date")
+    public ResponseEntity<ApiResponse<List<PickupAvailabilityResponse>>> getAvailableSlots(
+            @PathVariable Long locationId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return ResponseEntity.ok(ApiResponse.success(pickupLocationService.getAvailableSlotsForDate(locationId, date)));
     }
 
     @PostMapping("/calculate-national")

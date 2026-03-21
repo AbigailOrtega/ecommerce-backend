@@ -68,7 +68,7 @@ class ShippingControllerTest {
 
     private PickupLocationResponse stubPickupLocation(Long id) {
         return new PickupLocationResponse(id, "Sucursal Centro", "Calle 5 de Mayo 10",
-                "Ciudad de México", "CDMX", true, Collections.emptyList());
+                "Ciudad de México", "CDMX", true);
     }
 
     private ShippingConfig stubShippingConfigEntity(boolean hasSkydropx) {

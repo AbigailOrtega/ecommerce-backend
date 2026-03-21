@@ -2,6 +2,7 @@ package com.ecommerce.service;
 
 import com.ecommerce.dto.response.OrderResponse;
 import com.ecommerce.entity.User;
+import java.time.LocalDate;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -92,6 +93,23 @@ public class EmailService {
     }
 
     @Async
+    public void sendGuestOrderStatusUpdateEmail(String email, String firstName, OrderResponse order) {
+        try {
+            Context context = new Context();
+            context.setVariable("firstName", firstName);
+            context.setVariable("order", order);
+            context.setVariable("statusLabel", getStatusLabel(order.getStatus()));
+
+            String html = templateEngine.process("email/order-status", context);
+            sendEmail(email, "Actualización de tu pedido #" + order.getOrderNumber(), html);
+            log.info("Guest order status email sent to: {} for order: {} - status: {}",
+                    email, order.getOrderNumber(), order.getStatus());
+        } catch (Exception e) {
+            log.error("Failed to send guest order status email to: {}", email, e);
+        }
+    }
+
+    @Async
     public void sendPasswordResetEmail(String email, String firstName, String resetToken) {
         try {
             Context context = new Context();
@@ -103,6 +121,47 @@ public class EmailService {
             log.info("Password reset email sent to: {}", email);
         } catch (Exception e) {
             log.error("Failed to send password reset email to: {}", email, e);
+        }
+    }
+
+    @Async
+    public void sendPickupRescheduleEmail(String toEmail, String firstName, String orderNumber,
+            String locationName, LocalDate pickupDate, String timeSlotLabel, String reason) {
+        try {
+            Context context = new Context();
+            context.setVariable("firstName", firstName);
+            context.setVariable("orderNumber", orderNumber);
+            context.setVariable("locationName", locationName);
+            context.setVariable("pickupDate", pickupDate);
+            context.setVariable("timeSlotLabel", timeSlotLabel);
+            context.setVariable("reason", reason);
+            context.setVariable("frontendUrl", frontendUrl);
+
+            String html = templateEngine.process("email/pickup-reschedule", context);
+            sendEmail(toEmail, "Tu recolección ha sido cancelada — Pedido #" + orderNumber, html);
+            log.info("Pickup reschedule email sent to: {} for order: {}", toEmail, orderNumber);
+        } catch (Exception e) {
+            log.error("Failed to send pickup reschedule email to: {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendPickupRescheduledConfirmationEmail(String toEmail, String firstName, String orderNumber,
+            String locationName, LocalDate pickupDate, String timeSlotLabel) {
+        try {
+            Context context = new Context();
+            context.setVariable("firstName", firstName);
+            context.setVariable("orderNumber", orderNumber);
+            context.setVariable("locationName", locationName);
+            context.setVariable("pickupDate", pickupDate);
+            context.setVariable("timeSlotLabel", timeSlotLabel);
+            context.setVariable("frontendUrl", frontendUrl);
+
+            String html = templateEngine.process("email/pickup-rescheduled-confirmation", context);
+            sendEmail(toEmail, "Tu recolección ha sido confirmada — Pedido #" + orderNumber, html);
+            log.info("Pickup rescheduled confirmation email sent to: {} for order: {}", toEmail, orderNumber);
+        } catch (Exception e) {
+            log.error("Failed to send pickup rescheduled confirmation email to: {}", toEmail, e);
         }
     }
 

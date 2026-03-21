@@ -2,6 +2,7 @@ package com.ecommerce.controller;
 
 import com.ecommerce.dto.request.GuestOrderRequest;
 import com.ecommerce.dto.request.OrderRequest;
+import com.ecommerce.dto.request.ReschedulePickupRequest;
 import com.ecommerce.dto.response.ApiResponse;
 import com.ecommerce.dto.response.OrderResponse;
 import com.ecommerce.service.OrderService;
@@ -53,5 +54,25 @@ public class OrderController {
             @PathVariable String orderNumber, Authentication authentication) {
         return ResponseEntity.ok(ApiResponse.success(
                 orderService.getOrderByNumber(orderNumber, authentication.getName())));
+    }
+
+    @PostMapping("/{orderNumber}/reschedule-pickup")
+    @Operation(summary = "Reschedule a pickup (can be customer-initiated or after seller cancellation)")
+    public ResponseEntity<ApiResponse<OrderResponse>> reschedulePickup(
+            @PathVariable String orderNumber,
+            Authentication authentication,
+            @Valid @RequestBody ReschedulePickupRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                orderService.reschedulePickup(authentication.getName(), orderNumber,
+                        request.pickupDate(), request.pickupAvailabilityId())));
+    }
+
+    @PatchMapping("/{orderNumber}/cancel-pickup")
+    @Operation(summary = "Customer cancels their own pickup so they can reschedule later")
+    public ResponseEntity<ApiResponse<OrderResponse>> cancelPickup(
+            @PathVariable String orderNumber,
+            Authentication authentication) {
+        return ResponseEntity.ok(ApiResponse.success("Recolección cancelada",
+                orderService.customerCancelPickup(authentication.getName(), orderNumber)));
     }
 }

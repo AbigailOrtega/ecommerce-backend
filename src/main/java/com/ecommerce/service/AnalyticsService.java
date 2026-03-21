@@ -55,8 +55,11 @@ public class AnalyticsService {
 
     private OrderResponse mapToOrderResponse(Order order) {
         User user = order.getUser();
-        UserResponse userResponse = new UserResponse(user.getId(), user.getFirstName(),
-                user.getLastName(), user.getEmail(), user.getPhone(), user.getRole().name());
+        UserResponse userResponse = user != null
+                ? new UserResponse(user.getId(), user.getFirstName(),
+                        user.getLastName(), user.getEmail(), user.getPhone(), user.getRole().name())
+                : new UserResponse(null, order.getGuestFirstName(),
+                        order.getGuestLastName(), order.getGuestEmail(), order.getGuestPhone(), "GUEST");
 
         List<OrderItemResponse> items = order.getItems().stream()
                 .map(item -> new OrderItemResponse(item.getId(),
@@ -71,6 +74,10 @@ public class AnalyticsService {
                 .id(order.getId())
                 .orderNumber(order.getOrderNumber())
                 .user(userResponse)
+                .guestEmail(order.getGuestEmail())
+                .guestFirstName(order.getGuestFirstName())
+                .guestLastName(order.getGuestLastName())
+                .guestPhone(order.getGuestPhone())
                 .items(items)
                 .totalAmount(order.getTotalAmount())
                 .status(order.getStatus().name())

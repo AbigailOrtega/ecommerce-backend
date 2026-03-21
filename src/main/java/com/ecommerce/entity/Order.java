@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -81,6 +82,11 @@ public class Order {
     private String shippingType;           // "NATIONAL" or "PICKUP"
     private String pickupLocationName;     // e.g. "Sucursal Centro, Reforma 42"
     private String pickupTimeSlotLabel;    // e.g. "Lunes 10:00 – 14:00"
+    private LocalDate pickupDate;          // concrete date chosen by buyer
+    private Long pickupLocationId;         // denormalized for capacity queries
+    private Long pickupAvailabilityId;     // specific rule chosen when multiple slots exist
+    @Builder.Default
+    private boolean pickupCancelled = false; // set true when admin blocks the pickup date
 
     // ── Skydropx ─────────────────────────────────────────────────────────────
     private String skydropxRateId;         // rate chosen by customer at checkout

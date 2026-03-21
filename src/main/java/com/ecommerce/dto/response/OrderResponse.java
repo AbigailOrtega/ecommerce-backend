@@ -1,6 +1,7 @@
 package com.ecommerce.dto.response;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -39,6 +40,8 @@ public class OrderResponse {
     private String shippingType;
     private String pickupLocationName;
     private String pickupTimeSlotLabel;
+    private LocalDate pickupDate;
+    private Long pickupLocationId;
     private String skydropxRateId;
     private String skydropxShipmentId;
     private String trackingNumber;
@@ -49,4 +52,5 @@ public class OrderResponse {
     private String guestFirstName;
     private String guestLastName;
     private String guestPhone;
+    private boolean pickupCancelled;
 }

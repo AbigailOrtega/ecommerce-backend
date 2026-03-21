@@ -82,7 +82,7 @@ class OrderControllerTest {
         return new OrderRequest(
                 "Calle Falsa 123", "Ciudad de México", "CDMX", "06600", "MX",
                 "COD", null, null, null,
-                "NATIONAL", null, null, null
+                "NATIONAL", null, null, null, null
         );
     }
 

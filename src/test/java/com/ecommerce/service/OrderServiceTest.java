@@ -1,7 +1,9 @@
 package com.ecommerce.service;
 
 import com.ecommerce.dto.request.OrderRequest;
+import com.ecommerce.dto.request.UpdateOrderStatusRequest;
 import com.ecommerce.dto.response.OrderResponse;
+import com.ecommerce.dto.response.UpcomingScheduleResponse;
 import com.ecommerce.entity.*;
 import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.repository.*;
@@ -73,9 +75,21 @@ class OrderServiceTest {
                 .build();
     }
 
+    private Order buildShippingOrder(String shippingType, OrderStatus status, String locationName) {
+        return Order.builder()
+                .id(System.nanoTime()).orderNumber("ORD-" + System.nanoTime())
+                .user(customer).status(status)
+                .totalAmount(BigDecimal.valueOf(100))
+                .shippingType(shippingType)
+                .pickupLocationName(locationName)
+                .shippingAddress("Calle 1").shippingCity("CDMX")
+                .shippingState("CMX").shippingZipCode("06600").shippingCountry("MX")
+                .build();
+    }
+
     private OrderRequest sampleRequest() {
         return new OrderRequest("Calle 1", "CDMX", "CMX", "06600", "MX",
-                "CARD", null, null, null, "NATIONAL", null, null, null);
+                "CARD", null, null, null, "NATIONAL", null, null, null, null);
     }
 
     // ─── createOrder ─────────────────────────────────────────────────────────
@@ -151,6 +165,142 @@ class OrderServiceTest {
             List<OrderResponse> orders = orderService.getUserOrders("ana@example.com");
 
             assertThat(orders).isEmpty();
+        }
+    }
+
+    // ─── updateOrderStatus — guest email ─────────────────────────────────────
+
+    @Nested
+    @DisplayName("updateOrderStatus")
+    class UpdateOrderStatus {
+
+        @Test
+        @DisplayName("sends guest status email when order has no user but has guestEmail")
+        void guestOrder_sendsGuestStatusEmail() {
+            Order guestOrder = Order.builder()
+                    .id(5L).orderNumber("ORD-GUEST01")
+                    .guestEmail("guest@example.com").guestFirstName("Invitado")
+                    .status(OrderStatus.PENDING).totalAmount(BigDecimal.valueOf(100))
+                    .shippingAddress("Calle 1").shippingCity("CDMX")
+                    .shippingState("CMX").shippingZipCode("06600").shippingCountry("MX")
+                    .build();
+
+            when(orderRepository.findById(5L)).thenReturn(Optional.of(guestOrder));
+            when(orderRepository.save(any())).thenReturn(guestOrder);
+
+            orderService.updateOrderStatus(5L, new UpdateOrderStatusRequest(OrderStatus.CONFIRMED));
+
+            verify(emailService).sendGuestOrderStatusUpdateEmail(
+                    eq("guest@example.com"), eq("Invitado"), any());
+            verify(emailService, never()).sendOrderStatusUpdateEmail(any(), any());
+        }
+
+        @Test
+        @DisplayName("falls back to 'Cliente' when guestFirstName is null")
+        void guestOrder_usesClienteFallbackWhenNoFirstName() {
+            Order guestOrder = Order.builder()
+                    .id(6L).orderNumber("ORD-GUEST02")
+                    .guestEmail("noname@example.com").guestFirstName(null)
+                    .status(OrderStatus.PENDING).totalAmount(BigDecimal.valueOf(50))
+                    .shippingAddress("Calle 1").shippingCity("CDMX")
+                    .shippingState("CMX").shippingZipCode("06600").shippingCountry("MX")
+                    .build();
+
+            when(orderRepository.findById(6L)).thenReturn(Optional.of(guestOrder));
+            when(orderRepository.save(any())).thenReturn(guestOrder);
+
+            orderService.updateOrderStatus(6L, new UpdateOrderStatusRequest(OrderStatus.CONFIRMED));
+
+            verify(emailService).sendGuestOrderStatusUpdateEmail(
+                    eq("noname@example.com"), eq("Cliente"), any());
+        }
+
+        @Test
+        @DisplayName("sends registered-user status email when order has a user")
+        void registeredOrder_sendsUserStatusEmail() {
+            Order userOrder = Order.builder()
+                    .id(7L).orderNumber("ORD-USER01").user(customer)
+                    .status(OrderStatus.PENDING).totalAmount(BigDecimal.valueOf(80))
+                    .shippingAddress("Calle 1").shippingCity("CDMX")
+                    .shippingState("CMX").shippingZipCode("06600").shippingCountry("MX")
+                    .build();
+
+            when(orderRepository.findById(7L)).thenReturn(Optional.of(userOrder));
+            when(orderRepository.save(any())).thenReturn(userOrder);
+
+            orderService.updateOrderStatus(7L, new UpdateOrderStatusRequest(OrderStatus.SHIPPED));
+
+            verify(emailService).sendOrderStatusUpdateEmail(eq(customer), any());
+            verify(emailService, never()).sendGuestOrderStatusUpdateEmail(any(), any(), any());
+        }
+    }
+
+    // ─── getUpcomingSchedule ──────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getUpcomingSchedule")
+    class GetUpcomingSchedule {
+
+        @Test
+        @DisplayName("returns NATIONAL shipments in confirmed/processing state")
+        void returnsNationalShipments() {
+            Order national = buildShippingOrder("NATIONAL", OrderStatus.CONFIRMED, null);
+            when(orderRepository.findByShippingTypeAndStatusInOrderByCreatedAtAsc(
+                    eq("NATIONAL"), any())).thenReturn(List.of(national));
+            when(orderRepository.findByShippingTypeAndStatusInOrderByCreatedAtAsc(
+                    eq("PICKUP"), any())).thenReturn(List.of());
+
+            UpcomingScheduleResponse result = orderService.getUpcomingSchedule();
+
+            assertThat(result.shipments()).hasSize(1);
+            assertThat(result.pickups()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("groups PICKUP orders by pickup location name")
+        void groupsPickupsByLocation() {
+            Order pickup1 = buildShippingOrder("PICKUP", OrderStatus.CONFIRMED, "Sucursal Norte");
+            Order pickup2 = buildShippingOrder("PICKUP", OrderStatus.PROCESSING, "Sucursal Sur");
+            Order pickup3 = buildShippingOrder("PICKUP", OrderStatus.CONFIRMED, "Sucursal Norte");
+            when(orderRepository.findByShippingTypeAndStatusInOrderByCreatedAtAsc(
+                    eq("NATIONAL"), any())).thenReturn(List.of());
+            when(orderRepository.findByShippingTypeAndStatusInOrderByCreatedAtAsc(
+                    eq("PICKUP"), any())).thenReturn(List.of(pickup1, pickup2, pickup3));
+
+            UpcomingScheduleResponse result = orderService.getUpcomingSchedule();
+
+            assertThat(result.pickups()).hasSize(2);
+            UpcomingScheduleResponse.PickupGroupResponse norte = result.pickups().stream()
+                    .filter(g -> g.locationName().equals("Sucursal Norte")).findFirst().orElseThrow();
+            assertThat(norte.orders()).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("uses 'Sin ubicación' when pickupLocationName is null")
+        void usesDefaultLocationNameWhenNull() {
+            Order pickup = buildShippingOrder("PICKUP", OrderStatus.CONFIRMED, null);
+            when(orderRepository.findByShippingTypeAndStatusInOrderByCreatedAtAsc(
+                    eq("NATIONAL"), any())).thenReturn(List.of());
+            when(orderRepository.findByShippingTypeAndStatusInOrderByCreatedAtAsc(
+                    eq("PICKUP"), any())).thenReturn(List.of(pickup));
+
+            UpcomingScheduleResponse result = orderService.getUpcomingSchedule();
+
+            assertThat(result.pickups().get(0).locationName()).isEqualTo("Sin ubicación");
+        }
+
+        @Test
+        @DisplayName("returns empty shipments and pickups when no active orders exist")
+        void emptyWhenNoActiveOrders() {
+            when(orderRepository.findByShippingTypeAndStatusInOrderByCreatedAtAsc(
+                    eq("NATIONAL"), any())).thenReturn(List.of());
+            when(orderRepository.findByShippingTypeAndStatusInOrderByCreatedAtAsc(
+                    eq("PICKUP"), any())).thenReturn(List.of());
+
+            UpcomingScheduleResponse result = orderService.getUpcomingSchedule();
+
+            assertThat(result.shipments()).isEmpty();
+            assertThat(result.pickups()).isEmpty();
         }
     }
 

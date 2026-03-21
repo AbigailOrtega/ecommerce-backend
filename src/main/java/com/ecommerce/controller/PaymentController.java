@@ -36,7 +36,7 @@ public class PaymentController {
     public ResponseEntity<ApiResponse<Map<String, String>>> createPaymentIntent(
             @RequestBody Map<String, Object> request) {
         BigDecimal amount = new BigDecimal(request.get("amount").toString());
-        String currency = request.getOrDefault("currency", "usd").toString();
+        String currency = request.getOrDefault("currency", "mxn").toString();
         Map<String, String> response = paymentService.createPaymentIntent(amount, currency);
         return ResponseEntity.ok(ApiResponse.success(response));
     }

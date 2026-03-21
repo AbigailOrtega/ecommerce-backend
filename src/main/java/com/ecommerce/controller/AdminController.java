@@ -1,8 +1,9 @@
 package com.ecommerce.controller;
 
 import com.ecommerce.dto.request.CouponRequest;
+import com.ecommerce.dto.request.PickupAvailabilityRequest;
+import com.ecommerce.dto.request.PickupExceptionRequest;
 import com.ecommerce.dto.request.PickupLocationRequest;
-import com.ecommerce.dto.request.PickupTimeSlotRequest;
 import com.ecommerce.dto.request.PromoBannerRequest;
 import com.ecommerce.dto.request.PromotionRequest;
 import com.ecommerce.dto.request.ShippingConfigRequest;
@@ -10,6 +11,8 @@ import com.ecommerce.dto.request.SkydropxCreateShipmentRequest;
 import com.ecommerce.dto.request.TicketUpdateRequest;
 import com.ecommerce.dto.request.UpdateOrderStatusRequest;
 import com.ecommerce.dto.response.*;
+import com.ecommerce.dto.response.PickupAvailabilityResponse;
+import com.ecommerce.dto.response.PickupExceptionResponse;
 import com.ecommerce.dto.response.ReviewResponse;
 import com.ecommerce.dto.response.SkydropxQuotationResponse;
 import com.ecommerce.dto.response.SkydropxShipmentResponse;
@@ -19,6 +22,10 @@ import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.UserRepository;
 import com.ecommerce.service.AnalyticsService;
+import com.ecommerce.service.ReportService;
+import com.ecommerce.dto.response.SalesReportResponse;
+import com.ecommerce.dto.response.ProductSalesItem;
+import com.ecommerce.dto.response.InventoryItem;
 import com.ecommerce.service.EmailService;
 import com.ecommerce.service.OrderService;
 import com.ecommerce.service.ProductService;
@@ -55,6 +62,7 @@ import java.util.List;
 public class AdminController {
 
     private final AnalyticsService analyticsService;
+    private final ReportService reportService;
     private final EmailService emailService;
     private final OrderService orderService;
     private final ProductService productService;
@@ -69,6 +77,43 @@ public class AdminController {
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
 
+    // ── Reports ───────────────────────────────────────────────────────────────
+
+    @GetMapping("/reports/sales")
+    @Operation(summary = "Sales report by period (week, month, year)")
+    public ResponseEntity<ApiResponse<SalesReportResponse>> getSalesReport(
+            @RequestParam(defaultValue = "month") String period) {
+        return ResponseEntity.ok(ApiResponse.success(reportService.getSalesReport(period)));
+    }
+
+    @GetMapping("/reports/products/top-selling")
+    @Operation(summary = "Top selling products")
+    public ResponseEntity<ApiResponse<List<ProductSalesItem>>> getTopSellingProducts(
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(ApiResponse.success(reportService.getTopSellingProducts(limit)));
+    }
+
+    @GetMapping("/reports/products/least-selling")
+    @Operation(summary = "Least selling products")
+    public ResponseEntity<ApiResponse<List<ProductSalesItem>>> getLeastSellingProducts(
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(ApiResponse.success(reportService.getLeastSellingProducts(limit)));
+    }
+
+    @GetMapping("/reports/inventory")
+    @Operation(summary = "Full inventory report")
+    public ResponseEntity<ApiResponse<List<InventoryItem>>> getInventoryReport() {
+        return ResponseEntity.ok(ApiResponse.success(reportService.getInventoryReport()));
+    }
+
+    @GetMapping("/reports/out-of-stock")
+    @Operation(summary = "Products with zero stock")
+    public ResponseEntity<ApiResponse<List<InventoryItem>>> getOutOfStockProducts() {
+        return ResponseEntity.ok(ApiResponse.success(reportService.getOutOfStockProducts()));
+    }
+
+    // ── Dashboard ─────────────────────────────────────────────────────────────
+
     @GetMapping("/dashboard")
     @Operation(summary = "Get dashboard statistics")
     public ResponseEntity<ApiResponse<DashboardStatsResponse>> getDashboard() {
@@ -80,6 +125,12 @@ public class AdminController {
     public ResponseEntity<ApiResponse<Page<OrderResponse>>> getAllOrders(
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(orderService.getAllOrders(pageable)));
+    }
+
+    @GetMapping("/orders/upcoming-schedule")
+    @Operation(summary = "Get upcoming national shipments and pickups (CONFIRMED/PROCESSING)")
+    public ResponseEntity<ApiResponse<UpcomingScheduleResponse>> getUpcomingSchedule() {
+        return ResponseEntity.ok(ApiResponse.success(orderService.getUpcomingSchedule()));
     }
 
     @GetMapping("/orders/{id}")
@@ -94,6 +145,15 @@ public class AdminController {
             @PathVariable Long id, @Valid @RequestBody UpdateOrderStatusRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Order status updated",
                 orderService.updateOrderStatus(id, request)));
+    }
+
+    @PatchMapping("/orders/{id}/cancel-pickup")
+    @Operation(summary = "Cancel a pickup order so the customer can reschedule it")
+    public ResponseEntity<ApiResponse<OrderResponse>> cancelPickup(
+            @PathVariable Long id,
+            @RequestParam(required = false) String reason) {
+        return ResponseEntity.ok(ApiResponse.success("Recolección cancelada",
+                orderService.cancelPickupForAdmin(id, reason)));
     }
 
     @GetMapping("/products")
@@ -314,34 +374,67 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success(pickupLocationService.toggle(id)));
     }
 
-    @PostMapping("/pickup-locations/{id}/time-slots")
-    @Operation(summary = "Add time slot to pickup location")
-    public ResponseEntity<ApiResponse<PickupTimeSlotResponse>> addTimeSlot(
-            @PathVariable Long id, @Valid @RequestBody PickupTimeSlotRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(pickupLocationService.addTimeSlot(id, request)));
+    // --- Pickup Availability ---
+
+    @GetMapping("/pickup-locations/{id}/availability")
+    @Operation(summary = "Get availability rules for a pickup location")
+    public ResponseEntity<ApiResponse<List<PickupAvailabilityResponse>>> getPickupAvailability(
+            @PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(pickupLocationService.getAvailabilities(id)));
     }
 
-    @PutMapping("/pickup-locations/{lid}/time-slots/{sid}")
-    @Operation(summary = "Update time slot")
-    public ResponseEntity<ApiResponse<PickupTimeSlotResponse>> updateTimeSlot(
-            @PathVariable Long lid, @PathVariable Long sid,
-            @Valid @RequestBody PickupTimeSlotRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(pickupLocationService.updateTimeSlot(sid, request)));
+    @PostMapping("/pickup-locations/{id}/availability")
+    @Operation(summary = "Add availability rule to pickup location")
+    public ResponseEntity<ApiResponse<PickupAvailabilityResponse>> createPickupAvailability(
+            @PathVariable Long id, @Valid @RequestBody PickupAvailabilityRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(pickupLocationService.createAvailability(id, request)));
     }
 
-    @DeleteMapping("/pickup-locations/{lid}/time-slots/{sid}")
-    @Operation(summary = "Delete time slot")
-    public ResponseEntity<ApiResponse<Void>> deleteTimeSlot(
-            @PathVariable Long lid, @PathVariable Long sid) {
-        pickupLocationService.deleteTimeSlot(sid);
+    @PutMapping("/pickup-locations/{id}/availability/{aid}")
+    @Operation(summary = "Update availability rule")
+    public ResponseEntity<ApiResponse<PickupAvailabilityResponse>> updatePickupAvailability(
+            @PathVariable Long id, @PathVariable Long aid, @Valid @RequestBody PickupAvailabilityRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(pickupLocationService.updateAvailability(id, aid, request)));
+    }
+
+    @DeleteMapping("/pickup-locations/{id}/availability/{aid}")
+    @Operation(summary = "Delete availability rule")
+    public ResponseEntity<ApiResponse<Void>> deletePickupAvailability(
+            @PathVariable Long id, @PathVariable Long aid) {
+        pickupLocationService.deleteAvailability(id, aid);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
-    @PatchMapping("/pickup-locations/{lid}/time-slots/{sid}/toggle")
-    @Operation(summary = "Toggle time slot active status")
-    public ResponseEntity<ApiResponse<PickupTimeSlotResponse>> toggleTimeSlot(
-            @PathVariable Long lid, @PathVariable Long sid) {
-        return ResponseEntity.ok(ApiResponse.success(pickupLocationService.toggleTimeSlot(sid)));
+    @PatchMapping("/pickup-locations/{id}/availability/{aid}/toggle")
+    @Operation(summary = "Toggle availability rule active status")
+    public ResponseEntity<ApiResponse<PickupAvailabilityResponse>> togglePickupAvailability(
+            @PathVariable Long id, @PathVariable Long aid) {
+        return ResponseEntity.ok(ApiResponse.success(pickupLocationService.toggleAvailability(id, aid)));
+    }
+
+    // --- Pickup Exceptions ---
+
+    @GetMapping("/pickup-locations/{id}/availability/{aid}/exceptions")
+    @Operation(summary = "Get exceptions for an availability rule")
+    public ResponseEntity<ApiResponse<List<PickupExceptionResponse>>> getPickupExceptions(
+            @PathVariable Long id, @PathVariable Long aid) {
+        return ResponseEntity.ok(ApiResponse.success(pickupLocationService.getExceptions(id, aid)));
+    }
+
+    @PostMapping("/pickup-locations/{id}/availability/{aid}/exceptions")
+    @Operation(summary = "Add an exception (blocked date) to an availability rule")
+    public ResponseEntity<ApiResponse<PickupExceptionResponse>> createPickupException(
+            @PathVariable Long id, @PathVariable Long aid,
+            @Valid @RequestBody PickupExceptionRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(pickupLocationService.createException(id, aid, request)));
+    }
+
+    @DeleteMapping("/pickup-locations/{id}/availability/{aid}/exceptions/{eid}")
+    @Operation(summary = "Remove an exception from an availability rule")
+    public ResponseEntity<ApiResponse<Void>> deletePickupException(
+            @PathVariable Long id, @PathVariable Long aid, @PathVariable Long eid) {
+        pickupLocationService.deleteException(id, aid, eid);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     // --- Skydropx ---

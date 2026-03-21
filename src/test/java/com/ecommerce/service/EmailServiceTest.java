@@ -204,6 +204,69 @@ class EmailServiceTest {
         }
     }
 
+    // ─── sendGuestOrderStatusUpdateEmail ─────────────────────────────────────
+
+    @Nested
+    @DisplayName("sendGuestOrderStatusUpdateEmail")
+    class SendGuestOrderStatusUpdateEmail {
+
+        @Test
+        @DisplayName("uses email/order-status template")
+        void usesOrderStatusTemplate() {
+            var order = new com.ecommerce.dto.response.OrderResponse();
+            order.setOrderNumber("ORD-G01");
+            order.setStatus("CONFIRMED");
+
+            emailService.sendGuestOrderStatusUpdateEmail("guest@example.com", "Invitado", order);
+
+            verify(templateEngine).process(eq("email/order-status"), any());
+        }
+
+        @Test
+        @DisplayName("passes firstName, order and statusLabel to template context")
+        void includesContextVariables() {
+            org.mockito.ArgumentCaptor<org.thymeleaf.context.Context> ctxCaptor =
+                    org.mockito.ArgumentCaptor.forClass(org.thymeleaf.context.Context.class);
+            var order = new com.ecommerce.dto.response.OrderResponse();
+            order.setOrderNumber("ORD-G01");
+            order.setStatus("CONFIRMED");
+
+            emailService.sendGuestOrderStatusUpdateEmail("guest@example.com", "Invitado", order);
+
+            verify(templateEngine).process(eq("email/order-status"), ctxCaptor.capture());
+            org.thymeleaf.context.Context ctx = ctxCaptor.getValue();
+            assertThat(ctx.getVariable("firstName")).isEqualTo("Invitado");
+            assertThat(ctx.getVariable("order")).isSameAs(order);
+            assertThat(ctx.getVariable("statusLabel")).isNotNull();
+        }
+
+        @Test
+        @DisplayName("sends email to the guest email address")
+        void sendsToGuestEmail() throws Exception {
+            var order = new com.ecommerce.dto.response.OrderResponse();
+            order.setOrderNumber("ORD-G01");
+            order.setStatus("SHIPPED");
+
+            emailService.sendGuestOrderStatusUpdateEmail("guest@example.com", "Invitado", order);
+
+            verify(mailSender).send(realMessage);
+            assertThat(realMessage.getAllRecipients()[0].toString())
+                    .isEqualTo("guest@example.com");
+        }
+
+        @Test
+        @DisplayName("does not propagate exception when SMTP fails")
+        void silentOnSmtpError() {
+            when(mailSender.createMimeMessage()).thenThrow(new RuntimeException("SMTP down"));
+            var order = new com.ecommerce.dto.response.OrderResponse();
+            order.setOrderNumber("ORD-G01");
+            order.setStatus("SHIPPED");
+
+            assertThatNoException().isThrownBy(() ->
+                    emailService.sendGuestOrderStatusUpdateEmail("guest@example.com", "Invitado", order));
+        }
+    }
+
     // ─── sendOrderConfirmationEmail ───────────────────────────────────────────
 
     @Nested

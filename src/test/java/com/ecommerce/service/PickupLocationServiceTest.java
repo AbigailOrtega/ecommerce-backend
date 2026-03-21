@@ -1,15 +1,11 @@
 package com.ecommerce.service;
 
 import com.ecommerce.dto.request.PickupLocationRequest;
-import com.ecommerce.dto.request.PickupTimeSlotRequest;
 import com.ecommerce.dto.response.PickupLocationResponse;
-import com.ecommerce.dto.response.PickupTimeSlotResponse;
 import com.ecommerce.entity.PickupLocation;
-import com.ecommerce.entity.PickupTimeSlot;
 import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.repository.PickupLocationRepository;
-import com.ecommerce.repository.PickupTimeSlotRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -20,7 +16,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,29 +28,14 @@ import static org.mockito.Mockito.*;
 class PickupLocationServiceTest {
 
     @Mock private PickupLocationRepository locationRepository;
-    @Mock private PickupTimeSlotRepository timeSlotRepository;
 
     @InjectMocks private PickupLocationService pickupLocationService;
 
     private PickupLocation activeLocation;
     private PickupLocation inactiveLocation;
-    private PickupTimeSlot activeSlot;
-    private PickupTimeSlot inactiveSlot;
 
     @BeforeEach
     void setUp() {
-        activeSlot = PickupTimeSlot.builder()
-                .id(10L)
-                .label("10:00 - 12:00")
-                .active(true)
-                .build();
-
-        inactiveSlot = PickupTimeSlot.builder()
-                .id(11L)
-                .label("14:00 - 16:00")
-                .active(false)
-                .build();
-
         activeLocation = PickupLocation.builder()
                 .id(1L)
                 .name("Main Store")
@@ -63,7 +43,6 @@ class PickupLocationServiceTest {
                 .city("CDMX")
                 .state("CDMX")
                 .active(true)
-                .timeSlots(new ArrayList<>(List.of(activeSlot, inactiveSlot)))
                 .build();
 
         inactiveLocation = PickupLocation.builder()
@@ -73,7 +52,6 @@ class PickupLocationServiceTest {
                 .city("Monterrey")
                 .state("NL")
                 .active(false)
-                .timeSlots(new ArrayList<>())
                 .build();
     }
 
@@ -102,32 +80,6 @@ class PickupLocationServiceTest {
             when(locationRepository.findAllByActiveTrueOrderByNameAsc()).thenReturn(List.of());
 
             assertThat(pickupLocationService.getActiveLocations()).isEmpty();
-        }
-
-        @Test
-        @DisplayName("filters time slots to active-only in public response")
-        void getActiveLocations_filtersInactiveTimeSlots() {
-            when(locationRepository.findAllByActiveTrueOrderByNameAsc())
-                    .thenReturn(List.of(activeLocation));
-
-            List<PickupLocationResponse> result = pickupLocationService.getActiveLocations();
-
-            List<PickupTimeSlotResponse> slots = result.get(0).timeSlots();
-            assertThat(slots).hasSize(1);
-            assertThat(slots.get(0).active()).isTrue();
-            assertThat(slots.get(0).label()).isEqualTo("10:00 - 12:00");
-        }
-
-        @Test
-        @DisplayName("returns empty timeSlots list when location has no active slots")
-        void getActiveLocations_emptyTimeSlotsWhenAllInactive() {
-            activeLocation.setTimeSlots(new ArrayList<>(List.of(inactiveSlot)));
-            when(locationRepository.findAllByActiveTrueOrderByNameAsc())
-                    .thenReturn(List.of(activeLocation));
-
-            List<PickupLocationResponse> result = pickupLocationService.getActiveLocations();
-
-            assertThat(result.get(0).timeSlots()).isEmpty();
         }
 
         @Test
@@ -165,33 +117,11 @@ class PickupLocationServiceTest {
         }
 
         @Test
-        @DisplayName("includes both active and inactive time slots in admin response")
-        void getAllLocations_includesAllTimeSlots() {
-            when(locationRepository.findAll()).thenReturn(List.of(activeLocation));
-
-            List<PickupLocationResponse> result = pickupLocationService.getAllLocations();
-
-            assertThat(result.get(0).timeSlots()).hasSize(2);
-        }
-
-        @Test
         @DisplayName("returns empty list when no locations exist")
         void getAllLocations_emptyWhenNoneExist() {
             when(locationRepository.findAll()).thenReturn(List.of());
 
             assertThat(pickupLocationService.getAllLocations()).isEmpty();
-        }
-
-        @Test
-        @DisplayName("includes inactive time slots that are excluded from public view")
-        void getAllLocations_inactiveSlotsVisible() {
-            when(locationRepository.findAll()).thenReturn(List.of(activeLocation));
-
-            List<PickupTimeSlotResponse> slots = pickupLocationService.getAllLocations()
-                    .get(0).timeSlots();
-
-            assertThat(slots).extracting(PickupTimeSlotResponse::active)
-                    .containsExactlyInAnyOrder(true, false);
         }
 
         @Test
@@ -221,7 +151,7 @@ class PickupLocationServiceTest {
             PickupLocation saved = PickupLocation.builder()
                     .id(5L).name("New Branch").address("Blvd. Insurgentes 50")
                     .city("Tijuana").state("BC").active(true)
-                    .timeSlots(new ArrayList<>()).build();
+                    .build();
             when(locationRepository.save(any(PickupLocation.class))).thenReturn(saved);
 
             PickupLocationResponse response = pickupLocationService.create(request);
@@ -251,19 +181,6 @@ class PickupLocationServiceTest {
         }
 
         @Test
-        @DisplayName("new location has empty timeSlots list")
-        void create_hasEmptyTimeSlots() {
-            PickupLocationRequest request = new PickupLocationRequest(
-                    "Empty", "No slots", "City", "State");
-            when(locationRepository.save(any(PickupLocation.class)))
-                    .thenAnswer(inv -> inv.getArgument(0));
-
-            PickupLocationResponse response = pickupLocationService.create(request);
-
-            assertThat(response.timeSlots()).isEmpty();
-        }
-
-        @Test
         @DisplayName("calls locationRepository.save exactly once")
         void create_savesExactlyOnce() {
             PickupLocationRequest request = new PickupLocationRequest("X", "Y", "Z", "W");
@@ -274,16 +191,6 @@ class PickupLocationServiceTest {
             verify(locationRepository, times(1)).save(any());
         }
 
-        @Test
-        @DisplayName("does not interact with timeSlotRepository during create")
-        void create_doesNotTouchTimeSlotRepository() {
-            PickupLocationRequest request = new PickupLocationRequest("X", "Y", "Z", "W");
-            when(locationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            pickupLocationService.create(request);
-
-            verifyNoInteractions(timeSlotRepository);
-        }
     }
 
     // ─── update ───────────────────────────────────────────────────────────────
@@ -345,17 +252,6 @@ class PickupLocationServiceTest {
             assertThat(response.active()).isTrue();
         }
 
-        @Test
-        @DisplayName("includes all time slots (both active/inactive) in updated response")
-        void update_includesAllTimeSlotsInResponse() {
-            PickupLocationRequest request = new PickupLocationRequest("New", "Addr", "City", "State");
-            when(locationRepository.findById(1L)).thenReturn(Optional.of(activeLocation));
-            when(locationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            PickupLocationResponse response = pickupLocationService.update(1L, request);
-
-            assertThat(response.timeSlots()).hasSize(2);
-        }
     }
 
     // ─── delete ───────────────────────────────────────────────────────────────
@@ -479,272 +375,6 @@ class PickupLocationServiceTest {
         }
     }
 
-    // ─── addTimeSlot ─────────────────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("addTimeSlot")
-    class AddTimeSlot {
-
-        @Test
-        @DisplayName("adds a new slot to an existing location and returns it")
-        void addTimeSlot_success() {
-            PickupTimeSlotRequest request = new PickupTimeSlotRequest("08:00 - 10:00");
-            PickupTimeSlot savedSlot = PickupTimeSlot.builder()
-                    .id(20L).label("08:00 - 10:00").active(true).location(activeLocation).build();
-            when(locationRepository.findById(1L)).thenReturn(Optional.of(activeLocation));
-            when(timeSlotRepository.save(any(PickupTimeSlot.class))).thenReturn(savedSlot);
-
-            PickupTimeSlotResponse response = pickupLocationService.addTimeSlot(1L, request);
-
-            assertThat(response.id()).isEqualTo(20L);
-            assertThat(response.label()).isEqualTo("08:00 - 10:00");
-            assertThat(response.active()).isTrue();
-        }
-
-        @Test
-        @DisplayName("throws ResourceNotFoundException when location does not exist")
-        void addTimeSlot_locationNotFound() {
-            PickupTimeSlotRequest request = new PickupTimeSlotRequest("08:00 - 10:00");
-            when(locationRepository.findById(999L)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> pickupLocationService.addTimeSlot(999L, request))
-                    .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("PickupLocation");
-
-            verify(timeSlotRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("sets the correct location on the new slot entity")
-        void addTimeSlot_setsLocationOnSlot() {
-            PickupTimeSlotRequest request = new PickupTimeSlotRequest("18:00 - 20:00");
-            when(locationRepository.findById(1L)).thenReturn(Optional.of(activeLocation));
-            when(timeSlotRepository.save(any(PickupTimeSlot.class)))
-                    .thenAnswer(inv -> inv.getArgument(0));
-
-            pickupLocationService.addTimeSlot(1L, request);
-
-            ArgumentCaptor<PickupTimeSlot> captor = ArgumentCaptor.forClass(PickupTimeSlot.class);
-            verify(timeSlotRepository).save(captor.capture());
-            assertThat(captor.getValue().getLocation()).isEqualTo(activeLocation);
-            assertThat(captor.getValue().getLabel()).isEqualTo("18:00 - 20:00");
-        }
-
-        @Test
-        @DisplayName("calls timeSlotRepository.save exactly once")
-        void addTimeSlot_savesExactlyOnce() {
-            PickupTimeSlotRequest request = new PickupTimeSlotRequest("09:00 - 11:00");
-            when(locationRepository.findById(1L)).thenReturn(Optional.of(activeLocation));
-            when(timeSlotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            pickupLocationService.addTimeSlot(1L, request);
-
-            verify(timeSlotRepository, times(1)).save(any());
-        }
-
-        @Test
-        @DisplayName("can add a slot to an inactive location")
-        void addTimeSlot_worksForInactiveLocation() {
-            PickupTimeSlotRequest request = new PickupTimeSlotRequest("11:00 - 13:00");
-            when(locationRepository.findById(2L)).thenReturn(Optional.of(inactiveLocation));
-            when(timeSlotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            assertThatNoException().isThrownBy(() ->
-                    pickupLocationService.addTimeSlot(2L, request));
-        }
-    }
-
-    // ─── updateTimeSlot ──────────────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("updateTimeSlot")
-    class UpdateTimeSlot {
-
-        @Test
-        @DisplayName("updates the slot label and returns updated response")
-        void updateTimeSlot_success() {
-            PickupTimeSlotRequest request = new PickupTimeSlotRequest("16:00 - 18:00");
-            when(timeSlotRepository.findById(10L)).thenReturn(Optional.of(activeSlot));
-            when(timeSlotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            PickupTimeSlotResponse response = pickupLocationService.updateTimeSlot(10L, request);
-
-            assertThat(response.label()).isEqualTo("16:00 - 18:00");
-        }
-
-        @Test
-        @DisplayName("throws ResourceNotFoundException when slot does not exist")
-        void updateTimeSlot_notFound() {
-            PickupTimeSlotRequest request = new PickupTimeSlotRequest("16:00 - 18:00");
-            when(timeSlotRepository.findById(999L)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> pickupLocationService.updateTimeSlot(999L, request))
-                    .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("PickupTimeSlot");
-
-            verify(timeSlotRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("mutates the existing slot entity label")
-        void updateTimeSlot_mutatesEntity() {
-            PickupTimeSlotRequest request = new PickupTimeSlotRequest("New Label");
-            when(timeSlotRepository.findById(10L)).thenReturn(Optional.of(activeSlot));
-            when(timeSlotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            pickupLocationService.updateTimeSlot(10L, request);
-
-            ArgumentCaptor<PickupTimeSlot> captor = ArgumentCaptor.forClass(PickupTimeSlot.class);
-            verify(timeSlotRepository).save(captor.capture());
-            assertThat(captor.getValue().getLabel()).isEqualTo("New Label");
-        }
-
-        @Test
-        @DisplayName("preserves slot id after update")
-        void updateTimeSlot_preservesId() {
-            PickupTimeSlotRequest request = new PickupTimeSlotRequest("Changed");
-            when(timeSlotRepository.findById(10L)).thenReturn(Optional.of(activeSlot));
-            when(timeSlotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            PickupTimeSlotResponse response = pickupLocationService.updateTimeSlot(10L, request);
-
-            assertThat(response.id()).isEqualTo(10L);
-        }
-
-        @Test
-        @DisplayName("preserves slot active status after update")
-        void updateTimeSlot_preservesActiveStatus() {
-            PickupTimeSlotRequest request = new PickupTimeSlotRequest("Changed");
-            when(timeSlotRepository.findById(10L)).thenReturn(Optional.of(activeSlot));
-            when(timeSlotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            PickupTimeSlotResponse response = pickupLocationService.updateTimeSlot(10L, request);
-
-            assertThat(response.active()).isTrue();
-        }
-    }
-
-    // ─── deleteTimeSlot ──────────────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("deleteTimeSlot")
-    class DeleteTimeSlot {
-
-        @Test
-        @DisplayName("deletes the time slot when it exists")
-        void deleteTimeSlot_success() {
-            when(timeSlotRepository.findById(10L)).thenReturn(Optional.of(activeSlot));
-
-            pickupLocationService.deleteTimeSlot(10L);
-
-            verify(timeSlotRepository).delete(activeSlot);
-        }
-
-        @Test
-        @DisplayName("throws ResourceNotFoundException when slot does not exist")
-        void deleteTimeSlot_notFound() {
-            when(timeSlotRepository.findById(999L)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> pickupLocationService.deleteTimeSlot(999L))
-                    .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("PickupTimeSlot");
-
-            verify(timeSlotRepository, never()).delete(any());
-        }
-
-        @Test
-        @DisplayName("passes the correct entity to timeSlotRepository.delete")
-        void deleteTimeSlot_passesCorrectEntity() {
-            when(timeSlotRepository.findById(11L)).thenReturn(Optional.of(inactiveSlot));
-
-            pickupLocationService.deleteTimeSlot(11L);
-
-            verify(timeSlotRepository).delete(inactiveSlot);
-        }
-
-        @Test
-        @DisplayName("calls delete exactly once")
-        void deleteTimeSlot_deletesExactlyOnce() {
-            when(timeSlotRepository.findById(10L)).thenReturn(Optional.of(activeSlot));
-
-            pickupLocationService.deleteTimeSlot(10L);
-
-            verify(timeSlotRepository, times(1)).delete(any());
-        }
-
-        @Test
-        @DisplayName("never calls locationRepository during slot deletion")
-        void deleteTimeSlot_doesNotTouchLocationRepository() {
-            when(timeSlotRepository.findById(10L)).thenReturn(Optional.of(activeSlot));
-
-            pickupLocationService.deleteTimeSlot(10L);
-
-            verify(locationRepository, never()).delete(any());
-            verify(locationRepository, never()).save(any());
-        }
-    }
-
-    // ─── toggleTimeSlot ──────────────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("toggleTimeSlot")
-    class ToggleTimeSlot {
-
-        @Test
-        @DisplayName("sets inactive when slot is currently active")
-        void toggleTimeSlot_activeToInactive() {
-            when(timeSlotRepository.findById(10L)).thenReturn(Optional.of(activeSlot));
-            when(timeSlotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            PickupTimeSlotResponse response = pickupLocationService.toggleTimeSlot(10L);
-
-            assertThat(response.active()).isFalse();
-        }
-
-        @Test
-        @DisplayName("sets active when slot is currently inactive")
-        void toggleTimeSlot_inactiveToActive() {
-            when(timeSlotRepository.findById(11L)).thenReturn(Optional.of(inactiveSlot));
-            when(timeSlotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            PickupTimeSlotResponse response = pickupLocationService.toggleTimeSlot(11L);
-
-            assertThat(response.active()).isTrue();
-        }
-
-        @Test
-        @DisplayName("throws ResourceNotFoundException when slot does not exist")
-        void toggleTimeSlot_notFound() {
-            when(timeSlotRepository.findById(999L)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> pickupLocationService.toggleTimeSlot(999L))
-                    .isInstanceOf(ResourceNotFoundException.class);
-
-            verify(timeSlotRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("calls save after toggling")
-        void toggleTimeSlot_savesCalled() {
-            when(timeSlotRepository.findById(10L)).thenReturn(Optional.of(activeSlot));
-            when(timeSlotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            pickupLocationService.toggleTimeSlot(10L);
-
-            verify(timeSlotRepository).save(activeSlot);
-        }
-
-        @Test
-        @DisplayName("preserves slot label after toggle")
-        void toggleTimeSlot_preservesLabel() {
-            when(timeSlotRepository.findById(10L)).thenReturn(Optional.of(activeSlot));
-            when(timeSlotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            PickupTimeSlotResponse response = pickupLocationService.toggleTimeSlot(10L);
-
-            assertThat(response.label()).isEqualTo("10:00 - 12:00");
-        }
-    }
 
     // ─── findById ─────────────────────────────────────────────────────────────
 

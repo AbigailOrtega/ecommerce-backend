@@ -219,7 +219,7 @@ public class PaymentService {
                 .purchaseUnits(List.of(
                         new PurchaseUnitRequest()
                                 .amountWithBreakdown(new AmountWithBreakdown()
-                                        .currencyCode("USD")
+                                        .currencyCode("MXN")
                                         .value(amount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()))
                 )));
 

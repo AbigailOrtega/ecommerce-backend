@@ -29,5 +29,5 @@ public class PickupLocation {
     @OneToMany(mappedBy = "location", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     @ToString.Exclude
-    private List<PickupTimeSlot> timeSlots = new ArrayList<>();
+    private List<PickupAvailability> availabilities = new ArrayList<>();
 }

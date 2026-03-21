@@ -6,6 +6,7 @@ import com.ecommerce.dto.request.OrderRequest;
 import com.ecommerce.dto.request.UpdateOrderStatusRequest;
 import com.ecommerce.dto.response.OrderItemResponse;
 import com.ecommerce.dto.response.OrderResponse;
+import com.ecommerce.dto.response.UpcomingScheduleResponse;
 import com.ecommerce.dto.response.UserResponse;
 import com.ecommerce.entity.*;
 import com.ecommerce.exception.BadRequestException;
@@ -14,7 +15,6 @@ import com.ecommerce.entity.ProductSize;
 import com.ecommerce.dto.response.SkydropxRateDto;
 import com.ecommerce.repository.CartItemRepository;
 import com.ecommerce.repository.OrderRepository;
-import com.ecommerce.repository.PickupTimeSlotRepository;
 import com.ecommerce.repository.ProductRepository;
 import com.ecommerce.repository.ProductSizeRepository;
 import com.ecommerce.repository.PromotionRepository;
@@ -29,7 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -47,7 +50,6 @@ public class OrderService {
     private final ShippingConfigService shippingConfigService;
     private final GoogleMapsService googleMapsService;
     private final PickupLocationService pickupLocationService;
-    private final PickupTimeSlotRepository pickupTimeSlotRepository;
     private final SkydropxService skydropxService;
 
     @Transactional
@@ -181,27 +183,26 @@ public class OrderService {
             if (request.pickupLocationId() == null) {
                 throw new BadRequestException("pickupLocationId is required for PICKUP shipping.");
             }
-            if (request.pickupTimeSlotId() == null) {
-                throw new BadRequestException("pickupTimeSlotId is required for PICKUP shipping.");
-            }
             ShippingConfig cfg = shippingConfigService.getOrCreate();
             if (!cfg.isPickupEnabled()) {
                 throw new BadRequestException("Pick Up is not available.");
             }
             PickupLocation loc = pickupLocationService.findActiveById(request.pickupLocationId());
-            PickupTimeSlot slot = pickupTimeSlotRepository.findById(request.pickupTimeSlotId())
-                    .orElseThrow(() -> new ResourceNotFoundException("PickupTimeSlot", "id", request.pickupTimeSlotId()));
             order.setShippingCost(cfg.getPickupCost());
             order.setShippingMethodName("Pick Up – " + loc.getName());
             order.setShippingType("PICKUP");
             order.setPickupLocationName(loc.getName() + ", " + loc.getAddress());
-            order.setPickupTimeSlotLabel(slot.getLabel());
             order.setShippingAddress(loc.getAddress());
             order.setShippingCity(loc.getCity());
             order.setShippingState(loc.getState() != null ? loc.getState() : "");
             order.setShippingZipCode("-");
             order.setShippingCountry("-");
             totalAmount = totalAmount.add(cfg.getPickupCost());
+
+            if (request.pickupDate() == null) {
+                throw new BadRequestException("pickupDate es requerido para envío tipo PICKUP.");
+            }
+            applyPickupDate(order, loc.getId(), request.pickupDate(), request.pickupAvailabilityId());
 
         } else {
             throw new BadRequestException("shippingType must be NATIONAL or PICKUP");
@@ -350,27 +351,26 @@ public class OrderService {
             if (request.pickupLocationId() == null) {
                 throw new BadRequestException("pickupLocationId is required for PICKUP shipping.");
             }
-            if (request.pickupTimeSlotId() == null) {
-                throw new BadRequestException("pickupTimeSlotId is required for PICKUP shipping.");
-            }
             ShippingConfig cfg = shippingConfigService.getOrCreate();
             if (!cfg.isPickupEnabled()) {
                 throw new BadRequestException("Pick Up is not available.");
             }
             PickupLocation loc = pickupLocationService.findActiveById(request.pickupLocationId());
-            PickupTimeSlot slot = pickupTimeSlotRepository.findById(request.pickupTimeSlotId())
-                    .orElseThrow(() -> new ResourceNotFoundException("PickupTimeSlot", "id", request.pickupTimeSlotId()));
             order.setShippingCost(cfg.getPickupCost());
             order.setShippingMethodName("Pick Up – " + loc.getName());
             order.setShippingType("PICKUP");
             order.setPickupLocationName(loc.getName() + ", " + loc.getAddress());
-            order.setPickupTimeSlotLabel(slot.getLabel());
             order.setShippingAddress(loc.getAddress());
             order.setShippingCity(loc.getCity());
             order.setShippingState(loc.getState() != null ? loc.getState() : "");
             order.setShippingZipCode("-");
             order.setShippingCountry("-");
             totalAmount = totalAmount.add(cfg.getPickupCost());
+
+            if (request.pickupDate() == null) {
+                throw new BadRequestException("pickupDate es requerido para envío tipo PICKUP.");
+            }
+            applyPickupDate(order, loc.getId(), request.pickupDate(), request.pickupAvailabilityId());
 
         } else {
             throw new BadRequestException("shippingType must be NATIONAL or PICKUP");
@@ -447,13 +447,168 @@ public class OrderService {
         OrderResponse orderResponse = mapToResponse(orderRepository.save(order), true);
         if (order.getUser() != null) {
             emailService.sendOrderStatusUpdateEmail(order.getUser(), orderResponse);
+        } else if (order.getGuestEmail() != null) {
+            emailService.sendGuestOrderStatusUpdateEmail(
+                    order.getGuestEmail(),
+                    order.getGuestFirstName() != null ? order.getGuestFirstName() : "Cliente",
+                    orderResponse);
         }
         return orderResponse;
+    }
+
+    /**
+     * Validates capacity and sets pickup date / availability fields on the order.
+     * If pickupAvailabilityId is provided, checks per-rule capacity; otherwise falls back to any-rule check.
+     */
+    private void applyPickupDate(Order order, Long locationId, LocalDate pickupDate, Long pickupAvailabilityId) {
+        List<OrderStatus> excluded = List.of(OrderStatus.CANCELLED, OrderStatus.REFUNDED);
+        List<com.ecommerce.entity.PickupAvailability> rules =
+                pickupLocationService.getAvailabilityRulesForDate(locationId, pickupDate);
+
+        if (rules.isEmpty()) {
+            throw new BadRequestException("Sin disponibilidad para esta fecha");
+        }
+
+        com.ecommerce.entity.PickupAvailability chosenRule;
+        if (pickupAvailabilityId != null) {
+            chosenRule = rules.stream()
+                    .filter(r -> r.getId().equals(pickupAvailabilityId))
+                    .findFirst()
+                    .orElseThrow(() -> new BadRequestException("El horario seleccionado no está disponible para esta fecha"));
+            long booked = orderRepository.countPickupOrdersForRule(locationId, pickupDate, chosenRule.getId(), excluded);
+            if (booked >= chosenRule.getMaxCapacity()) {
+                throw new BadRequestException("Sin cupo disponible para el horario seleccionado");
+            }
+        } else {
+            // No specific rule chosen — pick first rule with remaining capacity
+            chosenRule = rules.stream()
+                    .filter(r -> orderRepository.countPickupOrdersForRule(locationId, pickupDate, r.getId(), excluded) < r.getMaxCapacity())
+                    .findFirst()
+                    .orElseThrow(() -> new BadRequestException("Sin cupo disponible para esta fecha"));
+        }
+
+        String timeLabel = pickupLocationService.formatTimeLabelPublic(chosenRule);
+        order.setPickupDate(pickupDate);
+        order.setPickupLocationId(locationId);
+        order.setPickupAvailabilityId(chosenRule.getId());
+        order.setPickupTimeSlotLabel(timeLabel);
+    }
+
+    @Transactional
+    public OrderResponse reschedulePickup(String userEmail, String orderNumber, LocalDate newDate, Long availabilityId) {
+        User user = findUserByEmail(userEmail);
+        Order order = orderRepository.findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
+
+        if (order.getUser() == null || !order.getUser().getId().equals(user.getId())) {
+            throw new BadRequestException("No tienes permiso para modificar este pedido.");
+        }
+        if (!"PICKUP".equals(order.getShippingType())) {
+            throw new BadRequestException("Este pedido no es de tipo recolección.");
+        }
+        List<OrderStatus> terminalStatuses = List.of(OrderStatus.CANCELLED, OrderStatus.DELIVERED, OrderStatus.REFUNDED);
+        if (terminalStatuses.contains(order.getStatus())) {
+            throw new BadRequestException("No se puede reagendar un pedido " + order.getStatus().name().toLowerCase() + ".");
+        }
+        applyPickupDate(order, order.getPickupLocationId(), newDate, availabilityId);
+        order.setPickupCancelled(false);
+        Order saved = orderRepository.save(order);
+        emailService.sendPickupRescheduledConfirmationEmail(
+                saved.getUser().getEmail(),
+                saved.getUser().getFirstName(),
+                saved.getOrderNumber(),
+                saved.getPickupLocationName(),
+                saved.getPickupDate(),
+                saved.getPickupTimeSlotLabel());
+        return mapToResponse(saved, true);
+    }
+
+    @Transactional
+    public OrderResponse customerCancelPickup(String userEmail, String orderNumber) {
+        User user = findUserByEmail(userEmail);
+        Order order = orderRepository.findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
+
+        if (order.getUser() == null || !order.getUser().getId().equals(user.getId())) {
+            throw new BadRequestException("No tienes permiso para modificar este pedido.");
+        }
+        if (!"PICKUP".equals(order.getShippingType())) {
+            throw new BadRequestException("Este pedido no es de tipo recolección.");
+        }
+        if (order.isPickupCancelled()) {
+            throw new BadRequestException("La recolección ya está cancelada.");
+        }
+        List<OrderStatus> terminalStatuses = List.of(OrderStatus.CANCELLED, OrderStatus.DELIVERED, OrderStatus.REFUNDED);
+        if (terminalStatuses.contains(order.getStatus())) {
+            throw new BadRequestException("No se puede cancelar la recolección de un pedido " + order.getStatus().name().toLowerCase() + ".");
+        }
+        order.setPickupCancelled(true);
+        Order saved = orderRepository.save(order);
+        emailService.sendPickupRescheduleEmail(
+                saved.getUser().getEmail(),
+                saved.getUser().getFirstName(),
+                saved.getOrderNumber(),
+                saved.getPickupLocationName(),
+                saved.getPickupDate(),
+                saved.getPickupTimeSlotLabel(),
+                "Cancelado a tu solicitud — puedes reagendar cuando quieras desde tu cuenta.");
+        return mapToResponse(saved, true);
     }
 
     private User findUserByEmail(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
+    }
+
+    @Transactional
+    public OrderResponse cancelPickupForAdmin(Long orderId, String reason) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+        if (!"PICKUP".equals(order.getShippingType())) {
+            throw new BadRequestException("Este pedido no es de tipo recolección.");
+        }
+        if (order.isPickupCancelled()) {
+            throw new BadRequestException("La recolección ya está cancelada.");
+        }
+        List<OrderStatus> terminalStatuses = List.of(OrderStatus.CANCELLED, OrderStatus.DELIVERED, OrderStatus.REFUNDED);
+        if (terminalStatuses.contains(order.getStatus())) {
+            throw new BadRequestException("No se puede cancelar la recolección de un pedido " + order.getStatus().name().toLowerCase() + ".");
+        }
+        order.setPickupCancelled(true);
+        Order saved = orderRepository.save(order);
+        String recipientEmail = saved.getUser() != null ? saved.getUser().getEmail() : saved.getGuestEmail();
+        String firstName = saved.getUser() != null ? saved.getUser().getFirstName() : saved.getGuestFirstName();
+        if (recipientEmail != null) {
+            emailService.sendPickupRescheduleEmail(
+                    recipientEmail, firstName,
+                    saved.getOrderNumber(), saved.getPickupLocationName(),
+                    saved.getPickupDate(), saved.getPickupTimeSlotLabel(), reason);
+        }
+        return mapToResponse(saved, true);
+    }
+
+    public UpcomingScheduleResponse getUpcomingSchedule() {
+        List<OrderStatus> activeStatuses = List.of(OrderStatus.CONFIRMED, OrderStatus.PROCESSING);
+
+        List<OrderResponse> shipments = orderRepository
+                .findByShippingTypeAndStatusInOrderByCreatedAtAsc("NATIONAL", activeStatuses)
+                .stream().map(o -> mapToResponse(o, true)).toList();
+
+        List<Order> pickupOrders = orderRepository
+                .findByShippingTypeAndStatusInOrderByCreatedAtAsc("PICKUP", activeStatuses)
+                .stream().filter(o -> !o.isPickupCancelled()).toList();
+
+        Map<String, List<OrderResponse>> grouped = new LinkedHashMap<>();
+        for (Order o : pickupOrders) {
+            String loc = o.getPickupLocationName() != null ? o.getPickupLocationName() : "Sin ubicación";
+            grouped.computeIfAbsent(loc, k -> new ArrayList<>()).add(mapToResponse(o, true));
+        }
+
+        List<UpcomingScheduleResponse.PickupGroupResponse> pickupGroups = grouped.entrySet().stream()
+                .map(e -> new UpcomingScheduleResponse.PickupGroupResponse(e.getKey(), e.getValue()))
+                .toList();
+
+        return new UpcomingScheduleResponse(shipments, pickupGroups);
     }
 
     private OrderResponse mapToResponse(Order order, boolean includeUser) {
@@ -500,6 +655,8 @@ public class OrderService {
                 .shippingType(order.getShippingType())
                 .pickupLocationName(order.getPickupLocationName())
                 .pickupTimeSlotLabel(order.getPickupTimeSlotLabel())
+                .pickupDate(order.getPickupDate())
+                .pickupLocationId(order.getPickupLocationId())
                 .skydropxRateId(order.getSkydropxRateId())
                 .skydropxShipmentId(order.getSkydropxShipmentId())
                 .trackingNumber(order.getTrackingNumber())
@@ -510,6 +667,7 @@ public class OrderService {
                 .guestFirstName(order.getGuestFirstName())
                 .guestLastName(order.getGuestLastName())
                 .guestPhone(order.getGuestPhone())
+                .pickupCancelled(order.isPickupCancelled())
                 .build();
     }
 }
