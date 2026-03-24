@@ -9,5 +9,6 @@ public record RegisterRequest(
     @NotBlank String lastName,
     @Email @NotBlank String email,
     @Size(min = 8, message = "Password must be at least 8 characters") @NotBlank String password,
-    String phone
+    String phone,
+    boolean marketingOptIn
 ) {}

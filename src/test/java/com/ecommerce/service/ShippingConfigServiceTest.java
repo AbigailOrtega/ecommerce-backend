@@ -46,7 +46,6 @@ class ShippingConfigServiceTest {
                 .originAddress("Calle Origen 1, CDMX")
                 .googleMapsApiKey("test-api-key")
                 .pickupCost(BigDecimal.valueOf(20))
-                .whatsappNumber("5215512345678")
                 .build();
     }
 
@@ -135,7 +134,6 @@ class ShippingConfigServiceTest {
             assertThat(response.nationalPricePerKm()).isEqualByComparingTo(BigDecimal.valueOf(2));
             assertThat(response.originAddress()).isEqualTo("Calle Origen 1, CDMX");
             assertThat(response.pickupCost()).isEqualByComparingTo(BigDecimal.valueOf(20));
-            assertThat(response.whatsappNumber()).isEqualTo("5215512345678");
         }
 
         @Test
@@ -158,17 +156,6 @@ class ShippingConfigServiceTest {
             ShippingConfigResponse response = shippingConfigService.getPublicConfig();
 
             assertThat(response.nationalEnabled()).isFalse();
-        }
-
-        @Test
-        @DisplayName("returns null whatsappNumber when none is set")
-        void getPublicConfig_nullWhatsapp() {
-            defaultConfig.setWhatsappNumber(null);
-            when(repository.findById(1L)).thenReturn(Optional.of(defaultConfig));
-
-            ShippingConfigResponse response = shippingConfigService.getPublicConfig();
-
-            assertThat(response.whatsappNumber()).isNull();
         }
 
         @Test
@@ -292,9 +279,8 @@ class ShippingConfigServiceTest {
             ShippingConfigRequest request = new ShippingConfigRequest(
                     null, null, BigDecimal.valueOf(99), null,
                     null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null
+                    null, null, null, null, null,
+                    null, null, null, null, null, null, null
             );
 
             ShippingConfigAdminResponse response = shippingConfigService.updateConfig(request);
@@ -311,9 +297,8 @@ class ShippingConfigServiceTest {
             ShippingConfigRequest request = new ShippingConfigRequest(
                     null, null, null, null,
                     null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null
+                    null, null, null, null, null,
+                    null, null, null, null, null, null, null
             );
 
             ShippingConfigAdminResponse response = shippingConfigService.updateConfig(request);
@@ -331,129 +316,14 @@ class ShippingConfigServiceTest {
             ShippingConfigRequest request = new ShippingConfigRequest(
                     false, false, null, null,
                     null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null
+                    null, null, null, null, null,
+                    null, null, null, null, null, null, null
             );
 
             ShippingConfigAdminResponse response = shippingConfigService.updateConfig(request);
 
             assertThat(response.nationalEnabled()).isFalse();
             assertThat(response.pickupEnabled()).isFalse();
-        }
-
-        @Test
-        @DisplayName("invalidates Skydropx token cache when skydropxClientId changes")
-        void updateConfig_invalidatesTokenCacheOnClientIdChange() {
-            when(repository.findById(1L)).thenReturn(Optional.of(defaultConfig));
-            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            ShippingConfigRequest request = new ShippingConfigRequest(
-                    null, null, null, null,
-                    null, null, null,
-                    "new-client-id", null, null, null, null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null
-            );
-
-            shippingConfigService.updateConfig(request);
-
-            verify(skydropxService).invalidateTokenCache();
-        }
-
-        @Test
-        @DisplayName("invalidates Skydropx token cache when skydropxClientSecret changes")
-        void updateConfig_invalidatesTokenCacheOnClientSecretChange() {
-            when(repository.findById(1L)).thenReturn(Optional.of(defaultConfig));
-            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            ShippingConfigRequest request = new ShippingConfigRequest(
-                    null, null, null, null,
-                    null, null, null,
-                    null, "new-secret", null, null, null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null
-            );
-
-            shippingConfigService.updateConfig(request);
-
-            verify(skydropxService).invalidateTokenCache();
-        }
-
-        @Test
-        @DisplayName("invalidates Skydropx token cache when skydropxSandbox flag changes")
-        void updateConfig_invalidatesTokenCacheOnSandboxChange() {
-            when(repository.findById(1L)).thenReturn(Optional.of(defaultConfig));
-            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            ShippingConfigRequest request = new ShippingConfigRequest(
-                    null, null, null, null,
-                    null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null,
-                    false, null
-            );
-
-            shippingConfigService.updateConfig(request);
-
-            verify(skydropxService).invalidateTokenCache();
-        }
-
-        @Test
-        @DisplayName("does not invalidate Skydropx token cache when no credential fields change")
-        void updateConfig_doesNotInvalidateCacheWhenNoCredentialChange() {
-            when(repository.findById(1L)).thenReturn(Optional.of(defaultConfig));
-            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            ShippingConfigRequest request = new ShippingConfigRequest(
-                    true, true, BigDecimal.valueOf(80), BigDecimal.valueOf(3),
-                    "New Address", null, BigDecimal.valueOf(15),
-                    null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null
-            );
-
-            shippingConfigService.updateConfig(request);
-
-            verify(skydropxService, never()).invalidateTokenCache();
-        }
-
-        @Test
-        @DisplayName("trims and stores whatsappNumber; sets to null when blank")
-        void updateConfig_whatsappBlankBecomesNull() {
-            when(repository.findById(1L)).thenReturn(Optional.of(defaultConfig));
-            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            ShippingConfigRequest request = new ShippingConfigRequest(
-                    null, null, null, null,
-                    null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, "   "
-            );
-
-            ShippingConfigAdminResponse response = shippingConfigService.updateConfig(request);
-
-            assertThat(response.whatsappNumber()).isNull();
-        }
-
-        @Test
-        @DisplayName("stores trimmed whatsappNumber when non-blank")
-        void updateConfig_whatsappTrimmed() {
-            when(repository.findById(1L)).thenReturn(Optional.of(defaultConfig));
-            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-            ShippingConfigRequest request = new ShippingConfigRequest(
-                    null, null, null, null,
-                    null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, "  5219991234567  "
-            );
-
-            ShippingConfigAdminResponse response = shippingConfigService.updateConfig(request);
-
-            assertThat(response.whatsappNumber()).isEqualTo("5219991234567");
         }
 
         @Test
@@ -465,9 +335,8 @@ class ShippingConfigServiceTest {
             shippingConfigService.updateConfig(new ShippingConfigRequest(
                     null, null, null, null,
                     null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null,
-                    null, null
+                    null, null, null, null, null,
+                    null, null, null, null, null, null, null
             ));
 
             verify(repository, times(1)).save(any());

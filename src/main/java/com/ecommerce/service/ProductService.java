@@ -7,6 +7,7 @@ import com.ecommerce.dto.response.ProductResponse;
 import com.ecommerce.dto.response.ProductSizeResponse;
 import com.ecommerce.entity.*;
 import com.ecommerce.exception.ResourceNotFoundException;
+import com.ecommerce.repository.CartItemRepository;
 import com.ecommerce.repository.CategoryRepository;
 import com.ecommerce.repository.ProductRepository;
 import com.ecommerce.repository.PromotionRepository;
@@ -30,6 +31,7 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final PromotionRepository promotionRepository;
+    private final CartItemRepository cartItemRepository;
 
     public Page<ProductResponse> getAllProducts(Pageable pageable) {
         return productRepository.findByActiveTrue(pageable).map(this::mapToResponse);
@@ -128,6 +130,9 @@ public class ProductService {
 
     private void applyColors(Product product, ProductRequest request) {
         if (request.colors() == null) return;
+        if (product.getId() != null) {
+            cartItemRepository.clearSelectedSizeByProductId(product.getId());
+        }
         product.getColors().clear();
         for (var cr : request.colors()) {
             if (cr.name() == null || cr.name().isBlank()) continue;

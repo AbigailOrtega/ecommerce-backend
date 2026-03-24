@@ -64,6 +64,12 @@ public class User implements UserDetails {
     private String resetToken;
     private LocalDateTime resetTokenExpiry;
 
+    @Builder.Default
+    private boolean marketingOptIn = false;
+
+    @Column(unique = true)
+    private String unsubscribeToken;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

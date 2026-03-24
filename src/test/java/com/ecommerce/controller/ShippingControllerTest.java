@@ -63,7 +63,7 @@ class ShippingControllerTest {
         return new ShippingConfigResponse(
                 true, true,
                 BigDecimal.valueOf(50), BigDecimal.valueOf(5),
-                "Calle Falsa 123", BigDecimal.ZERO, "5215512345678");
+                "Calle Falsa 123", BigDecimal.ZERO);
     }
 
     private PickupLocationResponse stubPickupLocation(Long id) {

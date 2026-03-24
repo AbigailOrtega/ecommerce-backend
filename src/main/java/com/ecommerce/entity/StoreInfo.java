@@ -30,7 +30,14 @@ public class StoreInfo {
     private String logoUrl;
 
     private String themeKey;
+    private String fontKey;
+
+    private String email;
+
+    @Column(columnDefinition = "TEXT")
+    private String privacyPolicy;
 
     private String instagramUrl;
     private String facebookUrl;
+    private String whatsappNumber;
 }

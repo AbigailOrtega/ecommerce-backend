@@ -50,6 +50,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/payments/paypal/capture-order").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/payments/paypal/confirm-payment").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/webhooks/stripe").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/webhooks/skydropx").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/marketing/unsubscribe").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )

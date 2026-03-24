@@ -73,9 +73,17 @@ public class OrderService {
 
         for (CartItem cartItem : cartItems) {
             Product product = cartItem.getProduct();
+            ProductSize selectedSize = cartItem.getSelectedSize();
 
-            if (product.getColors().isEmpty() && product.getStockQuantity() < cartItem.getQuantity()) {
-                throw new BadRequestException("Insufficient stock for: " + product.getName());
+            if (product.getColors().isEmpty()) {
+                if (product.getStockQuantity() < cartItem.getQuantity()) {
+                    throw new BadRequestException("Stock insuficiente para: " + product.getName());
+                }
+            } else {
+                if (selectedSize == null || selectedSize.getStock() < cartItem.getQuantity()) {
+                    throw new BadRequestException("Stock insuficiente para: " + product.getName()
+                            + (selectedSize != null ? " – talla " + selectedSize.getName() : ""));
+                }
             }
 
             BigDecimal effectivePrice = promotionRepository
@@ -87,8 +95,6 @@ public class OrderService {
                     .orElse(product.getPrice());
 
             BigDecimal subtotal = effectivePrice.multiply(BigDecimal.valueOf(cartItem.getQuantity()));
-
-            ProductSize selectedSize = cartItem.getSelectedSize();
             OrderItem orderItem = OrderItem.builder()
                     .product(product)
                     .productName(product.getName())
@@ -137,10 +143,7 @@ public class OrderService {
             }
             BigDecimal cost;
             String methodName = "Envío Nacional";
-            boolean hasSkydropx = cfg.getSkydropxClientId() != null && !cfg.getSkydropxClientId().isBlank()
-                    && cfg.getSkydropxClientSecret() != null && !cfg.getSkydropxClientSecret().isBlank();
-
-            if (hasSkydropx && request.skydropxRateId() != null && !request.skydropxRateId().isBlank()) {
+            if (skydropxService.hasCredentials() && request.skydropxRateId() != null && !request.skydropxRateId().isBlank()) {
                 // Re-quote to get a fresh price for the selected rate
                 var quotation = skydropxService.createQuotationForAddress(
                         request.shippingAddress(), request.shippingCity(),
@@ -244,8 +247,15 @@ public class OrderService {
                         .orElseThrow(() -> new ResourceNotFoundException("ProductSize", "id", itemReq.sizeId()));
             }
 
-            if (product.getColors().isEmpty() && product.getStockQuantity() < itemReq.quantity()) {
-                throw new BadRequestException("Insufficient stock for: " + product.getName());
+            if (product.getColors().isEmpty()) {
+                if (product.getStockQuantity() < itemReq.quantity()) {
+                    throw new BadRequestException("Stock insuficiente para: " + product.getName());
+                }
+            } else {
+                if (selectedSize == null || selectedSize.getStock() < itemReq.quantity()) {
+                    throw new BadRequestException("Stock insuficiente para: " + product.getName()
+                            + (selectedSize != null ? " – talla " + selectedSize.getName() : ""));
+                }
             }
 
             BigDecimal effectivePrice = promotionRepository
@@ -306,10 +316,7 @@ public class OrderService {
             }
             BigDecimal cost;
             String methodName = "Envío Nacional";
-            boolean hasSkydropx = cfg.getSkydropxClientId() != null && !cfg.getSkydropxClientId().isBlank()
-                    && cfg.getSkydropxClientSecret() != null && !cfg.getSkydropxClientSecret().isBlank();
-
-            if (hasSkydropx && request.skydropxRateId() != null && !request.skydropxRateId().isBlank()) {
+            if (skydropxService.hasCredentials() && request.skydropxRateId() != null && !request.skydropxRateId().isBlank()) {
                 var quotation = skydropxService.createQuotationForAddress(
                         request.shippingAddress(), request.shippingCity(),
                         request.shippingState(), request.shippingZipCode(), request.shippingCountry());
@@ -410,8 +417,12 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public Page<OrderResponse> getAllOrders(Pageable pageable) {
-        return orderRepository.findAllByOrderByCreatedAtDesc(pageable)
+    public Page<OrderResponse> getAllOrders(com.ecommerce.entity.OrderStatus status, String shippingType,
+                                            String paymentMethod, java.time.LocalDateTime dateFrom,
+                                            java.time.LocalDateTime dateTo, String search, Pageable pageable) {
+        String searchTrim = (search != null && !search.isBlank()) ? search.trim() : null;
+        String paymentTrim = (paymentMethod != null && !paymentMethod.isBlank()) ? paymentMethod.trim() : null;
+        return orderRepository.findAllWithFilters(status, shippingType, paymentTrim, dateFrom, dateTo, searchTrim, pageable)
                 .map(o -> mapToResponse(o, true));
     }
 

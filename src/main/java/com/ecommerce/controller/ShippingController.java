@@ -64,11 +64,7 @@ public class ShippingController {
     @Operation(summary = "Calculate national shipping cost (returns Skydropx rates if configured, otherwise flat price)")
     public ResponseEntity<ApiResponse<ShippingRatesResponse>> calculateNational(
             @RequestBody Map<String, String> body) {
-        ShippingConfig cfg = shippingConfigService.getOrCreate();
-        boolean hasSkydropx = cfg.getSkydropxClientId() != null && !cfg.getSkydropxClientId().isBlank()
-                && cfg.getSkydropxClientSecret() != null && !cfg.getSkydropxClientSecret().isBlank();
-
-        if (hasSkydropx) {
+        if (skydropxService.hasCredentials()) {
             var quotation = skydropxService.createQuotationForAddress(
                     body.get("address"), body.get("city"), body.get("state"),
                     body.get("zipCode"), body.get("country"));

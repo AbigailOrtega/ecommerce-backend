@@ -63,7 +63,7 @@ class AuthServiceTest {
     class Register {
 
         private final RegisterRequest request = new RegisterRequest(
-                "Ana", "López", "ana@example.com", "password123", "555-0100");
+                "Ana", "López", "ana@example.com", "password123", "555-0100", false);
 
         @Test
         @DisplayName("returns AuthResponse with tokens on success")

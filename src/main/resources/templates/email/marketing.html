@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Promoción</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f4f4f4; color: #333; }
+        .wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header { background-color: #1a1a2e; padding: 36px 40px; text-align: center; }
+        .header h1 { color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+        .body { padding: 40px; }
+        .greeting { font-size: 20px; font-weight: 600; color: #1a1a2e; margin-bottom: 20px; }
+        .promo-image { width: 100%; max-height: 320px; object-fit: cover; border-radius: 8px; margin-bottom: 24px; display: block; }
+        .body-text { font-size: 15px; line-height: 1.8; color: #444; white-space: pre-line; margin-bottom: 28px; }
+        .btn { display: inline-block; padding: 14px 32px; background-color: #4361ee; color: #ffffff !important; text-decoration: none; border-radius: 6px; font-size: 15px; font-weight: 600; }
+        .footer { background-color: #f8f8f8; padding: 24px 40px; text-align: center; border-top: 1px solid #eeeeee; }
+        .footer p { font-size: 12px; color: #999; line-height: 1.6; }
+        .unsub { font-size: 11px; color: #bbb; margin-top: 12px; }
+        .unsub a { color: #bbb; text-decoration: underline; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="header">
+        <h1>E-Commerce Store</h1>
+    </div>
+    <div class="body">
+        <p class="greeting">¡Hola, <span th:text="${firstName}">Usuario</span>!</p>
+
+        <img th:if="${hasImage}" src="cid:promoImage" alt="Promoción" class="promo-image" />
+
+        <p class="body-text" th:text="${bodyText}">Contenido de la promoción.</p>
+
+        <a th:href="${frontendUrl}" class="btn">Ver productos</a>
+    </div>
+    <div class="footer">
+        <p>© 2025 E-Commerce Store. Todos los derechos reservados.</p>
+        <p class="unsub">
+            ¿No deseas recibir más correos?
+            <a th:href="${unsubscribeUrl}">Cancela tu suscripción aquí</a>.
+        </p>
+    </div>
+</div>
+</body>
+</html>

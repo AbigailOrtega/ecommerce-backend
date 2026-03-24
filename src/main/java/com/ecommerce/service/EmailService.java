@@ -165,6 +165,91 @@ public class EmailService {
         }
     }
 
+    @Async
+    public void sendLabelPendingAlert(String toEmail, String firstName, String orderNumber, String shipmentId) {
+        try {
+            Context context = new Context();
+            context.setVariable("firstName", firstName);
+            context.setVariable("orderNumber", orderNumber);
+            context.setVariable("shipmentId", shipmentId);
+            context.setVariable("adminUrl", frontendUrl);
+
+            String html = templateEngine.process("email/label-pending", context);
+            sendEmail(toEmail, "Acción requerida: guía pendiente — Pedido #" + orderNumber, html);
+            log.info("Label pending alert sent to: {} for order: {}", toEmail, orderNumber);
+        } catch (Exception e) {
+            log.error("Failed to send label pending alert to: {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendShipmentTrackingEmail(User user, OrderResponse order) {
+        try {
+            Context context = new Context();
+            context.setVariable("firstName", user.getFirstName());
+            context.setVariable("order", order);
+            context.setVariable("frontendUrl", frontendUrl);
+
+            String html = templateEngine.process("email/shipment-tracking", context);
+            sendEmail(user.getEmail(), "Tu pedido #" + order.getOrderNumber() + " está en camino", html);
+            log.info("Shipment tracking email sent to: {} for order: {}", user.getEmail(), order.getOrderNumber());
+        } catch (Exception e) {
+            log.error("Failed to send shipment tracking email to: {}", user.getEmail(), e);
+        }
+    }
+
+    @Async
+    public void sendGuestShipmentTrackingEmail(String email, String firstName, OrderResponse order) {
+        try {
+            Context context = new Context();
+            context.setVariable("firstName", firstName);
+            context.setVariable("order", order);
+            context.setVariable("frontendUrl", frontendUrl);
+
+            String html = templateEngine.process("email/shipment-tracking", context);
+            sendEmail(email, "Tu pedido #" + order.getOrderNumber() + " está en camino", html);
+            log.info("Guest shipment tracking email sent to: {} for order: {}", email, order.getOrderNumber());
+        } catch (Exception e) {
+            log.error("Failed to send guest shipment tracking email to: {}", email, e);
+        }
+    }
+
+    @Async
+    public void sendMarketingEmailBulk(java.util.List<User> users, String subject, String bodyText,
+                                       byte[] imageBytes, String imageContentType) {
+        int sent = 0;
+        for (User user : users) {
+            try {
+                Context context = new Context();
+                context.setVariable("firstName", user.getFirstName());
+                context.setVariable("bodyText", bodyText);
+                context.setVariable("hasImage", imageBytes != null && imageBytes.length > 0);
+                context.setVariable("unsubscribeUrl", frontendUrl + "/unsubscribe?token=" + user.getUnsubscribeToken());
+                context.setVariable("frontendUrl", frontendUrl);
+
+                String html = templateEngine.process("email/marketing", context);
+
+                MimeMessage message = mailSender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+                helper.setFrom(fromEmail);
+                helper.setTo(user.getEmail());
+                helper.setSubject(subject);
+                helper.setText(html, true);
+
+                if (imageBytes != null && imageBytes.length > 0) {
+                    helper.addInline("promoImage",
+                            new org.springframework.core.io.ByteArrayResource(imageBytes),
+                            imageContentType != null ? imageContentType : "image/jpeg");
+                }
+                mailSender.send(message);
+                sent++;
+            } catch (Exception e) {
+                log.error("Failed to send marketing email to: {}", user.getEmail(), e);
+            }
+        }
+        log.info("Marketing campaign sent: {}/{} emails delivered", sent, users.size());
+    }
+
     /**
      * Synchronous (no @Async), no try/catch — lets the real SMTP error propagate
      * to the caller so the admin can see exactly what went wrong.
@@ -198,8 +283,9 @@ public class EmailService {
             case "SHIPPED"    -> "Enviado";
             case "DELIVERED"  -> "Entregado";
             case "CANCELLED"  -> "Cancelado";
-            case "REFUNDED"   -> "Reembolsado";
-            default           -> status;
+            case "REFUNDED"         -> "Reembolsado";
+            case "SHIPMENT_PENDING" -> "Envío pendiente";
+            default                 -> status;
         };
     }
 }

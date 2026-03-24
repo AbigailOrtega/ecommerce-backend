@@ -11,8 +11,6 @@ public record ShippingConfigRequest(
     String googleMapsApiKey,
     BigDecimal pickupCost,
     // Skydropx
-    String skydropxClientId,
-    String skydropxClientSecret,
     String skydropxOriginStreet,
     String skydropxOriginPostalCode,
     String skydropxOriginCity,
@@ -24,8 +22,5 @@ public record ShippingConfigRequest(
     Double skydropxDefaultWeight,
     Integer skydropxDefaultLength,
     Integer skydropxDefaultWidth,
-    Integer skydropxDefaultHeight,
-    Boolean skydropxSandbox,
-    // General
-    String whatsappNumber
+    Integer skydropxDefaultHeight
 ) {}

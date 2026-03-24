@@ -10,9 +10,13 @@ public record StoreInfoResponse(
     String mission,
     String vision,
     String phone,
+    String email,
+    String privacyPolicy,
     String logoUrl,
     String themeKey,
+    String fontKey,
     List<StoreImage> images,
     String instagramUrl,
-    String facebookUrl
+    String facebookUrl,
+    String whatsappNumber
 ) {}

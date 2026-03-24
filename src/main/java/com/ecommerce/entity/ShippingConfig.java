@@ -41,8 +41,6 @@ public class ShippingConfig {
     // ── Skydropx ─────────────────────────────────────────────────────────────
     private String skydropxClientId;
     private String skydropxClientSecret;
-    @Builder.Default
-    private boolean skydropxSandbox = true; // false = producción, true = demo
 
     // Dirección de origen para guías
     private String skydropxOriginStreet;
@@ -54,9 +52,6 @@ public class ShippingConfig {
     private String skydropxSenderName;
     private String skydropxSenderEmail;
     private String skydropxSenderPhone;
-
-    // ── General ───────────────────────────────────────────────────────────────
-    private String whatsappNumber; // E.164 without '+', e.g. 5215512345678
 
     // Dimensiones de paquete por defecto
     @Builder.Default

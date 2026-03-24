@@ -36,11 +36,15 @@ public class StoreInfoService {
                 info.getMission(),
                 info.getVision(),
                 info.getPhone(),
+                info.getEmail(),
+                info.getPrivacyPolicy(),
                 info.getLogoUrl(),
                 info.getThemeKey(),
+                info.getFontKey(),
                 images,
                 info.getInstagramUrl(),
-                info.getFacebookUrl()
+                info.getFacebookUrl(),
+                info.getWhatsappNumber()
         );
     }
 
@@ -52,10 +56,14 @@ public class StoreInfoService {
         if (request.mission() != null) info.setMission(request.mission());
         if (request.vision() != null) info.setVision(request.vision());
         if (request.phone() != null) info.setPhone(request.phone());
+        if (request.email() != null) info.setEmail(request.email().isBlank() ? null : request.email());
+        if (request.privacyPolicy() != null) info.setPrivacyPolicy(request.privacyPolicy().isBlank() ? null : request.privacyPolicy());
         if (request.logoUrl() != null) info.setLogoUrl(request.logoUrl().isBlank() ? null : request.logoUrl());
         if (request.themeKey() != null) info.setThemeKey(request.themeKey());
+        if (request.fontKey() != null) info.setFontKey(request.fontKey());
         if (request.instagramUrl() != null) info.setInstagramUrl(request.instagramUrl().isBlank() ? null : request.instagramUrl());
         if (request.facebookUrl() != null) info.setFacebookUrl(request.facebookUrl().isBlank() ? null : request.facebookUrl());
+        if (request.whatsappNumber() != null) info.setWhatsappNumber(request.whatsappNumber().isBlank() ? null : request.whatsappNumber().trim());
         storeInfoRepository.save(info);
         return getPublic();
     }

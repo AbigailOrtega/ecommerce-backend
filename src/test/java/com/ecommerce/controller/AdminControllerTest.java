@@ -203,7 +203,7 @@ class AdminControllerTest {
                 BigDecimal.valueOf(0),
                 false, null, null, null, null, "MX",
                 null, null, null,
-                1.0, 30, 20, 15, true, "5215512345678");
+                1.0, 30, 20, 15);
     }
 
     // ─── GET /api/admin/dashboard ────────────────────────────────────────────
@@ -236,7 +236,7 @@ class AdminControllerTest {
         void getAllOrders_200() throws Exception {
             List<OrderResponse> orders = List.of(stubOrder(1L));
             Page<OrderResponse> page = new PageImpl<>(orders, PageRequest.of(0, 20), orders.size());
-            when(orderService.getAllOrders(any(Pageable.class))).thenReturn(page);
+            when(orderService.getAllOrders(any(), any(), any(), any(), any(), any(), any(Pageable.class))).thenReturn(page);
 
             mockMvc.perform(get("/api/admin/orders"))
                     .andExpect(status().isOk())
@@ -759,8 +759,8 @@ class AdminControllerTest {
             ShippingConfigRequest req = new ShippingConfigRequest(
                     true, true, BigDecimal.valueOf(50), BigDecimal.valueOf(5),
                     "Calle Falsa 123", null, BigDecimal.ZERO,
-                    null, null, null, null, null, null, null, null, null,
-                    null, 1.0, 30, 20, 15, true, "5215512345678");
+                    null, null, null, null, null, null, null,
+                    null, 1.0, 30, 20, 15);
 
             mockMvc.perform(put("/api/admin/shipping/config")
                     .contentType(MediaType.APPLICATION_JSON)

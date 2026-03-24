@@ -48,7 +48,6 @@ class SkydropxServiceTest {
         validConfig = ShippingConfig.builder()
                 .skydropxClientId("CLIENT_ID")
                 .skydropxClientSecret("CLIENT_SECRET")
-                .skydropxSandbox(true)
                 .skydropxOriginPostalCode("06600")
                 .skydropxOriginCity("CDMX")
                 .skydropxOriginState("CDMX")
@@ -168,7 +167,6 @@ class SkydropxServiceTest {
                     .skydropxOriginPostalCode("06600")
                     .skydropxClientId("")
                     .skydropxClientSecret("")
-                    .skydropxSandbox(true)
                     .build();
             when(shippingConfigService.getOrCreate()).thenReturn(cfg);
 
@@ -278,7 +276,6 @@ class SkydropxServiceTest {
             ShippingConfig cfg = ShippingConfig.builder()
                     .skydropxClientId("ID")
                     .skydropxClientSecret("SECRET")
-                    .skydropxSandbox(true)
                     .skydropxOriginPostalCode("")   // blank
                     .build();
             when(shippingConfigService.getOrCreate()).thenReturn(cfg);
@@ -860,7 +857,6 @@ class SkydropxServiceTest {
             ShippingConfig cfgNoPhone = ShippingConfig.builder()
                     .skydropxClientId("CLIENT_ID")
                     .skydropxClientSecret("CLIENT_SECRET")
-                    .skydropxSandbox(true)
                     .skydropxOriginPostalCode("06600")
                     .skydropxOriginCity("CDMX")
                     .skydropxOriginState("CDMX")

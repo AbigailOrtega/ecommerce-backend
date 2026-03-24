@@ -117,7 +117,6 @@ public class TestDataInitializer implements ApplicationRunner {
         ShippingConfig cfg = shippingConfigRepository.findById(1L)
                 .orElse(ShippingConfig.builder().id(1L).build());
         cfg.setPickupEnabled(true);
-        cfg.setWhatsappNumber("5215512345678"); // test number for E2E
         shippingConfigRepository.save(cfg);
     }
 

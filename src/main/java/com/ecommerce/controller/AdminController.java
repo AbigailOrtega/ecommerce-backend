@@ -121,10 +121,17 @@ public class AdminController {
     }
 
     @GetMapping("/orders")
-    @Operation(summary = "Get all orders (paginated)")
+    @Operation(summary = "Get all orders (paginated, filterable)")
     public ResponseEntity<ApiResponse<Page<OrderResponse>>> getAllOrders(
+            @RequestParam(required = false) com.ecommerce.entity.OrderStatus status,
+            @RequestParam(required = false) String shippingType,
+            @RequestParam(required = false) String paymentMethod,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime dateFrom,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime dateTo,
+            @RequestParam(required = false) String search,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(orderService.getAllOrders(pageable)));
+        return ResponseEntity.ok(ApiResponse.success(
+                orderService.getAllOrders(status, shippingType, paymentMethod, dateFrom, dateTo, search, pageable)));
     }
 
     @GetMapping("/orders/upcoming-schedule")
@@ -450,7 +457,8 @@ public class AdminController {
     @PostMapping("/orders/{id}/skydropx/shipment")
     @Operation(summary = "Crear guía Skydropx con la tarifa seleccionada")
     public ResponseEntity<ApiResponse<OrderResponse>> skydropxCreateShipment(
-            @PathVariable Long id, @Valid @RequestBody SkydropxCreateShipmentRequest request) {
+            @PathVariable Long id, @Valid @RequestBody SkydropxCreateShipmentRequest request,
+            org.springframework.security.core.Authentication authentication) {
         com.ecommerce.entity.Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "id", id));
         SkydropxShipmentResponse shipment = skydropxService.createShipment(request.rateId(), order);
@@ -459,8 +467,34 @@ public class AdminController {
         order.setCarrierName(shipment.carrierName());
         order.setLabelUrl(shipment.labelUrl());
         order.setShipmentStatus(shipment.status());
+
+        boolean labelReady = !shipment.labelUrl().isBlank() && !shipment.trackingNumber().isBlank();
+        if (!labelReady) {
+            order.setStatus(com.ecommerce.entity.OrderStatus.SHIPMENT_PENDING);
+        }
         orderRepository.save(order);
-        return ResponseEntity.ok(ApiResponse.success("Guía generada", orderService.getOrderById(id)));
+
+        com.ecommerce.dto.response.OrderResponse orderResponse = orderService.getOrderById(id);
+
+        if (!labelReady) {
+            // Notify the admin so they can retry
+            userRepository.findByEmail(authentication.getName()).ifPresent(admin ->
+                emailService.sendLabelPendingAlert(
+                        admin.getEmail(), admin.getFirstName(),
+                        order.getOrderNumber(), shipment.shipmentId()));
+            return ResponseEntity.ok(ApiResponse.success(
+                    "Guía registrada pero Skydropx no devolvió el label en 60s. Usa 'Reintentar guía' para obtenerlo.", orderResponse));
+        }
+
+        if (!shipment.trackingNumber().isBlank()) {
+            if (order.getUser() != null) {
+                emailService.sendShipmentTrackingEmail(order.getUser(), orderResponse);
+            } else if (order.getGuestEmail() != null) {
+                String firstName = order.getGuestFirstName() != null ? order.getGuestFirstName() : "Cliente";
+                emailService.sendGuestShipmentTrackingEmail(order.getGuestEmail(), firstName, orderResponse);
+            }
+        }
+        return ResponseEntity.ok(ApiResponse.success("Guía generada", orderResponse));
     }
 
     @GetMapping("/orders/{id}/skydropx/shipment")
@@ -471,13 +505,32 @@ public class AdminController {
         if (order.getSkydropxShipmentId() == null) {
             throw new com.ecommerce.exception.BadRequestException("Este pedido no tiene una guía Skydropx.");
         }
+        boolean hadTracking = order.getTrackingNumber() != null && !order.getTrackingNumber().isBlank();
         SkydropxShipmentResponse shipment = skydropxService.fetchShipment(order.getSkydropxShipmentId());
         if (!shipment.trackingNumber().isBlank()) order.setTrackingNumber(shipment.trackingNumber());
         if (!shipment.carrierName().isBlank()) order.setCarrierName(shipment.carrierName());
         if (!shipment.labelUrl().isBlank()) order.setLabelUrl(shipment.labelUrl());
         if (!shipment.status().isBlank()) order.setShipmentStatus(shipment.status());
+
+        // If we were waiting for the label and now it arrived, clear SHIPMENT_PENDING
+        boolean labelNowReady = !shipment.labelUrl().isBlank() && !shipment.trackingNumber().isBlank();
+        if (labelNowReady && order.getStatus() == com.ecommerce.entity.OrderStatus.SHIPMENT_PENDING) {
+            order.setStatus(com.ecommerce.entity.OrderStatus.PROCESSING);
+        }
         orderRepository.save(order);
-        return ResponseEntity.ok(ApiResponse.success("Datos actualizados", orderService.getOrderById(id)));
+
+        com.ecommerce.dto.response.OrderResponse orderResponse = orderService.getOrderById(id);
+        // Send tracking email if tracking just became available for the first time
+        if (!hadTracking && !shipment.trackingNumber().isBlank()) {
+            if (order.getUser() != null) {
+                emailService.sendShipmentTrackingEmail(order.getUser(), orderResponse);
+            } else if (order.getGuestEmail() != null) {
+                String firstName = order.getGuestFirstName() != null ? order.getGuestFirstName() : "Cliente";
+                emailService.sendGuestShipmentTrackingEmail(order.getGuestEmail(), firstName, orderResponse);
+            }
+        }
+        String message = labelNowReady && !hadTracking ? "Guía lista" : "Datos actualizados";
+        return ResponseEntity.ok(ApiResponse.success(message, orderResponse));
     }
 
     @GetMapping("/orders/{id}/skydropx/label")

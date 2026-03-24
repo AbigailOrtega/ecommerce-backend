@@ -50,6 +50,8 @@ public class AuthService {
                 .password(passwordEncoder.encode(request.password()))
                 .phone(request.phone())
                 .role(Role.CUSTOMER)
+                .marketingOptIn(request.marketingOptIn())
+                .unsubscribeToken(UUID.randomUUID().toString())
                 .build();
 
         user = userRepository.save(user);

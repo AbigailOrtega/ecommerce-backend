@@ -8,6 +8,7 @@ import com.ecommerce.entity.ShippingConfig;
 import com.ecommerce.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -27,8 +28,22 @@ public class SkydropxService {
     private static final String PROD_URL    = "https://pro.skydropx.com";
     private static final String SANDBOX_URL = "https://sb-pro.skydropx.com";
 
+    @Value("${app.skydropx.client-id:}")
+    private String clientId;
+
+    @Value("${app.skydropx.client-secret:}")
+    private String clientSecret;
+
+    @Value("${app.skydropx.sandbox:true}")
+    private boolean sandbox;
+
     private final ShippingConfigService shippingConfigService;
     private final RestTemplate restTemplate = new RestTemplate();
+
+    public boolean hasCredentials() {
+        return clientId != null && !clientId.isBlank()
+                && clientSecret != null && !clientSecret.isBlank();
+    }
 
     // ── Token cache ───────────────────────────────────────────────────────────
     private String cachedToken;
@@ -49,8 +64,7 @@ public class SkydropxService {
     }
 
     private String baseUrl() {
-        ShippingConfig cfg = shippingConfigService.getOrCreate();
-        return cfg.isSkydropxSandbox() ? SANDBOX_URL : PROD_URL;
+        return sandbox ? SANDBOX_URL : PROD_URL;
     }
 
     private synchronized String getToken() {
@@ -64,10 +78,8 @@ public class SkydropxService {
             return cachedToken;
         }
 
-        ShippingConfig cfg = shippingConfigService.getOrCreate();
-        if (cfg.getSkydropxClientId() == null || cfg.getSkydropxClientId().isBlank()
-                || cfg.getSkydropxClientSecret() == null || cfg.getSkydropxClientSecret().isBlank()) {
-            throw new BadRequestException("Skydropx no está configurado. Ingresa el API Key y API Secret Key en la configuración de envíos.");
+        if (!hasCredentials()) {
+            throw new BadRequestException("Skydropx no está configurado. Define SKYDROPX_CLIENT_ID y SKYDROPX_CLIENT_SECRET en las variables de entorno o en application.yml.");
         }
 
         // OAuth2 client_credentials — form-encoded (not JSON)
@@ -75,8 +87,8 @@ public class SkydropxService {
         tokenHeaders.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
         MultiValueMap<String, String> tokenBody = new LinkedMultiValueMap<>();
-        tokenBody.add("client_id", cfg.getSkydropxClientId().trim());
-        tokenBody.add("client_secret", cfg.getSkydropxClientSecret().trim());
+        tokenBody.add("client_id", clientId.trim());
+        tokenBody.add("client_secret", clientSecret.trim());
         tokenBody.add("grant_type", "client_credentials");
 
         try {
@@ -257,23 +269,29 @@ public class SkydropxService {
             ).getBody();
             log.info("Skydropx shipment raw response: {}", response);
             SkydropxShipmentResponse shipment = parseShipmentResponse(response);
-
-            // Poll until label_url is available (Skydropx generates it asynchronously)
-            if (shipment.labelUrl().isBlank() && !shipment.shipmentId().isBlank()) {
-                shipment = pollShipmentUntilLabelReady(shipment);
-            }
-            return shipment;
+            return pollShipmentUntilLabelReady(shipment);
         } catch (HttpClientErrorException e) {
             log.error("Skydropx shipment error [{}]: {}", e.getStatusCode(), e.getResponseBodyAsString());
             throw new BadRequestException("Error al crear envío en Skydropx: " + extractMessage(e));
         }
     }
 
-    /** Polls GET /shipments/{id} until workflow_status != in_progress and label_url is present. */
+    private static final java.util.Set<String> WORKFLOW_IN_PROGRESS =
+            java.util.Set.of("in_progress", "pending", "processing", "");
+
+    private static final java.util.Set<String> WORKFLOW_DONE =
+            java.util.Set.of("completed", "success", "processed", "done", "generated", "ready");
+
+    /**
+     * Polls GET /shipments/{id} while workflow_status is still "in_progress" / "pending".
+     * Returns as soon as the workflow reaches a terminal state (completed, success, etc.)
+     * or after a 60s timeout — whichever comes first.
+     */
     @SuppressWarnings("unchecked")
     private SkydropxShipmentResponse pollShipmentUntilLabelReady(SkydropxShipmentResponse initial) {
         String shipmentId = initial.shipmentId();
-        for (int i = 0; i < 15; i++) {
+        SkydropxShipmentResponse best = initial;
+        for (int i = 0; i < 30; i++) {
             try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
             try {
                 Map<String, Object> response = restTemplate.exchange(
@@ -283,34 +301,69 @@ public class SkydropxService {
                         Map.class
                 ).getBody();
 
-                // Extract workflow_status from data.attributes
                 String workflowStatus = "";
+                String errorDetail = "";
                 if (response != null && response.get("data") instanceof Map<?,?> data) {
                     if (((Map<?,?>) data).get("attributes") instanceof Map<?,?> attrs) {
                         workflowStatus = nullToEmpty(attrs.get("workflow_status"));
+                        if (attrs.get("error_detail") instanceof Map<?,?> err) {
+                            errorDetail = nullToEmpty(err.get("error_message_detail"));
+                            if (errorDetail.isBlank()) errorDetail = nullToEmpty(err.get("error_message"));
+                        }
                     }
                 }
 
                 SkydropxShipmentResponse polled = parseShipmentResponse(response);
-                log.info("Skydropx shipment poll {}/15 — workflow_status={} label_url={}",
-                        i + 1, workflowStatus, polled.labelUrl().isBlank() ? "(empty)" : polled.labelUrl());
+                best = mergeBest(best, polled);
 
-                if (!polled.labelUrl().isBlank()) {
-                    log.info("Skydropx label_url ready after {} polls", i + 1);
-                    return polled;
+                log.info("Skydropx poll {}/30 — workflow_status={} tracking={} label={}",
+                        i + 1, workflowStatus.isBlank() ? "(unknown)" : workflowStatus,
+                        best.trackingNumber().isBlank() ? "(empty)" : best.trackingNumber(),
+                        best.labelUrl().isBlank() ? "(empty)" : best.labelUrl());
+
+                // Still processing — keep waiting
+                if (WORKFLOW_IN_PROGRESS.contains(workflowStatus)) continue;
+
+                // Skydropx reported an error — surface it immediately
+                if ("error".equals(workflowStatus)) {
+                    String msg = errorDetail.isBlank()
+                            ? "Skydropx no pudo generar la guía. Por favor intenta con otra tarifa."
+                            : "Skydropx no pudo generar la guía: " + errorDetail;
+                    log.error("Skydropx workflow_status=error — {}", msg);
+                    throw new BadRequestException(msg);
                 }
-                // Stop polling if shipment finished processing but still no label (error state)
-                if (!workflowStatus.isBlank() && !"in_progress".equals(workflowStatus)
-                        && !"pending".equals(workflowStatus)) {
-                    log.warn("Skydropx shipment workflow_status={}, stopping poll", workflowStatus);
-                    return polled;
+
+                // Reached a terminal state — return what we have
+                if (WORKFLOW_DONE.contains(workflowStatus)) {
+                    log.info("Skydropx workflow_status={} after {} polls — tracking={} label={}",
+                            workflowStatus, i + 1,
+                            best.trackingNumber().isBlank() ? "MISSING" : best.trackingNumber(),
+                            best.labelUrl().isBlank() ? "MISSING" : best.labelUrl());
+                } else {
+                    log.warn("Skydropx workflow_status={} (unexpected) after {} polls — returning best result",
+                            workflowStatus, i + 1);
                 }
+                return best;
+
             } catch (HttpClientErrorException e) {
                 log.warn("Skydropx shipment poll error [{}]: {}", e.getStatusCode(), e.getResponseBodyAsString());
             }
         }
-        log.warn("Skydropx label_url not ready after 15 polls (30s), saving shipment without it");
-        return initial;
+        log.warn("Skydropx workflow still in_progress after 30 polls (60s) — saving best result so far (tracking={} label={})",
+                best.trackingNumber().isBlank() ? "MISSING" : best.trackingNumber(),
+                best.labelUrl().isBlank() ? "MISSING" : best.labelUrl());
+        return best;
+    }
+
+    /** Returns a new response keeping the best (non-blank) value from each field. */
+    private SkydropxShipmentResponse mergeBest(SkydropxShipmentResponse prev, SkydropxShipmentResponse next) {
+        return new SkydropxShipmentResponse(
+                next.shipmentId().isBlank()     ? prev.shipmentId()     : next.shipmentId(),
+                next.trackingNumber().isBlank() ? prev.trackingNumber() : next.trackingNumber(),
+                next.carrierName().isBlank()    ? prev.carrierName()    : next.carrierName(),
+                next.labelUrl().isBlank()       ? prev.labelUrl()       : next.labelUrl(),
+                next.status().isBlank()         ? prev.status()         : next.status()
+        );
     }
 
     /** Creates a fresh quotation and returns the raw completed response (including packages). */
@@ -377,10 +430,12 @@ public class SkydropxService {
             }
         }
 
-        // Step 3: try known label endpoints
+        // Step 3: try known label endpoints (singular and plural, with and without auth)
         String[] labelEndpoints = {
             baseUrl() + "/api/v1/shipments/" + shipmentId + "/labels",
-            baseUrl() + "/api/v1/shipments/" + shipmentId + "/label"
+            baseUrl() + "/api/v1/shipments/" + shipmentId + "/label",
+            baseUrl() + "/api/v1/packages/" + shipmentId + "/label",
+            baseUrl() + "/api/v1/packages/" + shipmentId + "/labels"
         };
         for (String endpoint : labelEndpoints) {
             try {
@@ -393,7 +448,7 @@ public class SkydropxService {
                     return resp.getBody();
                 }
             } catch (Exception e) {
-                log.debug("Label endpoint {} not available: {}", endpoint, e.getMessage());
+                log.warn("Label endpoint {} not available: {}", endpoint, e.getMessage());
             }
         }
 
@@ -401,9 +456,9 @@ public class SkydropxService {
     }
 
     /** Fetches the current state of a shipment (label URL, tracking, status). */
+    @SuppressWarnings("unchecked")
     public SkydropxShipmentResponse fetchShipment(String shipmentId) {
         try {
-            @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.exchange(
                     baseUrl() + "/api/v1/shipments/" + shipmentId,
                     HttpMethod.GET,
@@ -411,6 +466,26 @@ public class SkydropxService {
                     Map.class
             ).getBody();
             log.info("Skydropx fetch shipment raw response: {}", response);
+
+            // Check for workflow_status=error and surface the error message
+            if (response != null && response.get("data") instanceof Map<?,?> data) {
+                if (((Map<?,?>) data).get("attributes") instanceof Map<?,?> attrs) {
+                    String workflowStatus = nullToEmpty(attrs.get("workflow_status"));
+                    if ("error".equals(workflowStatus)) {
+                        String errorDetail = "";
+                        if (attrs.get("error_detail") instanceof Map<?,?> err) {
+                            errorDetail = nullToEmpty(err.get("error_message_detail"));
+                            if (errorDetail.isBlank()) errorDetail = nullToEmpty(err.get("error_message"));
+                        }
+                        String msg = errorDetail.isBlank()
+                                ? "Skydropx no pudo generar la guía. Por favor intenta con otra tarifa."
+                                : "Skydropx no pudo generar la guía: " + errorDetail;
+                        log.error("Skydropx fetchShipment workflow_status=error — {}", msg);
+                        throw new BadRequestException(msg);
+                    }
+                }
+            }
+
             return parseShipmentResponse(response);
         } catch (HttpClientErrorException e) {
             log.error("Skydropx fetch shipment error [{}]: {}", e.getStatusCode(), e.getResponseBodyAsString());
@@ -720,8 +795,8 @@ public class SkydropxService {
     private String extractMessage(HttpClientErrorException e) {
         try {
             String body = e.getResponseBodyAsString();
-            // Try "message" key first, then "errors" when it's a plain string value
-            for (String key : new String[]{"\"message\"", "\"errors\""}) {
+            // Try common error keys: "message", "error" (singular), "errors"
+            for (String key : new String[]{"\"message\"", "\"error\"", "\"errors\""}) {
                 int keyIdx = body.indexOf(key);
                 if (keyIdx >= 0) {
                     int colon = body.indexOf(':', keyIdx);

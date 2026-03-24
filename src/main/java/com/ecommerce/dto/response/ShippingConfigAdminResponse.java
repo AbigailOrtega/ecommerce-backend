@@ -23,8 +23,5 @@ public record ShippingConfigAdminResponse(
     Double skydropxDefaultWeight,
     Integer skydropxDefaultLength,
     Integer skydropxDefaultWidth,
-    Integer skydropxDefaultHeight,
-    boolean skydropxSandbox,
-    // General
-    String whatsappNumber
+    Integer skydropxDefaultHeight
 ) {}

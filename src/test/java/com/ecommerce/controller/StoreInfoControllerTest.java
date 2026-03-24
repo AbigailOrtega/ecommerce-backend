@@ -47,7 +47,7 @@ class StoreInfoControllerTest {
         List<StoreImage> images = withImages
                 ? List.of(StoreImage.builder().id(1L).url("https://img.jpg").displayOrder(1).active(true).build())
                 : List.of();
-        return new StoreInfoResponse("Mi Tienda", "Descripción", "Misión", "Visión", "+52 55 1234", null, null, images, null, null);
+        return new StoreInfoResponse("Mi Tienda", "Descripción", "Misión", "Visión", "+52 55 1234", null, null, null, null, null, images, null, null, null);
     }
 
     // ─── GET /api/store-info ──────────────────────────────────────────────────
@@ -93,7 +93,7 @@ class StoreInfoControllerTest {
         @Test
         @DisplayName("returns 200 with updated store info")
         void update_200() throws Exception {
-            StoreInfoRequest req = new StoreInfoRequest("Nuevo", "Nueva desc", null, null, null, null, null, null, null);
+            StoreInfoRequest req = new StoreInfoRequest("Nuevo", "Nueva desc", null, null, null, null, null, null, null, null, null, null, null);
             when(storeInfoService.update(any())).thenReturn(stubResponse(false));
 
             mockMvc.perform(put("/api/admin/store-info")

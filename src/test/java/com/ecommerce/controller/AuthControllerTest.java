@@ -60,7 +60,7 @@ class AuthControllerTest {
         @Test
         @DisplayName("returns 201 with AuthResponse on valid request")
         void register_201() throws Exception {
-            RegisterRequest req = new RegisterRequest("Ana", "López", "ana@example.com", "password123", null);
+            RegisterRequest req = new RegisterRequest("Ana", "López", "ana@example.com", "password123", null, false);
             when(authService.register(any())).thenReturn(stubAuthResponse());
 
             mockMvc.perform(post("/api/auth/register")

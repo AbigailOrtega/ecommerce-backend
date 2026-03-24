@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tu pedido está en camino</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f4f4f4; color: #333; }
+        .wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header { background-color: #1a1a2e; padding: 36px 40px; text-align: center; }
+        .header h1 { color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+        .header p { color: #a0a0b0; font-size: 13px; margin-top: 4px; }
+        .body { padding: 40px; }
+        .greeting { font-size: 20px; font-weight: 600; color: #1a1a2e; margin-bottom: 12px; }
+        .text { font-size: 15px; line-height: 1.7; color: #555; margin-bottom: 28px; }
+        .tracking-card { background: #e8f5e9; border-radius: 10px; padding: 28px 32px; margin-bottom: 32px; text-align: center; }
+        .tracking-icon { font-size: 44px; margin-bottom: 12px; }
+        .tracking-title { font-size: 20px; font-weight: 700; color: #2e7d32; margin-bottom: 6px; }
+        .tracking-subtitle { font-size: 13px; color: #555; margin-bottom: 20px; }
+        .tracking-number-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+        .tracking-number { font-family: 'Courier New', monospace; font-size: 22px; font-weight: 700; color: #1a1a2e; background: #fff; border: 2px solid #4caf50; border-radius: 6px; padding: 8px 20px; display: inline-block; letter-spacing: 2px; margin-bottom: 16px; }
+        .carrier-badge { display: inline-block; background: #f0f4ff; color: #3949ab; font-size: 13px; font-weight: 600; padding: 4px 14px; border-radius: 20px; margin-bottom: 0; }
+        .section-title { font-size: 13px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+        .info-grid { display: table; width: 100%; margin-bottom: 24px; }
+        .info-cell { display: table-cell; width: 50%; vertical-align: top; padding-right: 16px; }
+        .info-label { font-size: 12px; color: #999; margin-bottom: 2px; }
+        .info-value { font-size: 14px; font-weight: 600; color: #1a1a2e; }
+        .cta-btn { display: inline-block; background-color: #4361ee; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-size: 15px; font-weight: 600; margin: 8px 0 28px; }
+        .divider { border: none; border-top: 1px solid #eeeeee; margin: 28px 0; }
+        .items-summary { background: #f8f8f8; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; }
+        .item-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px solid #eeeeee; }
+        .item-row:last-child { border-bottom: none; }
+        .item-row.total { font-weight: 700; color: #1a1a2e; padding-top: 10px; font-size: 15px; }
+        .footer { background-color: #f8f8f8; padding: 24px 40px; text-align: center; border-top: 1px solid #eeeeee; }
+        .footer p { font-size: 12px; color: #999; line-height: 1.6; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="header">
+        <h1>E-Commerce Store</h1>
+        <p>Tu pedido está en camino</p>
+    </div>
+    <div class="body">
+        <p class="greeting">Hola, <span th:text="${firstName}">Usuario</span></p>
+        <p class="text">¡Tu pedido <strong th:text="'#' + ${order.orderNumber}">#ORD-00000000</strong> ha sido enviado y está en camino hacia ti!</p>
+
+        <!-- Tracking Card -->
+        <div class="tracking-card">
+            <div class="tracking-icon">&#128666;</div>
+            <p class="tracking-title">Pedido enviado</p>
+            <p class="tracking-subtitle">Usa el número de rastreo para seguir tu paquete</p>
+            <p class="tracking-number-label">Número de rastreo</p>
+            <div class="tracking-number" th:text="${order.trackingNumber}">123456789</div>
+            <br>
+            <span class="carrier-badge" th:text="${order.carrierName}">Paquetería</span>
+        </div>
+
+        <!-- CTA -->
+        <div style="text-align:center;">
+            <a class="cta-btn" th:href="${frontendUrl + '/orders/' + order.orderNumber}">Ver mi pedido</a>
+        </div>
+
+        <!-- Shipping Address -->
+        <p class="section-title">Enviado a</p>
+        <div class="info-grid">
+            <div class="info-cell">
+                <p class="info-label">Dirección</p>
+                <p class="info-value" th:text="${order.shippingAddress}">-</p>
+            </div>
+            <div class="info-cell">
+                <p class="info-label">Ciudad</p>
+                <p class="info-value" th:text="${order.shippingCity + ', ' + order.shippingState}">-</p>
+            </div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- Order Summary -->
+        <p class="section-title">Resumen del pedido</p>
+        <div class="items-summary">
+            <div class="item-row" th:each="item : ${order.items}">
+                <span>
+                    <span th:text="${item.productName}">Producto</span>
+                    <span style="color:#aaa;" th:text="' x' + ${item.quantity}"></span>
+                </span>
+                <span th:text="'$' + ${#numbers.formatDecimal(item.subtotal, 1, 2)}">$0.00</span>
+            </div>
+            <div class="item-row" th:if="${order.shippingCost != null and order.shippingCost > 0}"
+                 style="color:#555;font-size:13px;">
+                <span>Envío</span>
+                <span th:text="'+$' + ${#numbers.formatDecimal(order.shippingCost, 1, 2)}">+$0.00</span>
+            </div>
+            <div class="item-row total">
+                <span>Total</span>
+                <span th:text="'$' + ${#numbers.formatDecimal(order.totalAmount, 1, 2)}">$0.00</span>
+            </div>
+        </div>
+    </div>
+    <div class="footer">
+        <p>¿Tienes alguna pregunta sobre tu envío? Contáctanos respondiendo este correo.</p>
+        <p style="margin-top:8px;">© 2025 E-Commerce Store. Todos los derechos reservados.</p>
+    </div>
+</div>
+</body>
+</html>

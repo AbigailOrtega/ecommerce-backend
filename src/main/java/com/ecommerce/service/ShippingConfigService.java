@@ -6,7 +6,6 @@ import com.ecommerce.dto.response.ShippingConfigAdminResponse;
 import com.ecommerce.dto.response.ShippingConfigResponse;
 import com.ecommerce.entity.ShippingConfig;
 import com.ecommerce.repository.ShippingConfigRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,8 +44,7 @@ public class ShippingConfigService {
                 cfg.getNationalBasePrice(),
                 cfg.getNationalPricePerKm(),
                 cfg.getOriginAddress(),
-                cfg.getPickupCost(),
-                cfg.getWhatsappNumber()
+                cfg.getPickupCost()
         );
     }
 
@@ -61,8 +59,7 @@ public class ShippingConfigService {
                 cfg.getGoogleMapsApiKey() != null && !cfg.getGoogleMapsApiKey().isBlank(),
                 cfg.getPickupCost(),
                 // Skydropx
-                cfg.getSkydropxClientId() != null && !cfg.getSkydropxClientId().isBlank()
-                        && cfg.getSkydropxClientSecret() != null && !cfg.getSkydropxClientSecret().isBlank(),
+                skydropxService.hasCredentials(),
                 cfg.getSkydropxOriginStreet(),
                 cfg.getSkydropxOriginPostalCode(),
                 cfg.getSkydropxOriginCity(),
@@ -74,9 +71,7 @@ public class ShippingConfigService {
                 cfg.getSkydropxDefaultWeight(),
                 cfg.getSkydropxDefaultLength(),
                 cfg.getSkydropxDefaultWidth(),
-                cfg.getSkydropxDefaultHeight(),
-                cfg.isSkydropxSandbox(),
-                cfg.getWhatsappNumber()
+                cfg.getSkydropxDefaultHeight()
         );
     }
 
@@ -91,11 +86,6 @@ public class ShippingConfigService {
         if (request.originAddress() != null) cfg.setOriginAddress(request.originAddress());
         if (request.googleMapsApiKey() != null) cfg.setGoogleMapsApiKey(request.googleMapsApiKey());
         if (request.pickupCost() != null) cfg.setPickupCost(request.pickupCost());
-        // Skydropx
-        boolean credentialsChanged = false;
-        if (request.skydropxClientId() != null) { cfg.setSkydropxClientId(request.skydropxClientId()); credentialsChanged = true; }
-        if (request.skydropxClientSecret() != null) { cfg.setSkydropxClientSecret(request.skydropxClientSecret()); credentialsChanged = true; }
-        if (request.skydropxSandbox() != null) credentialsChanged = true;
         if (request.skydropxOriginStreet() != null) cfg.setSkydropxOriginStreet(request.skydropxOriginStreet());
         if (request.skydropxOriginPostalCode() != null) cfg.setSkydropxOriginPostalCode(request.skydropxOriginPostalCode());
         if (request.skydropxOriginCity() != null) cfg.setSkydropxOriginCity(request.skydropxOriginCity());
@@ -108,11 +98,8 @@ public class ShippingConfigService {
         if (request.skydropxDefaultLength() != null) cfg.setSkydropxDefaultLength(request.skydropxDefaultLength());
         if (request.skydropxDefaultWidth() != null) cfg.setSkydropxDefaultWidth(request.skydropxDefaultWidth());
         if (request.skydropxDefaultHeight() != null) cfg.setSkydropxDefaultHeight(request.skydropxDefaultHeight());
-        if (request.skydropxSandbox() != null) cfg.setSkydropxSandbox(request.skydropxSandbox());
-        if (request.whatsappNumber() != null) cfg.setWhatsappNumber(request.whatsappNumber().isBlank() ? null : request.whatsappNumber().trim());
 
         repository.save(cfg);
-        if (credentialsChanged) skydropxService.invalidateTokenCache();
         return getAdminConfig();
     }
 
