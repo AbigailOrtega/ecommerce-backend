@@ -18,6 +18,9 @@ public class CorsConfig implements WebMvcConfigurer {
     @Value("${spring.profiles.active:dev}")
     private String activeProfile;
 
+    @Value("${app.mail.frontend-url:http://localhost:4200}")
+    private String frontendUrl;
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
@@ -46,10 +49,7 @@ public class CorsConfig implements WebMvcConfigurer {
 
     private String[] getAllowedOrigins() {
         if ("prod".equals(activeProfile)) {
-            return new String[]{
-                    "https://www.ecommerce.com",
-                    "https://ecommerce.com"
-            };
+            return new String[]{ frontendUrl };
         }
         return new String[]{
                 "http://localhost:4200",

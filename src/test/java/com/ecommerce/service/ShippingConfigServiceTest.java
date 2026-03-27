@@ -213,6 +213,7 @@ class ShippingConfigServiceTest {
             defaultConfig.setSkydropxClientId("client-id");
             defaultConfig.setSkydropxClientSecret("client-secret");
             when(repository.findById(1L)).thenReturn(Optional.of(defaultConfig));
+            when(skydropxService.hasCredentials()).thenReturn(true);
 
             ShippingConfigAdminResponse response = shippingConfigService.getAdminConfig();
 
@@ -280,7 +281,8 @@ class ShippingConfigServiceTest {
                     null, null, BigDecimal.valueOf(99), null,
                     null, null, null,
                     null, null, null, null, null,
-                    null, null, null, null, null, null, null
+                    null, null, null, null, null, null, null,
+                    null, null
             );
 
             ShippingConfigAdminResponse response = shippingConfigService.updateConfig(request);
@@ -298,7 +300,8 @@ class ShippingConfigServiceTest {
                     null, null, null, null,
                     null, null, null,
                     null, null, null, null, null,
-                    null, null, null, null, null, null, null
+                    null, null, null, null, null, null, null,
+                    null, null
             );
 
             ShippingConfigAdminResponse response = shippingConfigService.updateConfig(request);
@@ -317,7 +320,8 @@ class ShippingConfigServiceTest {
                     false, false, null, null,
                     null, null, null,
                     null, null, null, null, null,
-                    null, null, null, null, null, null, null
+                    null, null, null, null, null, null, null,
+                    null, null
             );
 
             ShippingConfigAdminResponse response = shippingConfigService.updateConfig(request);
@@ -336,7 +340,8 @@ class ShippingConfigServiceTest {
                     null, null, null, null,
                     null, null, null,
                     null, null, null, null, null,
-                    null, null, null, null, null, null, null
+                    null, null, null, null, null, null, null,
+                    null, null
             ));
 
             verify(repository, times(1)).save(any());

@@ -203,7 +203,8 @@ class AdminControllerTest {
                 BigDecimal.valueOf(0),
                 false, null, null, null, null, "MX",
                 null, null, null,
-                1.0, 30, 20, 15);
+                1.0, 30, 20, 15,
+                false, null);
     }
 
     // ─── GET /api/admin/dashboard ────────────────────────────────────────────
@@ -760,7 +761,8 @@ class AdminControllerTest {
                     true, true, BigDecimal.valueOf(50), BigDecimal.valueOf(5),
                     "Calle Falsa 123", null, BigDecimal.ZERO,
                     null, null, null, null, null, null, null,
-                    null, 1.0, 30, 20, 15);
+                    null, 1.0, 30, 20, 15,
+                    null, null);
 
             mockMvc.perform(put("/api/admin/shipping/config")
                     .contentType(MediaType.APPLICATION_JSON)

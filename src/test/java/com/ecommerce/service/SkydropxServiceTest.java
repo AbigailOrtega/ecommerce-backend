@@ -42,8 +42,10 @@ class SkydropxServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Inject mock RestTemplate (field is created inline in the service)
+        // Inject mock RestTemplate and credentials (not populated by @Value in unit tests)
         ReflectionTestUtils.setField(skydropxService, "restTemplate", restTemplate);
+        ReflectionTestUtils.setField(skydropxService, "clientId", "CLIENT_ID");
+        ReflectionTestUtils.setField(skydropxService, "clientSecret", "CLIENT_SECRET");
 
         validConfig = ShippingConfig.builder()
                 .skydropxClientId("CLIENT_ID")
@@ -125,6 +127,26 @@ class SkydropxServiceTest {
                 .thenReturn(getResponse);
     }
 
+    // ─── Helper: stubs the poll GET for pollShipmentUntilLabelReady ─────────
+
+    @SuppressWarnings("unchecked")
+    private void stubShipmentPoll(String shipmentId) {
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("workflow_status", "completed");
+        Map<String, Object> data = new HashMap<>();
+        data.put("id", shipmentId);
+        data.put("attributes", attrs);
+        Map<String, Object> pollResponse = new HashMap<>();
+        pollResponse.put("data", data);
+
+        when(restTemplate.exchange(
+                contains("/api/v1/shipments/" + shipmentId),
+                eq(HttpMethod.GET),
+                any(HttpEntity.class),
+                eq(Map.class)))
+                .thenReturn(ResponseEntity.ok(pollResponse));
+    }
+
     // ─── Helper: builds a successful rate map ────────────────────────────────
 
     private Map<String, Object> successRate(String id, String carrier, double total, int days) {
@@ -163,6 +185,10 @@ class SkydropxServiceTest {
         @Test
         @DisplayName("throws BadRequestException when credentials are blank")
         void getToken_missingCredentials() {
+            // Override credentials set in setUp to simulate unconfigured service
+            ReflectionTestUtils.setField(skydropxService, "clientId", "");
+            ReflectionTestUtils.setField(skydropxService, "clientSecret", "");
+
             ShippingConfig cfg = ShippingConfig.builder()
                     .skydropxOriginPostalCode("06600")
                     .skydropxClientId("")
@@ -382,7 +408,6 @@ class SkydropxServiceTest {
         @DisplayName("returns parsed shipment when API responds with flat format")
         @SuppressWarnings("unchecked")
         void fetchShipment_flatFormat() {
-            when(shippingConfigService.getOrCreate()).thenReturn(validConfig);
             stubTokenExchange();
 
             Map<String, Object> shipmentData = new HashMap<>();
@@ -413,7 +438,6 @@ class SkydropxServiceTest {
         @DisplayName("parses shipment with JSON:API data/attributes structure")
         @SuppressWarnings("unchecked")
         void fetchShipment_jsonApiFormat() {
-            when(shippingConfigService.getOrCreate()).thenReturn(validConfig);
             stubTokenExchange();
 
             Map<String, Object> attrs = new HashMap<>();
@@ -456,7 +480,6 @@ class SkydropxServiceTest {
         @DisplayName("throws BadRequestException when shipment fetch returns 404")
         @SuppressWarnings("unchecked")
         void fetchShipment_notFound() {
-            when(shippingConfigService.getOrCreate()).thenReturn(validConfig);
             stubTokenExchange();
 
             when(restTemplate.exchange(
@@ -484,7 +507,6 @@ class SkydropxServiceTest {
         @DisplayName("sends POST to cancellations endpoint without throwing")
         @SuppressWarnings("unchecked")
         void cancelShipment_success() {
-            when(shippingConfigService.getOrCreate()).thenReturn(validConfig);
             stubTokenExchange();
 
             when(restTemplate.exchange(
@@ -507,7 +529,6 @@ class SkydropxServiceTest {
         @Test
         @DisplayName("throws BadRequestException when cancellation returns 422")
         void cancelShipment_httpError() {
-            when(shippingConfigService.getOrCreate()).thenReturn(validConfig);
             stubTokenExchange();
 
             when(restTemplate.exchange(
@@ -535,7 +556,6 @@ class SkydropxServiceTest {
         @DisplayName("downloads label bytes using resolved label_url from re-fetched shipment")
         @SuppressWarnings("unchecked")
         void downloadLabel_fromResolvedUrl() {
-            when(shippingConfigService.getOrCreate()).thenReturn(validConfig);
             stubTokenExchange();
 
             // Step 1: re-fetch shipment to get latest label URL
@@ -571,7 +591,6 @@ class SkydropxServiceTest {
         @DisplayName("falls back to stored labelUrl when re-fetch fails")
         @SuppressWarnings("unchecked")
         void downloadLabel_fallbackToStoredUrl() {
-            when(shippingConfigService.getOrCreate()).thenReturn(validConfig);
             stubTokenExchange();
 
             // Re-fetch shipment fails
@@ -601,7 +620,6 @@ class SkydropxServiceTest {
         @DisplayName("throws BadRequestException when no label endpoint returns bytes")
         @SuppressWarnings("unchecked")
         void downloadLabel_noLabelAvailable() {
-            when(shippingConfigService.getOrCreate()).thenReturn(validConfig);
             stubTokenExchange();
 
             // Re-fetch returns shipment with no label URL
@@ -696,6 +714,8 @@ class SkydropxServiceTest {
                     eq(Map.class)))
                     .thenReturn(ResponseEntity.ok(shipmentFlat));
 
+            stubShipmentPoll("SHIP-NEW");
+
             SkydropxShipmentResponse result =
                     skydropxService.createShipment("RATE-1", sampleOrder);
 
@@ -761,6 +781,8 @@ class SkydropxServiceTest {
                     any(HttpEntity.class),
                     eq(Map.class)))
                     .thenReturn(ResponseEntity.ok(shipmentResponse));
+
+            stubShipmentPoll("SHIP-FALLBACK");
 
             // Preferred rate "OLD-RATE" is absent from fresh quotation, so "RATE-FRESH" is chosen
             SkydropxShipmentResponse result =
@@ -906,6 +928,8 @@ class SkydropxServiceTest {
                         assertThat(addrFrom.get("phone")).isEqualTo("0000000000");
                         return ResponseEntity.ok(shipmentResponse);
                     });
+
+            stubShipmentPoll("SHIP-PHONE");
 
             SkydropxShipmentResponse result =
                     skydropxService.createShipment("RATE-PHN", sampleOrder);

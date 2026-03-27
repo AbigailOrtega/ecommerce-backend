@@ -44,7 +44,9 @@ public class ShippingConfigService {
                 cfg.getNationalBasePrice(),
                 cfg.getNationalPricePerKm(),
                 cfg.getOriginAddress(),
-                cfg.getPickupCost()
+                cfg.getPickupCost(),
+                cfg.isFreeShippingEnabled(),
+                cfg.getFreeShippingMinAmount()
         );
     }
 
@@ -71,7 +73,9 @@ public class ShippingConfigService {
                 cfg.getSkydropxDefaultWeight(),
                 cfg.getSkydropxDefaultLength(),
                 cfg.getSkydropxDefaultWidth(),
-                cfg.getSkydropxDefaultHeight()
+                cfg.getSkydropxDefaultHeight(),
+                cfg.isFreeShippingEnabled(),
+                cfg.getFreeShippingMinAmount()
         );
     }
 
@@ -98,6 +102,8 @@ public class ShippingConfigService {
         if (request.skydropxDefaultLength() != null) cfg.setSkydropxDefaultLength(request.skydropxDefaultLength());
         if (request.skydropxDefaultWidth() != null) cfg.setSkydropxDefaultWidth(request.skydropxDefaultWidth());
         if (request.skydropxDefaultHeight() != null) cfg.setSkydropxDefaultHeight(request.skydropxDefaultHeight());
+        if (request.freeShippingEnabled() != null) cfg.setFreeShippingEnabled(request.freeShippingEnabled());
+        if (request.freeShippingMinAmount() != null) cfg.setFreeShippingMinAmount(request.freeShippingMinAmount());
 
         repository.save(cfg);
         return getAdminConfig();

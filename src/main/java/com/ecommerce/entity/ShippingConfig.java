@@ -53,6 +53,13 @@ public class ShippingConfig {
     private String skydropxSenderEmail;
     private String skydropxSenderPhone;
 
+    // Envío gratis por monto mínimo
+    @Builder.Default
+    private boolean freeShippingEnabled = false;
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal freeShippingMinAmount;
+
     // Dimensiones de paquete por defecto
     @Builder.Default
     private Double skydropxDefaultWeight = 1.0;

@@ -23,5 +23,7 @@ public record ShippingConfigAdminResponse(
     Double skydropxDefaultWeight,
     Integer skydropxDefaultLength,
     Integer skydropxDefaultWidth,
-    Integer skydropxDefaultHeight
+    Integer skydropxDefaultHeight,
+    boolean freeShippingEnabled,
+    BigDecimal freeShippingMinAmount
 ) {}

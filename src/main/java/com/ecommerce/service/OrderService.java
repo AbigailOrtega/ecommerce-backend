@@ -169,6 +169,11 @@ public class OrderService {
             } else {
                 cost = cfg.getNationalBasePrice().setScale(2, RoundingMode.HALF_UP);
             }
+            if (cfg.isFreeShippingEnabled() && cfg.getFreeShippingMinAmount() != null
+                    && totalAmount.compareTo(cfg.getFreeShippingMinAmount()) >= 0) {
+                cost = BigDecimal.ZERO;
+                methodName += " (Envío gratis)";
+            }
             order.setShippingCost(cost);
             order.setShippingMethodName(methodName);
             order.setShippingType("NATIONAL");
@@ -340,6 +345,11 @@ public class OrderService {
                         .setScale(2, RoundingMode.HALF_UP);
             } else {
                 cost = cfg.getNationalBasePrice().setScale(2, RoundingMode.HALF_UP);
+            }
+            if (cfg.isFreeShippingEnabled() && cfg.getFreeShippingMinAmount() != null
+                    && totalAmount.compareTo(cfg.getFreeShippingMinAmount()) >= 0) {
+                cost = BigDecimal.ZERO;
+                methodName += " (Envío gratis)";
             }
             order.setShippingCost(cost);
             order.setShippingMethodName(methodName);

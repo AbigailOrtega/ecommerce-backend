@@ -122,8 +122,8 @@ class PaymentControllerTest {
                     .content(body))
                     .andExpect(status().isOk());
 
-            // Verify the controller passed the default "usd" value
-            verify(paymentService).createPaymentIntent(new BigDecimal("29.99"), "usd");
+            // Verify the controller passed the default "mxn" value
+            verify(paymentService).createPaymentIntent(new BigDecimal("29.99"), "mxn");
         }
 
         @Test

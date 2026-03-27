@@ -38,6 +38,7 @@ class ProductServiceTest {
     @Mock private ProductRepository productRepository;
     @Mock private CategoryRepository categoryRepository;
     @Mock private PromotionRepository promotionRepository;
+    @Mock private com.ecommerce.repository.CartItemRepository cartItemRepository;
 
     @InjectMocks private ProductService productService;
 

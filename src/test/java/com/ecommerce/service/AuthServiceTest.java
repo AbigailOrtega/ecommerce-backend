@@ -7,6 +7,7 @@ import com.ecommerce.entity.Role;
 import com.ecommerce.entity.User;
 import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.exception.DuplicateResourceException;
+import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.UserRepository;
 import com.ecommerce.security.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,7 @@ import static org.mockito.Mockito.*;
 class AuthServiceTest {
 
     @Mock private UserRepository userRepository;
+    @Mock private OrderRepository orderRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private AuthenticationManager authenticationManager;

@@ -63,7 +63,8 @@ class ShippingControllerTest {
         return new ShippingConfigResponse(
                 true, true,
                 BigDecimal.valueOf(50), BigDecimal.valueOf(5),
-                "Calle Falsa 123", BigDecimal.ZERO);
+                "Calle Falsa 123", BigDecimal.ZERO,
+                false, null);
     }
 
     private PickupLocationResponse stubPickupLocation(Long id) {
@@ -116,8 +117,7 @@ class ShippingControllerTest {
                     .andExpect(jsonPath("$.data.nationalEnabled").value(true))
                     .andExpect(jsonPath("$.data.pickupEnabled").value(true))
                     .andExpect(jsonPath("$.data.nationalBasePrice").value(50))
-                    .andExpect(jsonPath("$.data.originAddress").value("Calle Falsa 123"))
-                    .andExpect(jsonPath("$.data.whatsappNumber").value("5215512345678"));
+                    .andExpect(jsonPath("$.data.originAddress").value("Calle Falsa 123"));
         }
     }
 
@@ -179,7 +179,7 @@ class ShippingControllerTest {
         @Test
         @DisplayName("returns 200 with Skydropx rates when credentials are configured")
         void calculateNational_200_skydropxRates() throws Exception {
-            when(shippingConfigService.getOrCreate()).thenReturn(stubShippingConfigEntity(true));
+            when(skydropxService.hasCredentials()).thenReturn(true);
             when(skydropxService.createQuotationForAddress(anyString(), anyString(), anyString(), anyString(), anyString()))
                     .thenReturn(stubQuotation());
 
