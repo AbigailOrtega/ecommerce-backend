@@ -430,8 +430,8 @@ public class OrderService {
     public Page<OrderResponse> getAllOrders(com.ecommerce.entity.OrderStatus status, String shippingType,
                                             String paymentMethod, java.time.LocalDateTime dateFrom,
                                             java.time.LocalDateTime dateTo, String search, Pageable pageable) {
-        String searchTrim = (search != null && !search.isBlank()) ? search.trim() : null;
-        String paymentTrim = (paymentMethod != null && !paymentMethod.isBlank()) ? paymentMethod.trim() : null;
+        String searchTrim = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
+        String paymentTrim = (paymentMethod != null && !paymentMethod.isBlank()) ? paymentMethod.trim().toLowerCase() : null;
         return orderRepository.findAllWithFilters(status, shippingType, paymentTrim, dateFrom, dateTo, searchTrim, pageable)
                 .map(o -> mapToResponse(o, true));
     }

@@ -26,15 +26,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o LEFT JOIN o.user u WHERE " +
            "(:status IS NULL OR o.status = :status) AND " +
            "(:shippingType IS NULL OR o.shippingType = :shippingType) AND " +
-           "(:paymentMethod IS NULL OR LOWER(o.paymentMethod) = LOWER(:paymentMethod)) AND " +
+           "(:paymentMethod IS NULL OR LOWER(o.paymentMethod) = :paymentMethod) AND " +
            "(:dateFrom IS NULL OR o.createdAt >= :dateFrom) AND " +
            "(:dateTo IS NULL OR o.createdAt <= :dateTo) AND " +
            "(:search IS NULL OR " +
-           "  LOWER(o.orderNumber) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "  LOWER(CONCAT(COALESCE(u.firstName,''), ' ', COALESCE(u.lastName,''))) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "  LOWER(COALESCE(u.email,'')) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "  LOWER(CONCAT(COALESCE(o.guestFirstName,''), ' ', COALESCE(o.guestLastName,''))) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "  LOWER(COALESCE(o.guestEmail,'')) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "  LOWER(o.orderNumber) LIKE CONCAT('%', :search, '%') OR " +
+           "  LOWER(CONCAT(COALESCE(u.firstName,''), ' ', COALESCE(u.lastName,''))) LIKE CONCAT('%', :search, '%') OR " +
+           "  LOWER(COALESCE(u.email,'')) LIKE CONCAT('%', :search, '%') OR " +
+           "  LOWER(CONCAT(COALESCE(o.guestFirstName,''), ' ', COALESCE(o.guestLastName,''))) LIKE CONCAT('%', :search, '%') OR " +
+           "  LOWER(COALESCE(o.guestEmail,'')) LIKE CONCAT('%', :search, '%')) " +
            "ORDER BY o.createdAt DESC")
     Page<Order> findAllWithFilters(
             @Param("status") com.ecommerce.entity.OrderStatus status,
