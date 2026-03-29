@@ -1,0 +1,198 @@
+# =============================================================================
+# Common Configuration (all profiles)
+# =============================================================================
+server:
+  port: 8080
+
+spring:
+  application:
+    name: ecommerce
+  profiles:
+    active: dev
+
+  # Mail configuration
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+# JWT Configuration
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-expiration: 86400000    # 24 hours in milliseconds
+    refresh-token-expiration: 604800000  # 7 days in milliseconds
+
+  # Stripe Configuration
+  stripe:
+    secret-key: ${STRIPE_SECRET_KEY}
+    webhook-secret: ${STRIPE_WEBHOOK_SECRET}
+    public-key: ${STRIPE_PUBLIC_KEY}
+
+  # PayPal Configuration
+  paypal:
+    client-id: ${PAYPAL_CLIENT_ID}
+    client-secret: ${PAYPAL_CLIENT_SECRET}
+    mode: ${PAYPAL_MODE:sandbox}
+
+  # Email Configuration
+  mail:
+    from: ${MAIL_FROM:${MAIL_USERNAME}}
+    frontend-url: ${FRONTEND_URL:http://localhost:4200}
+
+  # Skydropx Configuration
+  skydropx:
+    client-id: ${SKYDROPX_CLIENT_ID}
+    client-secret: ${SKYDROPX_CLIENT_SECRET}
+    sandbox: ${SKYDROPX_SANDBOX:true}
+    webhook-secret: ${SKYDROPX_WEBHOOK_SECRET:}
+
+  # Cloudinary Configuration
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME}
+    api-key: ${CLOUDINARY_API_KEY}
+    api-secret: ${CLOUDINARY_API_SECRET}
+
+# SpringDoc / Swagger
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+---
+# =============================================================================
+# Development Profile
+# =============================================================================
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:h2:mem:ecommerce_dev;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: false
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    com.ecommerce: DEBUG
+    org.springframework.security: DEBUG
+
+---
+# =============================================================================
+# E2E Test Profile  (mvn spring-boot:run -Dspring-boot.run.profiles=e2e)
+# Uses H2 in-memory, seeds test users automatically, emails fail silently.
+# =============================================================================
+spring:
+  config:
+    activate:
+      on-profile: e2e
+
+  datasource:
+    url: jdbc:h2:mem:ecommerce_e2e;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  h2:
+    console:
+      enabled: false
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+  # Point mail to a non-existent host so send attempts fail silently (@Async)
+  mail:
+    host: localhost
+    port: 25
+
+logging:
+  level:
+    com.ecommerce: INFO
+    org.springframework.security: WARN
+
+---
+# =============================================================================
+# Production Profile
+# =============================================================================
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+
+  h2:
+    console:
+      enabled: false
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          batch_size: 25
+        order_inserts: true
+        order_updates: true
+
+logging:
+  level:
+    com.ecommerce: INFO
+    org.springframework.security: WARN
