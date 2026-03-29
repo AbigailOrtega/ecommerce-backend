@@ -41,6 +41,6 @@ public class OrderItem {
     private BigDecimal subtotal;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "selected_size_id")
+    @JoinColumn(name = "selected_size_id", foreignKey = @ForeignKey(foreignKeyDefinition = "FOREIGN KEY (selected_size_id) REFERENCES product_sizes(id) ON DELETE SET NULL"))
     private ProductSize selectedSize;
 }

@@ -130,28 +130,57 @@ public class ProductService {
 
     private void applyColors(Product product, ProductRequest request) {
         if (request.colors() == null) return;
-        if (product.getId() != null) {
-            cartItemRepository.clearSelectedSizeByProductId(product.getId());
-        }
-        product.getColors().clear();
+
+        List<Long> incomingColorIds = request.colors().stream()
+                .filter(cr -> cr.id() != null).map(cr -> cr.id()).toList();
+        product.getColors().removeIf(existing -> !incomingColorIds.contains(existing.getId()));
+
         for (var cr : request.colors()) {
             if (cr.name() == null || cr.name().isBlank()) continue;
-            ProductColor color = ProductColor.builder()
-                    .product(product)
-                    .name(cr.name())
-                    .images(cr.images() != null ? new ArrayList<>(cr.images()) : new ArrayList<>())
-                    .build();
-            if (cr.sizes() != null) {
-                for (var sr : cr.sizes()) {
-                    if (sr.name() == null || sr.name().isBlank()) continue;
-                    color.getSizes().add(ProductSize.builder()
-                            .color(color)
-                            .name(sr.name())
-                            .stock(sr.stock() != null ? sr.stock() : 0)
-                            .build());
+
+            ProductColor color = product.getColors().stream()
+                    .filter(c -> c.getId() != null && c.getId().equals(cr.id()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (color == null) {
+                color = ProductColor.builder()
+                        .product(product)
+                        .name(cr.name())
+                        .images(cr.images() != null ? new ArrayList<>(cr.images()) : new ArrayList<>())
+                        .build();
+                product.getColors().add(color);
+            } else {
+                color.setName(cr.name());
+                if (cr.images() != null) {
+                    color.getImages().clear();
+                    color.getImages().addAll(cr.images());
                 }
             }
-            product.getColors().add(color);
+
+            if (cr.sizes() != null) {
+                List<Long> incomingSizeIds = cr.sizes().stream()
+                        .filter(sr -> sr.id() != null).map(sr -> sr.id()).toList();
+                color.getSizes().removeIf(existing -> !incomingSizeIds.contains(existing.getId()));
+
+                for (var sr : cr.sizes()) {
+                    if (sr.name() == null || sr.name().isBlank()) continue;
+                    ProductSize size = color.getSizes().stream()
+                            .filter(s -> s.getId() != null && s.getId().equals(sr.id()))
+                            .findFirst()
+                            .orElse(null);
+                    if (size == null) {
+                        color.getSizes().add(ProductSize.builder()
+                                .color(color)
+                                .name(sr.name())
+                                .stock(sr.stock() != null ? sr.stock() : 0)
+                                .build());
+                    } else {
+                        size.setName(sr.name());
+                        size.setStock(sr.stock() != null ? sr.stock() : 0);
+                    }
+                }
+            }
         }
         // Set product imageUrl to first color's first image if not set
         if ((product.getImageUrl() == null || product.getImageUrl().isBlank())
