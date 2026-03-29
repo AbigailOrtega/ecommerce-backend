@@ -30,11 +30,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "(:dateFrom IS NULL OR o.createdAt >= :dateFrom) AND " +
            "(:dateTo IS NULL OR o.createdAt <= :dateTo) AND " +
            "(:search IS NULL OR " +
-           "  LOWER(o.orderNumber) LIKE CONCAT('%', :search, '%') OR " +
-           "  LOWER(CONCAT(COALESCE(u.firstName,''), ' ', COALESCE(u.lastName,''))) LIKE CONCAT('%', :search, '%') OR " +
-           "  LOWER(COALESCE(u.email,'')) LIKE CONCAT('%', :search, '%') OR " +
-           "  LOWER(CONCAT(COALESCE(o.guestFirstName,''), ' ', COALESCE(o.guestLastName,''))) LIKE CONCAT('%', :search, '%') OR " +
-           "  LOWER(COALESCE(o.guestEmail,'')) LIKE CONCAT('%', :search, '%')) " +
+           "  LOWER(o.orderNumber) LIKE CONCAT('%', CAST(:search AS string), '%') OR " +
+           "  LOWER(CONCAT(COALESCE(u.firstName,''), ' ', COALESCE(u.lastName,''))) LIKE CONCAT('%', CAST(:search AS string), '%') OR " +
+           "  LOWER(COALESCE(u.email,'')) LIKE CONCAT('%', CAST(:search AS string), '%') OR " +
+           "  LOWER(CONCAT(COALESCE(o.guestFirstName,''), ' ', COALESCE(o.guestLastName,''))) LIKE CONCAT('%', CAST(:search AS string), '%') OR " +
+           "  LOWER(COALESCE(o.guestEmail,'')) LIKE CONCAT('%', CAST(:search AS string), '%')) " +
            "ORDER BY o.createdAt DESC")
     Page<Order> findAllWithFilters(
             @Param("status") com.ecommerce.entity.OrderStatus status,
