@@ -540,7 +540,7 @@ class ProductServiceTest {
         @DisplayName("applies colors and sets imageUrl from first color image when imageUrl not provided")
         void createProduct_setsImageUrlFromFirstColorImage() {
             ProductColorRequest colorReq = new ProductColorRequest(
-                    "Red", List.of("http://img.com/red.jpg"), List.of());
+                    null, "Red", List.of("http://img.com/red.jpg"), List.of());
             ProductRequest request = new ProductRequest(
                     "Tee", null, BigDecimal.valueOf(20), null, null,
                     10, null, null, null, null, null, List.of(colorReq));
@@ -561,7 +561,7 @@ class ProductServiceTest {
         @Test
         @DisplayName("skips color entries with blank name")
         void createProduct_skipsBlankColorNames() {
-            ProductColorRequest blankColor = new ProductColorRequest("  ", List.of(), null);
+            ProductColorRequest blankColor = new ProductColorRequest(null, "  ", List.of(), null);
             ProductRequest request = new ProductRequest(
                     "Tee", null, BigDecimal.valueOf(20), null, null,
                     10, "http://img.com/tee.jpg", null, null, null, null, List.of(blankColor));
