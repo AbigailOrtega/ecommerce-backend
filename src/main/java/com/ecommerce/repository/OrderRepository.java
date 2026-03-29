@@ -23,21 +23,34 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findBySkydropxShipmentId(String skydropxShipmentId);
     Page<Order> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
-    @Query("SELECT o FROM Order o LEFT JOIN o.user u WHERE " +
-           "(:status IS NULL OR o.status = :status) AND " +
-           "(:shippingType IS NULL OR o.shippingType = :shippingType) AND " +
-           "(:paymentMethod IS NULL OR LOWER(o.paymentMethod) = :paymentMethod) AND " +
-           "(:dateFrom IS NULL OR o.createdAt >= :dateFrom) AND " +
-           "(:dateTo IS NULL OR o.createdAt <= :dateTo) AND " +
-           "(:search IS NULL OR " +
-           "  LOWER(o.orderNumber) LIKE CONCAT('%', CAST(:search AS string), '%') OR " +
-           "  LOWER(CONCAT(COALESCE(u.firstName,''), ' ', COALESCE(u.lastName,''))) LIKE CONCAT('%', CAST(:search AS string), '%') OR " +
-           "  LOWER(COALESCE(u.email,'')) LIKE CONCAT('%', CAST(:search AS string), '%') OR " +
-           "  LOWER(CONCAT(COALESCE(o.guestFirstName,''), ' ', COALESCE(o.guestLastName,''))) LIKE CONCAT('%', CAST(:search AS string), '%') OR " +
-           "  LOWER(COALESCE(o.guestEmail,'')) LIKE CONCAT('%', CAST(:search AS string), '%')) " +
-           "ORDER BY o.createdAt DESC")
+    @Query(value = "SELECT o.* FROM orders o LEFT JOIN users u ON u.id = o.user_id WHERE " +
+           "(CAST(:status AS varchar) IS NULL OR o.status = CAST(:status AS varchar)) AND " +
+           "(CAST(:shippingType AS varchar) IS NULL OR o.shipping_type = CAST(:shippingType AS varchar)) AND " +
+           "(CAST(:paymentMethod AS varchar) IS NULL OR LOWER(o.payment_method) = CAST(:paymentMethod AS varchar)) AND " +
+           "(CAST(:dateFrom AS timestamp) IS NULL OR o.created_at >= CAST(:dateFrom AS timestamp)) AND " +
+           "(CAST(:dateTo AS timestamp) IS NULL OR o.created_at <= CAST(:dateTo AS timestamp)) AND " +
+           "(CAST(:search AS varchar) IS NULL OR " +
+           "  LOWER(o.order_number) LIKE '%' || CAST(:search AS varchar) || '%' OR " +
+           "  LOWER(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) LIKE '%' || CAST(:search AS varchar) || '%' OR " +
+           "  LOWER(COALESCE(u.email,'')) LIKE '%' || CAST(:search AS varchar) || '%' OR " +
+           "  LOWER(COALESCE(o.guest_first_name,'') || ' ' || COALESCE(o.guest_last_name,'')) LIKE '%' || CAST(:search AS varchar) || '%' OR " +
+           "  LOWER(COALESCE(o.guest_email,'')) LIKE '%' || CAST(:search AS varchar) || '%') " +
+           "ORDER BY o.created_at DESC",
+           countQuery = "SELECT COUNT(o.id) FROM orders o LEFT JOIN users u ON u.id = o.user_id WHERE " +
+           "(CAST(:status AS varchar) IS NULL OR o.status = CAST(:status AS varchar)) AND " +
+           "(CAST(:shippingType AS varchar) IS NULL OR o.shipping_type = CAST(:shippingType AS varchar)) AND " +
+           "(CAST(:paymentMethod AS varchar) IS NULL OR LOWER(o.payment_method) = CAST(:paymentMethod AS varchar)) AND " +
+           "(CAST(:dateFrom AS timestamp) IS NULL OR o.created_at >= CAST(:dateFrom AS timestamp)) AND " +
+           "(CAST(:dateTo AS timestamp) IS NULL OR o.created_at <= CAST(:dateTo AS timestamp)) AND " +
+           "(CAST(:search AS varchar) IS NULL OR " +
+           "  LOWER(o.order_number) LIKE '%' || CAST(:search AS varchar) || '%' OR " +
+           "  LOWER(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) LIKE '%' || CAST(:search AS varchar) || '%' OR " +
+           "  LOWER(COALESCE(u.email,'')) LIKE '%' || CAST(:search AS varchar) || '%' OR " +
+           "  LOWER(COALESCE(o.guest_first_name,'') || ' ' || COALESCE(o.guest_last_name,'')) LIKE '%' || CAST(:search AS varchar) || '%' OR " +
+           "  LOWER(COALESCE(o.guest_email,'')) LIKE '%' || CAST(:search AS varchar) || '%')",
+           nativeQuery = true)
     Page<Order> findAllWithFilters(
-            @Param("status") com.ecommerce.entity.OrderStatus status,
+            @Param("status") String status,
             @Param("shippingType") String shippingType,
             @Param("paymentMethod") String paymentMethod,
             @Param("dateFrom") java.time.LocalDateTime dateFrom,

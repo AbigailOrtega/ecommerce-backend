@@ -432,7 +432,8 @@ public class OrderService {
                                             java.time.LocalDateTime dateTo, String search, Pageable pageable) {
         String searchTrim = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
         String paymentTrim = (paymentMethod != null && !paymentMethod.isBlank()) ? paymentMethod.trim().toLowerCase() : null;
-        return orderRepository.findAllWithFilters(status, shippingType, paymentTrim, dateFrom, dateTo, searchTrim, pageable)
+        String statusStr = (status != null) ? status.name() : null;
+        return orderRepository.findAllWithFilters(statusStr, shippingType, paymentTrim, dateFrom, dateTo, searchTrim, pageable)
                 .map(o -> mapToResponse(o, true));
     }
 
