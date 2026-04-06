@@ -52,6 +52,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/webhooks/stripe").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/webhooks/skydropx").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/marketing/unsubscribe").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/analytics/pageview").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )

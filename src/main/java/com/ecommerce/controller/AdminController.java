@@ -51,7 +51,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -118,6 +121,37 @@ public class AdminController {
     @Operation(summary = "Get dashboard statistics")
     public ResponseEntity<ApiResponse<DashboardStatsResponse>> getDashboard() {
         return ResponseEntity.ok(ApiResponse.success(analyticsService.getDashboardStats()));
+    }
+
+    // ── Analytics ─────────────────────────────────────────────────────────────
+
+    @GetMapping("/analytics/pageviews/summary")
+    @Operation(summary = "Get page view summary (today / this week / this month / this year / total)")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getPageViewSummary() {
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.getPageViewSummary()));
+    }
+
+    @GetMapping("/analytics/pageviews/by-period")
+    @Operation(summary = "Get page views grouped by period (hour|day|week|month|year)")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPageViewsByPeriod(
+            @RequestParam(defaultValue = "day") String period,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+        DateTimeFormatter fmt = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+        LocalDateTime fromDt = from != null ? LocalDateTime.parse(from, fmt) : LocalDateTime.now().minusDays(30);
+        LocalDateTime toDt   = to   != null ? LocalDateTime.parse(to,   fmt) : LocalDateTime.now();
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.getPageViewsByPeriod(period, fromDt, toDt)));
+    }
+
+    @GetMapping("/analytics/pageviews/by-page")
+    @Operation(summary = "Get page views grouped by page path (top 20)")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPageViewsByPage(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+        DateTimeFormatter fmt = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+        LocalDateTime fromDt = from != null ? LocalDateTime.parse(from, fmt) : LocalDateTime.now().minusDays(30);
+        LocalDateTime toDt   = to   != null ? LocalDateTime.parse(to,   fmt) : LocalDateTime.now();
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.getPageViewsByPage(fromDt, toDt)));
     }
 
     @GetMapping("/orders")
