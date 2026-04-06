@@ -941,7 +941,7 @@ class AdminControllerTest {
         void getInventory_200() throws Exception {
             List<InventoryItem> items = List.of(
                     new InventoryItem(1L, "Camiseta", "SKU-1", 50,
-                            java.math.BigDecimal.valueOf(29.99), true));
+                            java.math.BigDecimal.valueOf(29.99), true, java.util.List.of()));
             when(reportService.getInventoryReport()).thenReturn(items);
 
             mockMvc.perform(get("/api/admin/reports/inventory"))
@@ -972,7 +972,7 @@ class AdminControllerTest {
         void getOutOfStock_200() throws Exception {
             List<InventoryItem> items = List.of(
                     new InventoryItem(3L, "Agotado", "SKU-3", 0,
-                            java.math.BigDecimal.TEN, true));
+                            java.math.BigDecimal.TEN, true, java.util.List.of()));
             when(reportService.getOutOfStockProducts()).thenReturn(items);
 
             mockMvc.perform(get("/api/admin/reports/out-of-stock"))

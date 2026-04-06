@@ -110,16 +110,22 @@ public class ReportService {
     public List<InventoryItem> getInventoryReport() {
         return productRepository.findAll().stream()
                 .map(p -> new InventoryItem(p.getId(), p.getName(), p.getSku(),
-                        p.getStockQuantity(), p.getPrice(), p.isActive()))
+                        effectiveStock(p), p.getPrice(), p.isActive(), outOfStockVariants(p)))
                 .sorted(Comparator.comparing(InventoryItem::name))
                 .toList();
     }
 
     public List<InventoryItem> getOutOfStockProducts() {
         return productRepository.findAll().stream()
-                .filter(p -> p.getStockQuantity() == 0)
+                .filter(p -> {
+                    if (p.getColors() != null && !p.getColors().isEmpty()) {
+                        return p.getColors().stream()
+                                .anyMatch(c -> c.getSizes().stream().anyMatch(s -> s.getStock() == 0));
+                    }
+                    return p.getStockQuantity() == 0;
+                })
                 .map(p -> new InventoryItem(p.getId(), p.getName(), p.getSku(),
-                        0, p.getPrice(), p.isActive()))
+                        effectiveStock(p), p.getPrice(), p.isActive(), outOfStockVariants(p)))
                 .sorted(Comparator.comparing(InventoryItem::name))
                 .toList();
     }
@@ -140,7 +146,26 @@ public class ReportService {
 
     private int stockOf(Long productId) {
         return productRepository.findById(productId)
-                .map(Product::getStockQuantity)
+                .map(this::effectiveStock)
                 .orElse(0);
+    }
+
+    private int effectiveStock(Product p) {
+        if (p.getColors() != null && !p.getColors().isEmpty()) {
+            return p.getColors().stream()
+                    .flatMap(c -> c.getSizes().stream())
+                    .mapToInt(s -> s.getStock())
+                    .sum();
+        }
+        return p.getStockQuantity();
+    }
+
+    private List<String> outOfStockVariants(Product p) {
+        if (p.getColors() == null || p.getColors().isEmpty()) return List.of();
+        return p.getColors().stream()
+                .flatMap(c -> c.getSizes().stream()
+                        .filter(s -> s.getStock() == 0)
+                        .map(s -> c.getName() + " / " + s.getName()))
+                .toList();
     }
 }

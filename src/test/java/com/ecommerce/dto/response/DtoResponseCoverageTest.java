@@ -230,7 +230,7 @@ class DtoResponseCoverageTest {
     }
 
     @Test @DisplayName("InventoryItem record") void inventoryItem() {
-        InventoryItem r = new InventoryItem(1L, "Camiseta", "SKU01", 50, BigDecimal.valueOf(100), true);
+        InventoryItem r = new InventoryItem(1L, "Camiseta", "SKU01", 50, BigDecimal.valueOf(100), true, List.of());
         assertThat(r.name()).isEqualTo("Camiseta");
         assertThat(r.stock()).isEqualTo(50);
     }
