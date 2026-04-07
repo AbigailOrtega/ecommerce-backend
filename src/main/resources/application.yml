@@ -44,6 +44,7 @@ app:
     client-id: ${PAYPAL_CLIENT_ID}
     client-secret: ${PAYPAL_CLIENT_SECRET}
     mode: ${PAYPAL_MODE:sandbox}
+    webhook-id: ${PAYPAL_WEBHOOK_ID:}
 
   # Email Configuration
   mail:

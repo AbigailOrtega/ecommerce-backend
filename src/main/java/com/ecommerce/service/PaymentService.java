@@ -207,6 +207,57 @@ public class PaymentService {
         log.info("Order {} confirmed via PayPal capture: {}", orderNumber, captureId);
     }
 
+    @Transactional
+    public void handlePayPalCaptureCompleted(String captureId) {
+        orderRepository.findByPaymentId(captureId).ifPresentOrElse(order -> {
+            if (order.getStatus() == OrderStatus.CONFIRMED) {
+                log.info("Order {} already confirmed, skipping", order.getOrderNumber());
+                return;
+            }
+            order.setStatus(OrderStatus.CONFIRMED);
+            orderRepository.save(order);
+            log.info("Order {} confirmed via PayPal webhook captureId={}", order.getOrderNumber(), captureId);
+        }, () -> log.warn("PayPal webhook CAPTURE.COMPLETED — no order found for captureId={}", captureId));
+    }
+
+    @Transactional
+    public void handlePayPalCaptureDenied(String captureId) {
+        orderRepository.findByPaymentId(captureId).ifPresentOrElse(order -> {
+            if (order.getStatus() == OrderStatus.CANCELLED) return;
+            order.setStatus(OrderStatus.CANCELLED);
+            restoreStock(order);
+            orderRepository.save(order);
+            log.info("Order {} cancelled via PayPal webhook captureId={}", order.getOrderNumber(), captureId);
+        }, () -> log.warn("PayPal webhook CAPTURE.DENIED — no order found for captureId={}", captureId));
+    }
+
+    @Transactional
+    public void handlePayPalCaptureRefunded(String captureId) {
+        orderRepository.findByPaymentId(captureId).ifPresentOrElse(order -> {
+            if (order.getStatus() == OrderStatus.REFUNDED) return;
+            order.setStatus(OrderStatus.REFUNDED);
+            restoreStock(order);
+            orderRepository.save(order);
+            log.info("Order {} refunded via PayPal webhook captureId={}", order.getOrderNumber(), captureId);
+        }, () -> log.warn("PayPal webhook CAPTURE.REFUNDED — no order found for captureId={}", captureId));
+    }
+
+    private void restoreStock(Order order) {
+        for (OrderItem item : order.getItems()) {
+            if (item.getProduct() != null) {
+                Product product = item.getProduct();
+                if (product.getColors().isEmpty()) {
+                    product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
+                    productRepository.save(product);
+                } else if (item.getSelectedSize() != null) {
+                    ProductSize size = item.getSelectedSize();
+                    size.setStock(size.getStock() + item.getQuantity());
+                    productSizeRepository.save(size);
+                }
+            }
+        }
+    }
+
     public Map<String, Object> createPayPalOrder(BigDecimal amount) {
         if (!isPayPalConfigured()) {
             throw new BadRequestException("PayPal is not configured. Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET.");
