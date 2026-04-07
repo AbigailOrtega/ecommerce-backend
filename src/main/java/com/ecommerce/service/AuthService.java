@@ -105,7 +105,7 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new BadRequestException("User not found"));
 
-        String newAccessToken = jwtTokenProvider.generateAccessToken(email);
+        String newAccessToken = jwtTokenProvider.generateAccessToken(email, user.getRole().name());
         String newRefreshToken = jwtTokenProvider.generateRefreshToken(email);
 
         return AuthResponse.builder()

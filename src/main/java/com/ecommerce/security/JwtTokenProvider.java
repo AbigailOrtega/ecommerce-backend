@@ -5,6 +5,7 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
@@ -30,23 +31,31 @@ public class JwtTokenProvider {
 
     public String generateAccessToken(Authentication authentication) {
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        return generateToken(userDetails.getUsername(), accessTokenExpiration);
+        String role = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .findFirst().orElse("");
+        return generateToken(userDetails.getUsername(), role, accessTokenExpiration);
     }
 
     public String generateAccessToken(String email) {
-        return generateToken(email, accessTokenExpiration);
+        return generateToken(email, "", accessTokenExpiration);
+    }
+
+    public String generateAccessToken(String email, String role) {
+        return generateToken(email, role, accessTokenExpiration);
     }
 
     public String generateRefreshToken(String email) {
-        return generateToken(email, refreshTokenExpiration);
+        return generateToken(email, "", refreshTokenExpiration);
     }
 
-    private String generateToken(String subject, long expiration) {
+    private String generateToken(String subject, String role, long expiration) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expiration);
 
         return Jwts.builder()
                 .subject(subject)
+                .claim("role", role)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(getSigningKey())
