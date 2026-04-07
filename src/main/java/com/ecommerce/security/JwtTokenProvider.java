@@ -33,7 +33,8 @@ public class JwtTokenProvider {
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
         String role = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
-                .findFirst().orElse("");
+                .findFirst().orElse("")
+                .replace("ROLE_", "");
         return generateToken(userDetails.getUsername(), role, accessTokenExpiration);
     }
 
