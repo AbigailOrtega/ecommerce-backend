@@ -30,8 +30,8 @@ spring:
 app:
   jwt:
     secret: ${JWT_SECRET}
-    access-token-expiration: 86400000    # 24 hours in milliseconds
-    refresh-token-expiration: 604800000  # 7 days in milliseconds
+    access-token-expiration: 7776000000  # 90 days in milliseconds
+    refresh-token-expiration: 7776000000 # 90 days in milliseconds
 
   # Stripe Configuration
   stripe:
