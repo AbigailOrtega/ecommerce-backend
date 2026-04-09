@@ -158,6 +158,16 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <requiresUnpack>
+                        <dependency>
+                            <groupId>io.jsonwebtoken</groupId>
+                            <artifactId>jjwt-impl</artifactId>
+                        </dependency>
+                        <dependency>
+                            <groupId>io.jsonwebtoken</groupId>
+                            <artifactId>jjwt-jackson</artifactId>
+                        </dependency>
+                    </requiresUnpack>
                 </configuration>
             </plugin>
             <plugin>
