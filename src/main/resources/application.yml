@@ -193,6 +193,12 @@ spring:
         order_inserts: true
         order_updates: true
 
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 logging:
   level:
     com.ecommerce: INFO
