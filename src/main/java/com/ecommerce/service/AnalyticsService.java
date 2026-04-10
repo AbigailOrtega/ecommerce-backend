@@ -16,8 +16,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.time.DayOfWeek;
 import java.time.LocalDateTime;
-import java.time.temporal.IsoFields;
+import java.time.temporal.TemporalAdjusters;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -70,7 +71,7 @@ public class AnalyticsService {
         LocalDateTime now = LocalDateTime.now();
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("today",     pageViewRepository.countByTimestampBetween(now.toLocalDate().atStartOfDay(), now));
-        summary.put("thisWeek",  pageViewRepository.countByTimestampBetween(now.with(IsoFields.DAY_OF_QUARTER, now.getDayOfYear() - now.getDayOfYear() % 7).toLocalDate().atStartOfDay(), now));
+        summary.put("thisWeek",  pageViewRepository.countByTimestampBetween(now.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toLocalDate().atStartOfDay(), now));
         summary.put("thisMonth", pageViewRepository.countByTimestampBetween(now.withDayOfMonth(1).toLocalDate().atStartOfDay(), now));
         summary.put("thisYear",  pageViewRepository.countByTimestampBetween(now.withDayOfYear(1).toLocalDate().atStartOfDay(), now));
         summary.put("total",     pageViewRepository.count());
