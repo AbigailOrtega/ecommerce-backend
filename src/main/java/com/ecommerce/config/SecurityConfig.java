@@ -28,8 +28,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
-    private final RateLimitFilter rateLimitFilter;
     private final UserDetailsService userDetailsService;
+    private final RateLimitFilter rateLimitFilter = new RateLimitFilter();
     private final org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource;
 
     @Bean
