@@ -6,6 +6,7 @@ import com.ecommerce.dto.response.StoreInfoResponse;
 import com.ecommerce.entity.StoreImage;
 import com.ecommerce.service.StoreInfoService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 public class StoreInfoController {
@@ -21,7 +23,10 @@ public class StoreInfoController {
 
     @GetMapping("/api/store-info")
     public ResponseEntity<ApiResponse<StoreInfoResponse>> getPublic() {
-        return ResponseEntity.ok(ApiResponse.success(storeInfoService.getPublic()));
+        log.info("GET /api/store-info - request received");
+        ResponseEntity<ApiResponse<StoreInfoResponse>> response = ResponseEntity.ok(ApiResponse.success(storeInfoService.getPublic()));
+        log.info("GET /api/store-info - response sent successfully");
+        return response;
     }
 
     @PutMapping("/api/admin/store-info")
