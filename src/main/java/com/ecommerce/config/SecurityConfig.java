@@ -41,6 +41,7 @@ public class SecurityConfig {
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/api-docs/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/h2-console/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**", "/api/banner/**", "/api/shipping/**", "/api/store-info").permitAll()
+                .requestMatchers(HttpMethod.HEAD, "/api/store-info").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/shipping/calculate-national").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/orders/guest").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/*/reviews/**").permitAll()
