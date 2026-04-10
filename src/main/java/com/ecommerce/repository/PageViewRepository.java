@@ -15,7 +15,7 @@ public interface PageViewRepository extends JpaRepository<PageView, Long> {
     long countByTimestampBetween(LocalDateTime from, LocalDateTime to);
 
     // Visits grouped by hour (0-23)
-    @Query(value = "SELECT EXTRACT(HOUR FROM timestamp)::int AS label, COUNT(*) AS count " +
+    @Query(value = "SELECT CAST(EXTRACT(HOUR FROM timestamp) AS int) AS label, COUNT(*) AS count " +
                    "FROM page_views WHERE timestamp BETWEEN :from AND :to " +
                    "GROUP BY label ORDER BY label", nativeQuery = true)
     List<Object[]> countByHour(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
@@ -39,7 +39,7 @@ public interface PageViewRepository extends JpaRepository<PageView, Long> {
     List<Object[]> countByMonth(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     // Visits grouped by year
-    @Query(value = "SELECT EXTRACT(YEAR FROM timestamp)::int::text AS label, COUNT(*) AS count " +
+    @Query(value = "SELECT CAST(CAST(EXTRACT(YEAR FROM timestamp) AS int) AS text) AS label, COUNT(*) AS count " +
                    "FROM page_views WHERE timestamp BETWEEN :from AND :to " +
                    "GROUP BY label ORDER BY label", nativeQuery = true)
     List<Object[]> countByYear(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
