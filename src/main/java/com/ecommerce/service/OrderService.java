@@ -577,6 +577,42 @@ public class OrderService {
         return mapToResponse(saved, true);
     }
 
+    public OrderResponse getOrderPublic(String orderNumber) {
+        Order order = orderRepository.findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
+        OrderResponse response = mapToResponse(order, false);
+        // Omit sensitive fields (paymentId, guest contact, user info) from unauthenticated response
+        return OrderResponse.builder()
+                .id(response.getId())
+                .orderNumber(response.getOrderNumber())
+                .items(response.getItems())
+                .totalAmount(response.getTotalAmount())
+                .discountAmount(response.getDiscountAmount())
+                .couponCode(response.getCouponCode())
+                .shippingCost(response.getShippingCost())
+                .shippingMethodName(response.getShippingMethodName())
+                .status(response.getStatus())
+                .paymentMethod(response.getPaymentMethod())
+                .shippingAddress(response.getShippingAddress())
+                .shippingCity(response.getShippingCity())
+                .shippingState(response.getShippingState())
+                .shippingZipCode(response.getShippingZipCode())
+                .shippingCountry(response.getShippingCountry())
+                .notes(response.getNotes())
+                .createdAt(response.getCreatedAt())
+                .updatedAt(response.getUpdatedAt())
+                .shippingType(response.getShippingType())
+                .pickupLocationName(response.getPickupLocationName())
+                .pickupTimeSlotLabel(response.getPickupTimeSlotLabel())
+                .pickupDate(response.getPickupDate())
+                .trackingNumber(response.getTrackingNumber())
+                .carrierName(response.getCarrierName())
+                .labelUrl(response.getLabelUrl())
+                .shipmentStatus(response.getShipmentStatus())
+                .pickupCancelled(response.isPickupCancelled())
+                .build();
+    }
+
     private User findUserByEmail(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));

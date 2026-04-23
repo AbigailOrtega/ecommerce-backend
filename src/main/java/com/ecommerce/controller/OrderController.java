@@ -27,6 +27,12 @@ public class OrderController {
 
     private final OrderService orderService;
 
+    @GetMapping("/track/{orderNumber}")
+    @Operation(summary = "Track an order by order number (no authentication required)")
+    public ResponseEntity<ApiResponse<OrderResponse>> trackOrder(@PathVariable String orderNumber) {
+        return ResponseEntity.ok(ApiResponse.success(orderService.getOrderPublic(orderNumber)));
+    }
+
     @PostMapping("/guest")
     @Operation(summary = "Create a guest order without authentication")
     public ResponseEntity<ApiResponse<OrderResponse>> createGuestOrder(@Valid @RequestBody GuestOrderRequest request) {
