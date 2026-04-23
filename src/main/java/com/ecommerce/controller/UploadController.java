@@ -27,8 +27,9 @@ public class UploadController {
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Upload an image to Cloudinary")
     public ResponseEntity<ApiResponse<Map<String, String>>> uploadImage(
-            @RequestParam("file") MultipartFile file) {
-        String url = cloudinaryService.upload(file);
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "type", defaultValue = "default") String type) {
+        String url = cloudinaryService.upload(file, type);
         return ResponseEntity.ok(ApiResponse.success(Map.of("url", url)));
     }
 }

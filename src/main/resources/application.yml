@@ -63,6 +63,11 @@ app:
     cloud-name: ${CLOUDINARY_CLOUD_NAME}
     api-key: ${CLOUDINARY_API_KEY}
     api-secret: ${CLOUDINARY_API_SECRET}
+    image:
+      product-max-width: ${CLOUDINARY_PRODUCT_MAX_WIDTH:800}
+      product-max-height: ${CLOUDINARY_PRODUCT_MAX_HEIGHT:800}
+      banner-max-width: ${CLOUDINARY_BANNER_MAX_WIDTH:1920}
+      banner-max-height: ${CLOUDINARY_BANNER_MAX_HEIGHT:600}
 
 # SpringDoc / Swagger
 springdoc:
