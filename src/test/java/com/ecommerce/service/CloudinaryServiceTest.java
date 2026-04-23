@@ -38,6 +38,10 @@ class CloudinaryServiceTest {
         ReflectionTestUtils.setField(cloudinaryService, "cloudName", "test-cloud");
         ReflectionTestUtils.setField(cloudinaryService, "apiKey",    "test-api-key");
         ReflectionTestUtils.setField(cloudinaryService, "apiSecret", "test-api-secret");
+        ReflectionTestUtils.setField(cloudinaryService, "productMaxWidth",  800);
+        ReflectionTestUtils.setField(cloudinaryService, "productMaxHeight", 800);
+        ReflectionTestUtils.setField(cloudinaryService, "bannerMaxWidth",  1920);
+        ReflectionTestUtils.setField(cloudinaryService, "bannerMaxHeight",  600);
     }
 
     // ─── isConfigured ─────────────────────────────────────────────────────────
@@ -75,7 +79,7 @@ class CloudinaryServiceTest {
             when(uploader.upload(eq(fileBytes), any(Map.class)))
                     .thenReturn(Map.of("secure_url", "https://res.cloudinary.com/test-cloud/image/upload/products/img.jpg"));
 
-            String result = cloudinaryService.upload(multipartFile);
+            String result = cloudinaryService.upload(multipartFile, "product");
 
             assertThat(result).isEqualTo("https://res.cloudinary.com/test-cloud/image/upload/products/img.jpg");
         }
@@ -92,7 +96,7 @@ class CloudinaryServiceTest {
                     "image".equals(opts.get("resource_type")))))
                     .thenReturn(Map.of("secure_url", "https://res.cloudinary.com/test/img.jpg"));
 
-            String url = cloudinaryService.upload(multipartFile);
+            String url = cloudinaryService.upload(multipartFile, "product");
 
             assertThat(url).contains("cloudinary.com");
         }
@@ -102,7 +106,7 @@ class CloudinaryServiceTest {
         void upload_notConfigured() {
             ReflectionTestUtils.setField(cloudinaryService, "cloudinary", null);
 
-            assertThatThrownBy(() -> cloudinaryService.upload(multipartFile))
+            assertThatThrownBy(() -> cloudinaryService.upload(multipartFile, "product"))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessage("Cloudinary is not configured.");
 
@@ -117,7 +121,7 @@ class CloudinaryServiceTest {
             when(uploader.upload(any(byte[].class), any(Map.class)))
                     .thenThrow(new IOException("network error"));
 
-            assertThatThrownBy(() -> cloudinaryService.upload(multipartFile))
+            assertThatThrownBy(() -> cloudinaryService.upload(multipartFile, "product"))
                     .isInstanceOf(RuntimeException.class)
                     .hasMessageContaining("Failed to upload image");
         }
@@ -128,7 +132,7 @@ class CloudinaryServiceTest {
             when(multipartFile.getBytes()).thenThrow(new IOException("read error"));
             when(cloudinary.uploader()).thenReturn(uploader);
 
-            assertThatThrownBy(() -> cloudinaryService.upload(multipartFile))
+            assertThatThrownBy(() -> cloudinaryService.upload(multipartFile, "product"))
                     .isInstanceOf(RuntimeException.class)
                     .hasMessageContaining("Failed to upload image");
         }
@@ -141,7 +145,7 @@ class CloudinaryServiceTest {
             when(uploader.upload(any(byte[].class), any(Map.class)))
                     .thenReturn(Map.of("public_id", "products/img"));  // no secure_url key
 
-            String result = cloudinaryService.upload(multipartFile);
+            String result = cloudinaryService.upload(multipartFile, "product");
 
             assertThat(result).isNull();
         }

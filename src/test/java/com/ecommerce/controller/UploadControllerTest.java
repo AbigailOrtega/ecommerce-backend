@@ -49,7 +49,7 @@ class UploadControllerTest {
         @Test
         @DisplayName("returns 200 with the uploaded image URL on success")
         void uploadImage_200() throws Exception {
-            when(cloudinaryService.upload(any()))
+            when(cloudinaryService.upload(any(), any()))
                     .thenReturn("https://res.cloudinary.com/demo/image/upload/products/test-image.jpg");
 
             MockMultipartFile file = new MockMultipartFile(
@@ -68,7 +68,7 @@ class UploadControllerTest {
         @Test
         @DisplayName("returns 400 when Cloudinary is not configured")
         void uploadImage_400_cloudinaryNotConfigured() throws Exception {
-            when(cloudinaryService.upload(any()))
+            when(cloudinaryService.upload(any(), any()))
                     .thenThrow(new BadRequestException("Cloudinary is not configured."));
 
             MockMultipartFile file = new MockMultipartFile(

@@ -1,7 +1,7 @@
 package com.ecommerce.service;
 
 import com.cloudinary.Cloudinary;
-import com.cloudinary.transformation.Transformation;
+import com.cloudinary.Transformation;
 import com.cloudinary.utils.ObjectUtils;
 import com.ecommerce.exception.BadRequestException;
 import jakarta.annotation.PostConstruct;

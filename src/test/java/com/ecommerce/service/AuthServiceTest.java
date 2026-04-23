@@ -209,7 +209,7 @@ class AuthServiceTest {
             when(jwtTokenProvider.validateToken("refresh")).thenReturn(true);
             when(jwtTokenProvider.getEmailFromToken("refresh")).thenReturn("ana@example.com");
             when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(testUser));
-            when(jwtTokenProvider.generateAccessToken("ana@example.com")).thenReturn("new-access");
+            when(jwtTokenProvider.generateAccessToken("ana@example.com", "CUSTOMER")).thenReturn("new-access");
             when(jwtTokenProvider.generateRefreshToken("ana@example.com")).thenReturn("new-refresh");
 
             AuthResponse response = authService.refreshToken("refresh");
