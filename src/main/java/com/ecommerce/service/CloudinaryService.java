@@ -10,6 +10,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -65,36 +73,71 @@ public class CloudinaryService {
             throw new BadRequestException("Cloudinary is not configured.");
         }
         try {
-            Map<String, Object> options = new HashMap<>();
-            options.put("resource_type", "image");
+            int maxWidth;
+            int maxHeight;
+            String folder;
 
             switch (type) {
-                case "product" -> {
-                    options.put("folder", "products");
-                    options.put("transformation", new Transformation()
-                            .width(productMaxWidth).height(productMaxHeight)
-                            .crop("limit").quality("auto").fetchFormat("auto"));
-                }
-                case "banner" -> {
-                    options.put("folder", "banners");
-                    options.put("transformation", new Transformation()
-                            .width(bannerMaxWidth).height(bannerMaxHeight)
-                            .crop("limit").quality("auto").fetchFormat("auto"));
-                }
-                default -> {
-                    options.put("folder", "uploads");
-                    options.put("transformation", new Transformation()
-                            .quality("auto").fetchFormat("auto"));
-                }
+                case "product" -> { maxWidth = productMaxWidth; maxHeight = productMaxHeight; folder = "products"; }
+                case "banner"  -> { maxWidth = bannerMaxWidth;  maxHeight = bannerMaxHeight;  folder = "banners";  }
+                default        -> { maxWidth = 0;               maxHeight = 0;                folder = "uploads";  }
             }
 
-            Map result = cloudinary.uploader().upload(file.getBytes(), options);
+            byte[] bytes = (maxWidth > 0)
+                    ? resizeImage(file.getBytes(), maxWidth, maxHeight)
+                    : file.getBytes();
+
+            Map<String, Object> options = new HashMap<>();
+            options.put("folder", folder);
+            options.put("resource_type", "image");
+            options.put("format", "webp");
+            options.put("transformation", new Transformation().quality("auto"));
+
+            Map result = cloudinary.uploader().upload(bytes, options);
             String url = (String) result.get("secure_url");
-            log.info("Image uploaded to Cloudinary [type={}]: {}", type, url);
+            log.info("Image uploaded to Cloudinary [type={}, folder={}]: {}", type, folder, url);
             return url;
         } catch (IOException e) {
             log.error("Cloudinary upload error: {}", e.getMessage());
             throw new RuntimeException("Failed to upload image: " + e.getMessage());
         }
+    }
+
+    private byte[] resizeImage(byte[] originalBytes, int maxWidth, int maxHeight) throws IOException {
+        BufferedImage original = ImageIO.read(new ByteArrayInputStream(originalBytes));
+        if (original == null) {
+            return originalBytes;
+        }
+
+        int origWidth  = original.getWidth();
+        int origHeight = original.getHeight();
+
+        if (origWidth <= maxWidth && origHeight <= maxHeight) {
+            return originalBytes;
+        }
+
+        double scale = Math.min((double) maxWidth / origWidth, (double) maxHeight / origHeight);
+        int newWidth  = (int) (origWidth  * scale);
+        int newHeight = (int) (origHeight * scale);
+
+        BufferedImage resized = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = resized.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(original.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH), 0, 0, null);
+        g.dispose();
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
+        ImageWriteParam param = writer.getDefaultWriteParam();
+        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+        param.setCompressionQuality(0.85f);
+        try (ImageOutputStream ios = ImageIO.createImageOutputStream(out)) {
+            writer.setOutput(ios);
+            writer.write(null, new javax.imageio.IIOImage(resized, null, null), param);
+        }
+        writer.dispose();
+
+        log.debug("Image resized from {}x{} to {}x{}", origWidth, origHeight, newWidth, newHeight);
+        return out.toByteArray();
     }
 }
