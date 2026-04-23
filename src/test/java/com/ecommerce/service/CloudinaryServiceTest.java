@@ -130,7 +130,6 @@ class CloudinaryServiceTest {
         @DisplayName("wraps IOException from getBytes() in RuntimeException")
         void upload_getBytesThrows() throws IOException {
             when(multipartFile.getBytes()).thenThrow(new IOException("read error"));
-            when(cloudinary.uploader()).thenReturn(uploader);
 
             assertThatThrownBy(() -> cloudinaryService.upload(multipartFile, "product"))
                     .isInstanceOf(RuntimeException.class)
