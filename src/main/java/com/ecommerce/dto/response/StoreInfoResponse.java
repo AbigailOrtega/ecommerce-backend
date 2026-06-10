@@ -18,5 +18,6 @@ public record StoreInfoResponse(
     List<StoreImage> images,
     String instagramUrl,
     String facebookUrl,
-    String whatsappNumber
+    String whatsappNumber,
+    Boolean showNameInNavbar
 ) {}

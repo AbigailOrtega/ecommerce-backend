@@ -44,7 +44,8 @@ public class StoreInfoService {
                 images,
                 info.getInstagramUrl(),
                 info.getFacebookUrl(),
-                info.getWhatsappNumber()
+                info.getWhatsappNumber(),
+                info.getShowNameInNavbar() != null ? info.getShowNameInNavbar() : true
         );
     }
 
@@ -64,6 +65,7 @@ public class StoreInfoService {
         if (request.instagramUrl() != null) info.setInstagramUrl(request.instagramUrl().isBlank() ? null : request.instagramUrl());
         if (request.facebookUrl() != null) info.setFacebookUrl(request.facebookUrl().isBlank() ? null : request.facebookUrl());
         if (request.whatsappNumber() != null) info.setWhatsappNumber(request.whatsappNumber().isBlank() ? null : request.whatsappNumber().trim());
+        if (request.showNameInNavbar() != null) info.setShowNameInNavbar(request.showNameInNavbar());
         storeInfoRepository.save(info);
         return getPublic();
     }

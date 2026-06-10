@@ -40,4 +40,5 @@ public class StoreInfo {
     private String instagramUrl;
     private String facebookUrl;
     private String whatsappNumber;
+    private Boolean showNameInNavbar;
 }

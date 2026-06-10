@@ -13,5 +13,6 @@ public record StoreInfoRequest(
     String fontKey,
     String instagramUrl,
     String facebookUrl,
-    String whatsappNumber
+    String whatsappNumber,
+    Boolean showNameInNavbar
 ) {}
