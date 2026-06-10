@@ -123,7 +123,7 @@ class StoreInfoServiceTest {
             when(storeInfoRepository.save(any())).thenReturn(testInfo);
             when(storeImageRepository.findAllByActiveTrueOrderByDisplayOrderAsc()).thenReturn(List.of());
 
-            service.update(new StoreInfoRequest("Nuevo Nombre", null, null, null, null, null, null, null, null, null, null, null, null));
+            service.update(new StoreInfoRequest("Nuevo Nombre", null, null, null, null, null, null, null, null, null, null, null, null, null));
 
             verify(storeInfoRepository).save(argThat(info ->
                     info.getName().equals("Nuevo Nombre") &&
@@ -139,7 +139,7 @@ class StoreInfoServiceTest {
             when(storeInfoRepository.save(any())).thenReturn(testInfo);
             when(storeImageRepository.findAllByActiveTrueOrderByDisplayOrderAsc()).thenReturn(List.of());
 
-            service.update(new StoreInfoRequest("A", "B", "C", "D", "E", null, null, null, null, null, null, null, null));
+            service.update(new StoreInfoRequest("A", "B", "C", "D", "E", null, null, null, null, null, null, null, null, null));
 
             verify(storeInfoRepository).save(argThat(info ->
                     info.getName().equals("A") &&
@@ -157,7 +157,7 @@ class StoreInfoServiceTest {
             when(storeInfoRepository.save(any())).thenReturn(testInfo);
             when(storeImageRepository.findAllByActiveTrueOrderByDisplayOrderAsc()).thenReturn(List.of());
 
-            StoreInfoResponse response = service.update(new StoreInfoRequest("X", null, null, null, null, null, null, null, null, null, null, null, null));
+            StoreInfoResponse response = service.update(new StoreInfoRequest("X", null, null, null, null, null, null, null, null, null, null, null, null, null));
 
             assertThat(response).isNotNull();
             assertThat(response.images()).isEmpty();
@@ -170,7 +170,7 @@ class StoreInfoServiceTest {
             when(storeInfoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(storeImageRepository.findAllByActiveTrueOrderByDisplayOrderAsc()).thenReturn(List.of());
 
-            StoreInfoResponse response = service.update(new StoreInfoRequest(null, null, null, null, null, null, null, null, null, null, null, null, "   "));
+            StoreInfoResponse response = service.update(new StoreInfoRequest(null, null, null, null, null, null, null, null, null, null, null, null, "   ", null));
 
             assertThat(response.whatsappNumber()).isNull();
         }
@@ -182,7 +182,7 @@ class StoreInfoServiceTest {
             when(storeInfoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(storeImageRepository.findAllByActiveTrueOrderByDisplayOrderAsc()).thenReturn(List.of());
 
-            StoreInfoResponse response = service.update(new StoreInfoRequest(null, null, null, null, null, null, null, null, null, null, null, null, "  5219991234567  "));
+            StoreInfoResponse response = service.update(new StoreInfoRequest(null, null, null, null, null, null, null, null, null, null, null, null, "  5219991234567  ", null));
 
             assertThat(response.whatsappNumber()).isEqualTo("5219991234567");
         }
