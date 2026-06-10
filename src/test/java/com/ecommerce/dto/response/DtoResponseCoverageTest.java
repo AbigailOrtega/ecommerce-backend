@@ -356,7 +356,7 @@ class DtoResponseCoverageTest {
     @Test @DisplayName("StoreInfoResponse record") void storeInfoResponse() {
         StoreInfoResponse r = new StoreInfoResponse("Mi Tienda", "sobre nosotros", "misión",
                 "visión", "555", "a@b.com", "privacidad", "logo.jpg",
-                "default", "sans", List.of(), "ig_url", "fb_url", "+521234567890");
+                "default", "sans", List.of(), "ig_url", "fb_url", "+521234567890", true);
         assertThat(r.name()).isEqualTo("Mi Tienda");
         assertThat(r.themeKey()).isEqualTo("default");
     }
