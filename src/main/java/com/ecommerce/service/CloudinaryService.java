@@ -41,10 +41,10 @@ public class CloudinaryService {
     @Value("${app.cloudinary.image.product-max-height:800}")
     private int productMaxHeight;
 
-    @Value("${app.cloudinary.image.banner-max-width:1920}")
+    @Value("${app.cloudinary.image.banner-max-width:2560}")
     private int bannerMaxWidth;
 
-    @Value("${app.cloudinary.image.banner-max-height:600}")
+    @Value("${app.cloudinary.image.banner-max-height:1440}")
     private int bannerMaxHeight;
 
     private Cloudinary cloudinary;
@@ -91,7 +91,7 @@ public class CloudinaryService {
             options.put("folder", folder);
             options.put("resource_type", "image");
             options.put("format", "webp");
-            options.put("transformation", new Transformation().quality("auto"));
+            options.put("transformation", new Transformation().quality("auto:best"));
 
             Map result = cloudinary.uploader().upload(bytes, options);
             String url = (String) result.get("secure_url");
@@ -130,7 +130,7 @@ public class CloudinaryService {
         ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
         ImageWriteParam param = writer.getDefaultWriteParam();
         param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-        param.setCompressionQuality(0.85f);
+        param.setCompressionQuality(0.95f);
         try (ImageOutputStream ios = ImageIO.createImageOutputStream(out)) {
             writer.setOutput(ios);
             writer.write(null, new javax.imageio.IIOImage(resized, null, null), param);
