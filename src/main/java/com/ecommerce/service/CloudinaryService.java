@@ -114,19 +114,43 @@ public class CloudinaryService {
         }
 
         double scale = Math.min((double) maxWidth / origWidth, (double) maxHeight / origHeight);
-        int newWidth  = (int) (origWidth  * scale);
-        int newHeight = (int) (origHeight * scale);
+        int targetWidth  = (int) (origWidth  * scale);
+        int targetHeight = (int) (origHeight * scale);
 
-        BufferedImage resized = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = resized.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.drawImage(original.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH), 0, 0, null);
-        g.dispose();
+        BufferedImage resized = progressiveDownscale(original, targetWidth, targetHeight);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ImageIO.write(resized, "png", out);
 
-        log.debug("Image resized from {}x{} to {}x{}", origWidth, origHeight, newWidth, newHeight);
+        log.debug("Image resized from {}x{} to {}x{}", origWidth, origHeight, targetWidth, targetHeight);
         return out.toByteArray();
+    }
+
+    private BufferedImage progressiveDownscale(BufferedImage src, int targetWidth, int targetHeight) {
+        int currentWidth  = src.getWidth();
+        int currentHeight = src.getHeight();
+        BufferedImage current = src;
+
+        while (currentWidth > targetWidth * 2 || currentHeight > targetHeight * 2) {
+            currentWidth  = Math.max(currentWidth  / 2, targetWidth);
+            currentHeight = Math.max(currentHeight / 2, targetHeight);
+            current = scaleStep(current, currentWidth, currentHeight);
+        }
+
+        return scaleStep(current, targetWidth, targetHeight);
+    }
+
+    private BufferedImage scaleStep(BufferedImage src, int width, int height) {
+        int type = src.getTransparency() == Transparency.OPAQUE
+                ? BufferedImage.TYPE_INT_RGB
+                : BufferedImage.TYPE_INT_ARGB;
+        BufferedImage result = new BufferedImage(width, height, type);
+        Graphics2D g = result.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING,     RenderingHints.VALUE_RENDER_QUALITY);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,  RenderingHints.VALUE_ANTIALIAS_ON);
+        g.drawImage(src, 0, 0, width, height, null);
+        g.dispose();
+        return result;
     }
 }
