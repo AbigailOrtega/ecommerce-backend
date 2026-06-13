@@ -11,9 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
-import javax.imageio.stream.ImageOutputStream;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -35,10 +32,10 @@ public class CloudinaryService {
     @Value("${app.cloudinary.api-secret:}")
     private String apiSecret;
 
-    @Value("${app.cloudinary.image.product-max-width:800}")
+    @Value("${app.cloudinary.image.product-max-width:1200}")
     private int productMaxWidth;
 
-    @Value("${app.cloudinary.image.product-max-height:800}")
+    @Value("${app.cloudinary.image.product-max-height:1200}")
     private int productMaxHeight;
 
     @Value("${app.cloudinary.image.banner-max-width:2560}")
@@ -127,15 +124,7 @@ public class CloudinaryService {
         g.dispose();
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
-        ImageWriteParam param = writer.getDefaultWriteParam();
-        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-        param.setCompressionQuality(0.95f);
-        try (ImageOutputStream ios = ImageIO.createImageOutputStream(out)) {
-            writer.setOutput(ios);
-            writer.write(null, new javax.imageio.IIOImage(resized, null, null), param);
-        }
-        writer.dispose();
+        ImageIO.write(resized, "png", out);
 
         log.debug("Image resized from {}x{} to {}x{}", origWidth, origHeight, newWidth, newHeight);
         return out.toByteArray();

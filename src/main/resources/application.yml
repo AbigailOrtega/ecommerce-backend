@@ -68,8 +68,8 @@ app:
     api-key: ${CLOUDINARY_API_KEY}
     api-secret: ${CLOUDINARY_API_SECRET}
     image:
-      product-max-width: ${CLOUDINARY_PRODUCT_MAX_WIDTH:800}
-      product-max-height: ${CLOUDINARY_PRODUCT_MAX_HEIGHT:800}
+      product-max-width: ${CLOUDINARY_PRODUCT_MAX_WIDTH:1200}
+      product-max-height: ${CLOUDINARY_PRODUCT_MAX_HEIGHT:1200}
       banner-max-width: ${CLOUDINARY_BANNER_MAX_WIDTH:1920}
       banner-max-height: ${CLOUDINARY_BANNER_MAX_HEIGHT:600}
 
