@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -18,6 +19,7 @@ public class StoreInfoService {
 
     private final StoreInfoRepository storeInfoRepository;
     private final StoreImageRepository storeImageRepository;
+    private final ImageCleanupService imageCleanupService;
 
     @Transactional
     public StoreInfo getOrCreate() {
@@ -52,6 +54,7 @@ public class StoreInfoService {
     @Transactional
     public StoreInfoResponse update(StoreInfoRequest request) {
         StoreInfo info = getOrCreate();
+        String previousLogo = info.getLogoUrl();
         if (request.name() != null) info.setName(request.name());
         if (request.aboutText() != null) info.setAboutText(request.aboutText());
         if (request.mission() != null) info.setMission(request.mission());
@@ -67,6 +70,7 @@ public class StoreInfoService {
         if (request.whatsappNumber() != null) info.setWhatsappNumber(request.whatsappNumber().isBlank() ? null : request.whatsappNumber().trim());
         if (request.showNameInNavbar() != null) info.setShowNameInNavbar(request.showNameInNavbar());
         storeInfoRepository.save(info);
+        imageCleanupService.deleteRemoved(Collections.singletonList(previousLogo), Collections.singletonList(info.getLogoUrl()));
         return getPublic();
     }
 
@@ -83,7 +87,10 @@ public class StoreInfoService {
 
     @Transactional
     public void deleteImage(Long id) {
-        storeImageRepository.deleteById(id);
+        storeImageRepository.findById(id).ifPresent(image -> {
+            storeImageRepository.delete(image);
+            imageCleanupService.deleteUnused(List.of(image.getUrl()));
+        });
     }
 
     @Transactional

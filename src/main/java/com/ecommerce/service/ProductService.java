@@ -32,6 +32,7 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final PromotionRepository promotionRepository;
     private final CartItemRepository cartItemRepository;
+    private final ImageCleanupService imageCleanupService;
 
     public Page<ProductResponse> getAllProducts(Pageable pageable) {
         return productRepository.findByActiveTrue(pageable).map(this::mapToResponse);
@@ -95,6 +96,7 @@ public class ProductService {
     @Transactional
     public ProductResponse updateProduct(Long id, ProductRequest request) {
         Product product = findProductById(id);
+        List<String> imagesBefore = imageUrlsOf(product);
 
         product.setName(request.name());
         product.setDescription(request.description());
@@ -116,12 +118,25 @@ public class ProductService {
         }
 
         applyColors(product, request);
-        return mapToResponse(productRepository.save(product));
+        ProductResponse response = mapToResponse(productRepository.save(product));
+        imageCleanupService.deleteRemoved(imagesBefore, imageUrlsOf(product));
+        return response;
     }
 
     @Transactional
     public void deleteProduct(Long id) {
-        productRepository.delete(findProductById(id));
+        Product product = findProductById(id);
+        List<String> images = imageUrlsOf(product);
+        productRepository.delete(product);
+        imageCleanupService.deleteUnused(images);
+    }
+
+    private static List<String> imageUrlsOf(Product product) {
+        List<String> urls = new ArrayList<>();
+        urls.add(product.getImageUrl());
+        if (product.getImages() != null) urls.addAll(product.getImages());
+        if (product.getColors() != null) product.getColors().forEach(c -> urls.addAll(c.getImages()));
+        return urls;
     }
 
     public Page<ProductResponse> getAllProductsAdmin(Pageable pageable) {

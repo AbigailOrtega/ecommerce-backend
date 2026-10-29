@@ -33,6 +33,9 @@ class PromoBannerServiceTest {
 
     @Mock private PromoBannerRepository promoBannerRepository;
 
+    @Mock ImageCleanupService imageCleanupService;
+
+
     @InjectMocks private PromoBannerService promoBannerService;
 
     private PromoBanner activeBanner;

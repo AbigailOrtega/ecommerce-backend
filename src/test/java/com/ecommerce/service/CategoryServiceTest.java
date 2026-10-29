@@ -31,6 +31,9 @@ class CategoryServiceTest {
 
     @Mock private CategoryRepository categoryRepository;
 
+    @Mock ImageCleanupService imageCleanupService;
+
+
     @InjectMocks private CategoryService categoryService;
 
     private Category shoes;

@@ -40,6 +40,9 @@ class ProductServiceTest {
     @Mock private PromotionRepository promotionRepository;
     @Mock private com.ecommerce.repository.CartItemRepository cartItemRepository;
 
+    @Mock ImageCleanupService imageCleanupService;
+
+
     @InjectMocks private ProductService productService;
 
     private Product sampleProduct;
@@ -608,6 +611,26 @@ class ProductServiceTest {
         }
 
         @Test
+        @DisplayName("hands the images before and after the edit to the image cleanup")
+        void updateProduct_cleansRemovedImages() {
+            sampleProduct.setImageUrl("https://img/main.webp");
+            sampleProduct.setImages(new ArrayList<>(List.of("https://img/a.webp", "https://img/b.webp")));
+            sampleProduct.getColors().add(ProductColor.builder().id(7L).product(sampleProduct).name("Rojo")
+                    .images(new ArrayList<>(List.of("https://img/red.webp"))).build());
+            when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+            when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+            noActivePromotion();
+
+            productService.updateProduct(1L, new ProductRequest("Name", "d", BigDecimal.TEN, null, "SKU", 1,
+                    "https://img/main.webp", List.of("https://img/a.webp"), null, null, true,
+                    List.of(new ProductColorRequest(7L, "Rojo", List.of(), null))));
+
+            verify(imageCleanupService).deleteRemoved(
+                    List.of("https://img/main.webp", "https://img/a.webp", "https://img/b.webp", "https://img/red.webp"),
+                    List.of("https://img/main.webp", "https://img/a.webp"));
+        }
+
+        @Test
         @DisplayName("throws ResourceNotFoundException when product does not exist")
         void updateProduct_notFound() {
             when(productRepository.findById(999L)).thenReturn(Optional.empty());
@@ -688,6 +711,19 @@ class ProductServiceTest {
             productService.deleteProduct(1L);
 
             verify(productRepository).delete(sampleProduct);
+        }
+
+        @Test
+        @DisplayName("hands all the product's images to the image cleanup")
+        void deleteProduct_cleansImages() {
+            sampleProduct.setImageUrl("https://img/main.webp");
+            sampleProduct.setImages(new ArrayList<>(List.of("https://img/a.webp")));
+            when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+
+            productService.deleteProduct(1L);
+
+            verify(imageCleanupService).deleteUnused(argThat((java.util.Collection<String> urls) ->
+                    urls.containsAll(List.of("https://img/main.webp", "https://img/a.webp"))));
         }
 
         @Test

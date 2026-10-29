@@ -28,6 +28,8 @@ class StoreInfoServiceTest {
 
     @Mock StoreInfoRepository storeInfoRepository;
     @Mock StoreImageRepository storeImageRepository;
+    @Mock ImageCleanupService imageCleanupService;
+
     @InjectMocks StoreInfoService service;
 
     private StoreInfo testInfo;
@@ -237,11 +239,26 @@ class StoreInfoServiceTest {
     class DeleteImage {
 
         @Test
-        @DisplayName("calls deleteById with the given id")
+        @DisplayName("deletes the record and hands its URL to the image cleanup")
         void deleteImage_callsRepository() {
+            StoreImage image = StoreImage.builder().id(5L).url("https://cdn/x.webp").build();
+            when(storeImageRepository.findById(5L)).thenReturn(Optional.of(image));
+
             service.deleteImage(5L);
 
-            verify(storeImageRepository).deleteById(5L);
+            verify(storeImageRepository).delete(image);
+            verify(imageCleanupService).deleteUnused(List.of("https://cdn/x.webp"));
+        }
+
+        @DisplayName("does nothing when the image does not exist")
+        @Test
+        void deleteImage_missing() {
+            when(storeImageRepository.findById(5L)).thenReturn(Optional.empty());
+
+            service.deleteImage(5L);
+
+            verify(storeImageRepository, never()).delete(any());
+            verifyNoInteractions(imageCleanupService);
         }
     }
 

@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -16,6 +17,7 @@ import java.util.List;
 public class PromoBannerService {
 
     private final PromoBannerRepository promoBannerRepository;
+    private final ImageCleanupService imageCleanupService;
 
     public List<PromoBannerResponse> getActiveBanners() {
         return promoBannerRepository.findAllByActiveTrueOrderByCreatedAtAsc()
@@ -39,14 +41,19 @@ public class PromoBannerService {
     @Transactional
     public PromoBannerResponse updateBanner(Long id, PromoBannerRequest request) {
         PromoBanner banner = findById(id);
+        String previousImage = banner.getImageUrl();
         banner.setImageUrl(request.imageUrl());
         banner.setLinkUrl(request.linkUrl());
-        return mapToResponse(promoBannerRepository.save(banner));
+        PromoBannerResponse response = mapToResponse(promoBannerRepository.save(banner));
+        imageCleanupService.deleteRemoved(Collections.singletonList(previousImage), Collections.singletonList(banner.getImageUrl()));
+        return response;
     }
 
     @Transactional
     public void deleteBanner(Long id) {
-        promoBannerRepository.delete(findById(id));
+        PromoBanner banner = findById(id);
+        promoBannerRepository.delete(banner);
+        imageCleanupService.deleteUnused(Collections.singletonList(banner.getImageUrl()));
     }
 
     @Transactional

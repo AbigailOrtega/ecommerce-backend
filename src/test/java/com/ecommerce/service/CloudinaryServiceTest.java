@@ -149,4 +149,46 @@ class CloudinaryServiceTest {
             assertThat(result).isNull();
         }
     }
+
+    @Nested
+    @DisplayName("delete")
+    class Delete {
+
+        @Test
+        @DisplayName("extracts the public id from this account's URLs, with or without transformations")
+        void publicIdOf() {
+            assertThat(cloudinaryService.publicIdOf("https://res.cloudinary.com/test-cloud/image/upload/v1712345/products/abc123.webp"))
+                    .contains("products/abc123");
+            assertThat(cloudinaryService.publicIdOf("https://res.cloudinary.com/test-cloud/image/upload/c_fill,w_200/v1/banners/x.webp?_a=1"))
+                    .contains("banners/x");
+            assertThat(cloudinaryService.publicIdOf("https://res.cloudinary.com/test-cloud/image/upload/uploads/no-version.png"))
+                    .contains("uploads/no-version");
+        }
+
+        @Test
+        @DisplayName("ignores URLs from other hosts or other Cloudinary accounts")
+        void publicIdOf_foreign() {
+            assertThat(cloudinaryService.publicIdOf("https://res.cloudinary.com/other-cloud/image/upload/v1/products/a.webp")).isEmpty();
+            assertThat(cloudinaryService.publicIdOf("https://images.unsplash.com/photo-1.jpg")).isEmpty();
+            assertThat(cloudinaryService.publicIdOf(null)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("calls destroy with the public id")
+        void delete_destroys() throws Exception {
+            when(cloudinary.uploader()).thenReturn(uploader);
+            when(uploader.destroy(eq("products/abc"), any(Map.class))).thenReturn(Map.of("result", "ok"));
+
+            cloudinaryService.delete("https://res.cloudinary.com/test-cloud/image/upload/v9/products/abc.webp");
+
+            verify(uploader).destroy(eq("products/abc"), any(Map.class));
+        }
+
+        @Test
+        @DisplayName("does not call Cloudinary for foreign URLs")
+        void delete_foreign() {
+            cloudinaryService.delete("https://example.com/a.png");
+            verifyNoInteractions(cloudinary);
+        }
+    }
 }

@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -15,6 +16,7 @@ import java.util.List;
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
+    private final ImageCleanupService imageCleanupService;
 
     public List<CategoryResponse> getAllCategories() {
         return categoryRepository.findAll().stream().map(this::mapToResponse).toList();
@@ -40,10 +42,13 @@ public class CategoryService {
     public CategoryResponse updateCategory(Long id, String name, String description, String imageUrl) {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", "id", id));
+        String previousImage = category.getImageUrl();
         category.setName(name);
         if (description != null) category.setDescription(description);
         if (imageUrl != null) category.setImageUrl(imageUrl);
-        return mapToResponse(categoryRepository.save(category));
+        CategoryResponse response = mapToResponse(categoryRepository.save(category));
+        imageCleanupService.deleteRemoved(Collections.singletonList(previousImage), Collections.singletonList(category.getImageUrl()));
+        return response;
     }
 
     @Transactional
@@ -51,6 +56,7 @@ public class CategoryService {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", "id", id));
         categoryRepository.delete(category);
+        imageCleanupService.deleteUnused(Collections.singletonList(category.getImageUrl()));
     }
 
     private CategoryResponse mapToResponse(Category category) {

@@ -18,6 +18,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @Slf4j
@@ -98,6 +101,38 @@ public class CloudinaryService {
             log.error("Cloudinary upload error: {}", e.getMessage());
             throw new RuntimeException("Failed to upload image: " + e.getMessage());
         }
+    }
+
+    /**
+     * Deletes an image this store uploaded. URLs from other hosts or other Cloudinary accounts
+     * are ignored, so seed data or external links are never touched.
+     */
+    public void delete(String url) {
+        if (!isConfigured()) return;
+        publicIdOf(url).ifPresent(publicId -> {
+            try {
+                Map result = cloudinary.uploader().destroy(publicId,
+                        ObjectUtils.asMap("resource_type", "image", "invalidate", true));
+                log.info("Image deleted from Cloudinary [{}]: {}", publicId, result.get("result"));
+            } catch (Exception e) {
+                log.error("Cloudinary delete error for {}: {}", publicId, e.getMessage());
+            }
+        });
+    }
+
+    /** "https://res.cloudinary.com/{cloud}/image/upload/v123/products/abc.webp" → "products/abc". */
+    Optional<String> publicIdOf(String url) {
+        if (url == null || cloudName == null || cloudName.isBlank()) return Optional.empty();
+        String prefix = "https://res.cloudinary.com/" + cloudName + "/image/upload/";
+        if (!url.startsWith(prefix)) return Optional.empty();
+        String path = url.substring(prefix.length());
+        int q = path.indexOf('?');
+        if (q >= 0) path = path.substring(0, q);
+        Matcher version = Pattern.compile("(?:^|/)v\\d+/").matcher(path);
+        if (version.find()) path = path.substring(version.end());
+        int dot = path.lastIndexOf('.');
+        if (dot > path.lastIndexOf('/')) path = path.substring(0, dot);
+        return path.isBlank() ? Optional.empty() : Optional.of(path);
     }
 
     private byte[] resizeImage(byte[] originalBytes, int maxWidth, int maxHeight) throws IOException {
