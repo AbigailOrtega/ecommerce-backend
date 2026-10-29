@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   - POST /api/admin/pickup-locations
  *   - PUT  /api/admin/pickup-locations/{id}
  *   - PATCH /api/admin/pickup-locations/{id}/toggle
- *   - POST /api/admin/pickup-locations/{id}/time-slots
+ *   - POST /api/admin/pickup-locations/{id}/availability
  *   - DELETE /api/admin/pickup-locations/{id}
  *
  * Test order:
@@ -49,7 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   13. PUT  /api/admin/pickup-locations/{id}             — admin updates    → 200
  *   14. PATCH /api/admin/pickup-locations/{id}/toggle     — admin toggles    → 200
  *   15. GET  /api/shipping/pickup-locations               — toggled location absent → 200
- *   16. POST /api/admin/pickup-locations/{id}/time-slots  — admin adds slot  → 200
+ *   16. POST /api/admin/pickup-locations/{id}/availability — admin adds rule  → 200
  *   17. DELETE /api/admin/pickup-locations/{id}           — no auth          → 401
  *   18. DELETE /api/admin/pickup-locations/{id}           — customer         → 403
  *   19. DELETE /api/admin/pickup-locations/{id}           — admin deletes    → 200
@@ -414,26 +414,27 @@ class ShippingControllerIT {
         }
     }
 
-    // ── POST /api/admin/pickup-locations/{id}/time-slots ─────────────────────
+    // ── POST /api/admin/pickup-locations/{id}/availability ───────────────────
 
     @Test
     @Order(16)
-    @DisplayName("POST /api/admin/pickup-locations/{id}/time-slots — returns 200 and adds time slot")
-    void addTimeSlot_200_adminToken() {
+    @DisplayName("POST /api/admin/pickup-locations/{id}/availability — returns 200 and adds an availability rule")
+    void addAvailability_200_adminToken() {
         Assumptions.assumeTrue(createdLocationId != null, "Requires location created in order 12");
 
-        Map<String, String> body = Map.of("label", "Lunes 09:00 – 13:00");
+        Map<String, Object> body = Map.of(
+                "type", "RECURRING", "dayOfWeek", "MONDAY",
+                "startTime", "09:00:00", "endTime", "13:00:00", "maxCapacity", 5);
 
         ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                baseUrl() + "/api/admin/pickup-locations/" + createdLocationId + "/time-slots",
+                baseUrl() + "/api/admin/pickup-locations/" + createdLocationId + "/availability",
                 new HttpEntity<>(body, authHeaders(adminToken)),
                 JsonNode.class
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().path("success").asBoolean()).isTrue();
-        assertThat(response.getBody().path("data").path("label").asText())
-                .isEqualTo("Lunes 09:00 – 13:00");
+        assertThat(response.getBody().path("data").path("dayOfWeek").asText()).isEqualTo("MONDAY");
     }
 
     // ── DELETE /api/admin/pickup-locations/{id} ───────────────────────────────

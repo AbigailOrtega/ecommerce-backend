@@ -322,7 +322,7 @@ class CartControllerIT {
      */
     private Long resolveProductId(String slug) {
         ResponseEntity<JsonNode> response = restTemplate.getForEntity(
-                baseUrl() + "/api/products/" + slug, JsonNode.class);
+                baseUrl() + "/api/products/slug/" + slug, JsonNode.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         return response.getBody().path("data").path("id").asLong();
     }

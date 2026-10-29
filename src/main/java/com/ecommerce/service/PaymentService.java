@@ -6,6 +6,7 @@ import com.ecommerce.entity.OrderStatus;
 import com.ecommerce.entity.Product;
 import com.ecommerce.entity.ProductSize;
 import com.ecommerce.exception.BadRequestException;
+import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.ProductRepository;
 import com.ecommerce.repository.ProductSizeRepository;
@@ -286,7 +287,7 @@ public class PaymentService {
     @Transactional
     public void confirmPayPalPayment(String orderNumber, String captureId) {
         Order order = orderRepository.findByOrderNumber(orderNumber)
-                .orElseThrow(() -> new RuntimeException("Order not found: " + orderNumber));
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
         if (order.getStatus() == OrderStatus.CONFIRMED) {
             log.info("Order {} already confirmed", orderNumber);
             return;

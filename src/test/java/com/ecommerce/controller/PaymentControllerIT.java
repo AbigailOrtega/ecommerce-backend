@@ -102,8 +102,8 @@ class PaymentControllerIT {
 
     @Test
     @Order(3)
-    @DisplayName("POST /api/payments/stripe/create-intent — returns 401 without authentication")
-    void createStripeIntent_401_noAuth() {
+    @DisplayName("POST /api/payments/stripe/create-intent — public for guest checkout (no 401/403 without token)")
+    void createStripeIntent_public_noAuth() {
         Map<String, Object> body = Map.of("amount", 49.99);
 
         ResponseEntity<JsonNode> response = restTemplate.postForEntity(
@@ -112,7 +112,8 @@ class PaymentControllerIT {
                 JsonNode.class
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
@@ -138,8 +139,8 @@ class PaymentControllerIT {
 
     @Test
     @Order(5)
-    @DisplayName("POST /api/payments/paypal/create-order — returns 401 without authentication")
-    void createPayPalOrder_401_noAuth() {
+    @DisplayName("POST /api/payments/paypal/create-order — public for guest checkout (no 401/403 without token)")
+    void createPayPalOrder_public_noAuth() {
         Map<String, Object> body = Map.of("amount", 99.99);
 
         ResponseEntity<JsonNode> response = restTemplate.postForEntity(
@@ -148,7 +149,8 @@ class PaymentControllerIT {
                 JsonNode.class
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
@@ -172,8 +174,8 @@ class PaymentControllerIT {
 
     @Test
     @Order(7)
-    @DisplayName("POST /api/payments/paypal/capture-order — returns 401 without authentication")
-    void capturePayPalOrder_401_noAuth() {
+    @DisplayName("POST /api/payments/paypal/capture-order — public for guest checkout (no 401/403 without token)")
+    void capturePayPalOrder_public_noAuth() {
         Map<String, Object> body = Map.of("orderId", "PAYPAL-TEST-ORDER-001");
 
         ResponseEntity<JsonNode> response = restTemplate.postForEntity(
@@ -182,7 +184,8 @@ class PaymentControllerIT {
                 JsonNode.class
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
@@ -205,8 +208,8 @@ class PaymentControllerIT {
 
     @Test
     @Order(9)
-    @DisplayName("POST /api/payments/paypal/confirm-payment — returns 401 without authentication")
-    void confirmPayPalPayment_401_noAuth() {
+    @DisplayName("POST /api/payments/paypal/confirm-payment — public for guest checkout; unknown order → 404")
+    void confirmPayPalPayment_404_unknownOrder_noAuth() {
         Map<String, String> body = Map.of("orderNumber", "ORD-TEST-001", "captureId", "CAP-TEST-001");
 
         ResponseEntity<JsonNode> response = restTemplate.postForEntity(
@@ -215,7 +218,7 @@ class PaymentControllerIT {
                 JsonNode.class
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test

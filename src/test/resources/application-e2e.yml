@@ -1,0 +1,27 @@
+# Placeholder values so the e2e profile starts in the *IT tests without real
+# environment variables. Only on the test classpath; never used in production.
+spring:
+  mail:
+    username: test@example.com
+    password: test
+
+app:
+  mail:
+    from: test@example.com
+  jwt:
+    # base64 of "e2e-test-secret-key-for-local-runs-only-0123456789"
+    secret: ZTJlLXRlc3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtcnVucy1vbmx5LTAxMjM0NTY3ODk=
+  stripe:
+    secret-key: ""
+    public-key: ""
+    webhook-secret: whsec_test
+  paypal:
+    client-id: ""
+    client-secret: ""
+  skydropx:
+    client-id: ""
+    client-secret: ""
+  cloudinary:
+    cloud-name: test
+    api-key: test
+    api-secret: test

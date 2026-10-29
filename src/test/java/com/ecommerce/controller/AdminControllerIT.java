@@ -2,7 +2,6 @@ package com.ecommerce.controller;
 
 import com.ecommerce.dto.request.CouponRequest;
 import com.ecommerce.dto.request.PickupLocationRequest;
-import com.ecommerce.dto.request.PickupTimeSlotRequest;
 import com.ecommerce.dto.request.PromoBannerRequest;
 import com.ecommerce.dto.request.PromotionRequest;
 import com.ecommerce.dto.request.TicketUpdateRequest;
@@ -264,9 +263,11 @@ class AdminControllerIT {
             assertThat(listResp.getStatusCode()).isEqualTo(HttpStatus.OK);
 
             // POST — create
+            Long productId = Long.valueOf(((Map<?, ?>) restTemplate.getForObject(
+                    base("/api/products/slug/test-t-shirt"), ApiResponse.class).getData()).get("id").toString());
             PromotionRequest body = new PromotionRequest(
                     "Test Promo", BigDecimal.valueOf(15),
-                    LocalDate.now(), LocalDate.now().plusDays(10), List.of());
+                    LocalDate.now(), LocalDate.now().plusDays(10), List.of(productId));
 
             HttpEntity<PromotionRequest> createReq = new HttpEntity<>(body, bearerHeaders(adminToken));
             ResponseEntity<ApiResponse> createResp = restTemplate.exchange(
@@ -358,22 +359,24 @@ class AdminControllerIT {
                     base("/api/admin/pickup-locations"), HttpMethod.POST, createLoc, ApiResponse.class);
             Long locId = Long.valueOf(((Map<?, ?>) locResp.getBody().getData()).get("id").toString());
 
-            // Add time slot
-            PickupTimeSlotRequest slotBody = new PickupTimeSlotRequest("Martes 09:00 – 13:00");
-            HttpEntity<PickupTimeSlotRequest> slotReq = new HttpEntity<>(slotBody, bearerHeaders(adminToken));
-            ResponseEntity<ApiResponse> slotResp = restTemplate.exchange(
-                    base("/api/admin/pickup-locations/" + locId + "/time-slots"),
-                    HttpMethod.POST, slotReq, ApiResponse.class);
-            assertThat(slotResp.getStatusCode()).isEqualTo(HttpStatus.OK);
-            Map<?, ?> slot = (Map<?, ?>) slotResp.getBody().getData();
-            assertThat(slot.get("label")).isEqualTo("Martes 09:00 – 13:00");
-            Long slotId = Long.valueOf(slot.get("id").toString());
+            // Add availability rule (replaces the old time-slot endpoints)
+            Map<String, Object> ruleBody = Map.of(
+                    "type", "RECURRING", "dayOfWeek", "TUESDAY",
+                    "startTime", "09:00:00", "endTime", "13:00:00", "maxCapacity", 5);
+            HttpEntity<Map<String, Object>> ruleReq = new HttpEntity<>(ruleBody, bearerHeaders(adminToken));
+            ResponseEntity<ApiResponse> ruleResp = restTemplate.exchange(
+                    base("/api/admin/pickup-locations/" + locId + "/availability"),
+                    HttpMethod.POST, ruleReq, ApiResponse.class);
+            assertThat(ruleResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+            Map<?, ?> rule = (Map<?, ?>) ruleResp.getBody().getData();
+            assertThat(rule.get("dayOfWeek")).isEqualTo("TUESDAY");
+            Long ruleId = Long.valueOf(rule.get("id").toString());
 
-            // DELETE time slot
-            HttpEntity<Void> delSlot = new HttpEntity<>(bearerHeaders(adminToken));
+            // DELETE availability rule
+            HttpEntity<Void> delRule = new HttpEntity<>(bearerHeaders(adminToken));
             ResponseEntity<ApiResponse> delResp = restTemplate.exchange(
-                    base("/api/admin/pickup-locations/" + locId + "/time-slots/" + slotId),
-                    HttpMethod.DELETE, delSlot, ApiResponse.class);
+                    base("/api/admin/pickup-locations/" + locId + "/availability/" + ruleId),
+                    HttpMethod.DELETE, delRule, ApiResponse.class);
             assertThat(delResp.getStatusCode()).isEqualTo(HttpStatus.OK);
 
             // Cleanup — delete location

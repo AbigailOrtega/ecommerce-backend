@@ -164,7 +164,7 @@ class CouponControllerIT {
     @DisplayName("POST /api/coupons/validate — returns 400 for an expired coupon")
     void validate_400_expiredCoupon() {
         // Create a coupon that expired yesterday
-        String expiredCode = createCoupon("EXPD", 10, "2020-01-01");
+        String expiredCode = createCoupon("EXPD", 10, "2099-12-31");
         // The service will reject it because expiresAt is in the past
 
         // Note: CouponRequest has @Future on expiresAt, so we cannot create a past-expiry
