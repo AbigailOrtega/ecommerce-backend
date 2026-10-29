@@ -58,6 +58,8 @@ class StripeWebhookControllerTest {
     private Event mockEvent(String type, String paymentIntentId) {
         PaymentIntent pi = mock(PaymentIntent.class);
         when(pi.getId()).thenReturn(paymentIntentId);
+        when(pi.getAmountReceived()).thenReturn(15000L);
+        when(pi.getCurrency()).thenReturn("mxn");
 
         EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
         when(deserializer.getObject()).thenReturn(Optional.of(pi));
@@ -102,7 +104,7 @@ class StripeWebhookControllerTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(content().string("Invalid signature"));
 
-            verify(paymentService, never()).handlePaymentSuccess(anyString());
+            verify(paymentService, never()).handlePaymentSuccess(anyString(), anyLong(), any());
             verify(paymentService, never()).handlePaymentFailure(anyString());
             verify(paymentService, never()).handleRefund(anyString());
         }
@@ -112,7 +114,7 @@ class StripeWebhookControllerTest {
         void webhook_200_paymentIntentSucceeded() throws Exception {
             Event event = mockEvent("payment_intent.succeeded", "pi_test_001");
             when(paymentService.constructWebhookEvent(anyString(), anyString())).thenReturn(event);
-            doNothing().when(paymentService).handlePaymentSuccess("pi_test_001");
+            doNothing().when(paymentService).handlePaymentSuccess("pi_test_001", 15000L, "mxn");
 
             mockMvc.perform(post("/api/webhooks/stripe")
                     .contentType(MediaType.TEXT_PLAIN)
@@ -121,7 +123,7 @@ class StripeWebhookControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(content().string("OK"));
 
-            verify(paymentService).handlePaymentSuccess("pi_test_001");
+            verify(paymentService).handlePaymentSuccess("pi_test_001", 15000L, "mxn");
             verify(paymentService, never()).handlePaymentFailure(anyString());
         }
 
@@ -140,7 +142,7 @@ class StripeWebhookControllerTest {
                     .andExpect(content().string("OK"));
 
             verify(paymentService).handlePaymentFailure("pi_failed_001");
-            verify(paymentService, never()).handlePaymentSuccess(anyString());
+            verify(paymentService, never()).handlePaymentSuccess(anyString(), anyLong(), any());
         }
 
         @Test
@@ -214,7 +216,7 @@ class StripeWebhookControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(content().string("OK"));
 
-            verify(paymentService, never()).handlePaymentSuccess(anyString());
+            verify(paymentService, never()).handlePaymentSuccess(anyString(), anyLong(), any());
             verify(paymentService, never()).handlePaymentFailure(anyString());
             verify(paymentService, never()).handleRefund(anyString());
         }
@@ -233,7 +235,7 @@ class StripeWebhookControllerTest {
                     .andExpect(content().string("OK"));
 
             // When deserialization fails entirely, the handler returns early with OK
-            verify(paymentService, never()).handlePaymentSuccess(anyString());
+            verify(paymentService, never()).handlePaymentSuccess(anyString(), anyLong(), any());
         }
 
         @Test

@@ -51,6 +51,7 @@ public class OrderService {
     private final GoogleMapsService googleMapsService;
     private final PickupLocationService pickupLocationService;
     private final SkydropxService skydropxService;
+    private final PaymentService paymentService;
 
     @Transactional
     public OrderResponse createOrder(String email, OrderRequest request) {
@@ -217,6 +218,7 @@ public class OrderService {
         }
 
         order.setTotalAmount(totalAmount);
+        paymentService.verifyPaymentForOrder(order.getPaymentMethod(), order.getPaymentId(), totalAmount);
         Order savedOrder = orderRepository.save(order);
 
         cartItemRepository.deleteByUserId(user.getId());
@@ -394,6 +396,7 @@ public class OrderService {
         }
 
         order.setTotalAmount(totalAmount);
+        paymentService.verifyPaymentForOrder(order.getPaymentMethod(), order.getPaymentId(), totalAmount);
         Order savedOrder = orderRepository.save(order);
 
         OrderResponse orderResponse = mapToResponse(savedOrder, false);

@@ -13,6 +13,8 @@ import com.paypal.core.PayPalEnvironment;
 import com.paypal.core.PayPalHttpClient;
 import com.paypal.http.HttpResponse;
 import com.paypal.orders.*;
+import com.paypal.payments.Capture;
+import com.paypal.payments.CapturesGetRequest;
 import com.stripe.Stripe;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
@@ -20,6 +22,7 @@ import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
 import com.stripe.net.Webhook;
 import com.stripe.param.PaymentIntentCreateParams;
+import com.stripe.param.PaymentIntentUpdateParams;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 
 @Service
@@ -116,8 +120,89 @@ public class PaymentService {
         return Webhook.constructEvent(payload, sigHeader, webhookSecret);
     }
 
+    /**
+     * Called by OrderService before saving a new order. Makes sure the payment referenced by the
+     * client belongs to no other order and is for exactly the total computed by the server.
+     * Payment methods other than stripe/paypal are left untouched.
+     */
+    public void verifyPaymentForOrder(String paymentMethod, String paymentId, BigDecimal orderTotal) {
+        boolean stripe = "stripe".equalsIgnoreCase(paymentMethod);
+        boolean paypal = "paypal".equalsIgnoreCase(paymentMethod);
+        if (!stripe && !paypal) return;
+
+        if (paymentId == null || paymentId.isBlank()) {
+            throw new BadRequestException("paymentId es requerido para el método de pago " + paymentMethod);
+        }
+        if (orderRepository.findByPaymentId(paymentId).isPresent()) {
+            throw new BadRequestException("Este pago ya está asociado a otro pedido");
+        }
+
+        if (stripe) {
+            verifyStripeIntentForOrder(paymentId, orderTotal);
+        } else {
+            verifyPayPalCapture(paymentId, orderTotal);
+        }
+    }
+
+    private void verifyStripeIntentForOrder(String paymentIntentId, BigDecimal orderTotal) {
+        if (!isStripeConfigured()) {
+            throw new BadRequestException("Stripe is not configured.");
+        }
+        long expectedCents = toCents(orderTotal);
+        try {
+            PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
+            if (!"mxn".equalsIgnoreCase(intent.getCurrency())) {
+                throw new BadRequestException("Moneda de pago inválida");
+            }
+            if (intent.getAmount() == expectedCents) return;
+
+            // The intent is created before the order, from the client's total. If it has not been
+            // confirmed yet, bring it in line with the server's total; otherwise reject the order.
+            if (UPDATABLE_INTENT_STATUSES.contains(intent.getStatus())) {
+                log.warn("PaymentIntent {} amount {} != order total {}, updating intent",
+                        paymentIntentId, intent.getAmount(), expectedCents);
+                intent.update(PaymentIntentUpdateParams.builder().setAmount(expectedCents).build());
+            } else {
+                throw new BadRequestException("El monto del pago no coincide con el total del pedido");
+            }
+        } catch (StripeException e) {
+            log.error("Stripe error verifying intent {}: {}", paymentIntentId, e.getMessage());
+            throw new BadRequestException("No se pudo verificar el pago con Stripe");
+        }
+    }
+
+    private void verifyPayPalCapture(String captureId, BigDecimal orderTotal) {
+        if (!isPayPalConfigured()) {
+            throw new BadRequestException("PayPal is not configured.");
+        }
+        Capture capture;
+        try {
+            capture = paypalClient.execute(new CapturesGetRequest(captureId)).result();
+        } catch (IOException e) {
+            log.error("PayPal error fetching capture {}: {}", captureId, e.getMessage());
+            throw new BadRequestException("No se pudo verificar el pago con PayPal");
+        }
+        if (capture == null || !"COMPLETED".equalsIgnoreCase(capture.status())) {
+            throw new BadRequestException("El pago de PayPal no está completado");
+        }
+        if (capture.amount() == null
+                || !"MXN".equalsIgnoreCase(capture.amount().currencyCode())
+                || new BigDecimal(capture.amount().value()).compareTo(orderTotal.setScale(2, RoundingMode.HALF_UP)) != 0) {
+            log.error("PayPal capture {} amount {} does not match order total {}",
+                    captureId, capture.amount() != null ? capture.amount().value() : null, orderTotal);
+            throw new BadRequestException("El monto del pago no coincide con el total del pedido");
+        }
+    }
+
+    private static final Set<String> UPDATABLE_INTENT_STATUSES =
+            Set.of("requires_payment_method", "requires_confirmation", "requires_action");
+
+    private static long toCents(BigDecimal amount) {
+        return amount.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact();
+    }
+
     @Transactional
-    public void handlePaymentSuccess(String paymentIntentId) {
+    public void handlePaymentSuccess(String paymentIntentId, long amountReceived, String currency) {
         Optional<Order> orderOpt = orderRepository.findByPaymentId(paymentIntentId);
         if (orderOpt.isEmpty()) {
             log.warn("No order found for paymentIntentId: {}", paymentIntentId);
@@ -126,6 +211,11 @@ public class PaymentService {
         Order order = orderOpt.get();
         if (order.getStatus() == OrderStatus.CONFIRMED) {
             log.info("Order {} already confirmed", order.getOrderNumber());
+            return;
+        }
+        if (!"mxn".equalsIgnoreCase(currency) || amountReceived != toCents(order.getTotalAmount())) {
+            log.error("Order {} NOT confirmed: Stripe received {} {} but order total is {} — review manually",
+                    order.getOrderNumber(), amountReceived, currency, order.getTotalAmount());
             return;
         }
         order.setStatus(OrderStatus.CONFIRMED);
@@ -201,7 +291,13 @@ public class PaymentService {
             log.info("Order {} already confirmed", orderNumber);
             return;
         }
-        order.setPaymentId(captureId);
+        // The capture was verified and attached to the order when it was created; only that
+        // capture can confirm it, and we re-check with PayPal that it is still completed.
+        if (!"paypal".equalsIgnoreCase(order.getPaymentMethod())
+                || captureId == null || !captureId.equals(order.getPaymentId())) {
+            throw new BadRequestException("El pago no corresponde a este pedido");
+        }
+        verifyPayPalCapture(captureId, order.getTotalAmount());
         order.setStatus(OrderStatus.CONFIRMED);
         orderRepository.save(order);
         log.info("Order {} confirmed via PayPal capture: {}", orderNumber, captureId);
