@@ -1,5 +1,7 @@
 package com.ecommerce.security;
 
+import com.ecommerce.entity.User;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -10,6 +12,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -32,18 +35,32 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         String token = extractTokenFromRequest(request);
 
-        if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
-            String email = jwtTokenProvider.getEmailFromToken(token);
-            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-
-            UsernamePasswordAuthenticationToken authToken =
-                    new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-            SecurityContextHolder.getContext().setAuthentication(authToken);
+        if (StringUtils.hasText(token)) {
+            // Only access tokens authenticate requests; refresh/legacy tokens leave the request
+            // anonymous so protected endpoints answer 401 and the frontend refreshes.
+            jwtTokenProvider.parseClaims(token)
+                    .filter(jwtTokenProvider::isAccessToken)
+                    .ifPresent(claims -> authenticate(claims, request));
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void authenticate(Claims claims, HttpServletRequest request) {
+        UserDetails userDetails;
+        try {
+            userDetails = userDetailsService.loadUserByUsername(claims.getSubject());
+        } catch (UsernameNotFoundException e) {
+            return; // user deleted since the token was issued
+        }
+        if (!(userDetails instanceof User user) || !jwtTokenProvider.isCurrentFor(claims, user)) {
+            return; // password changed since the token was issued
+        }
+
+        UsernamePasswordAuthenticationToken authToken =
+                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authToken);
     }
 
     private String extractTokenFromRequest(HttpServletRequest request) {

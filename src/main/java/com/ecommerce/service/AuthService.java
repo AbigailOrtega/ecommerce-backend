@@ -4,6 +4,7 @@ import com.ecommerce.dto.request.LoginRequest;
 import com.ecommerce.dto.request.RegisterRequest;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import com.ecommerce.dto.response.AuthResponse;
 import com.ecommerce.dto.response.UserResponse;
@@ -15,6 +16,7 @@ import com.ecommerce.exception.DuplicateResourceException;
 import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.UserRepository;
 import com.ecommerce.security.JwtTokenProvider;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -61,8 +63,8 @@ public class AuthService {
         emailService.sendWelcomeEmail(user);
 
         log.debug("Generating JWT tokens for user: {}", user.getEmail());
-        String accessToken = jwtTokenProvider.generateAccessToken(user.getEmail());
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());
+        String accessToken = jwtTokenProvider.generateAccessToken(user);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user);
 
         log.info("Registration completed successfully for user: {}", user.getEmail());
         return AuthResponse.builder()
@@ -85,8 +87,8 @@ public class AuthService {
         linkGuestOrdersToUser(user);
 
         log.debug("Generating JWT tokens");
-        String accessToken = jwtTokenProvider.generateAccessToken(authentication);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getEmail());
+        String accessToken = jwtTokenProvider.generateAccessToken(user);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user);
 
         log.info("Login completed successfully for user: {} (role: {})", user.getEmail(), user.getRole());
         return AuthResponse.builder()
@@ -97,16 +99,18 @@ public class AuthService {
     }
 
     public AuthResponse refreshToken(String refreshToken) {
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
-            throw new BadRequestException("Invalid refresh token");
-        }
+        Claims claims = Optional.ofNullable(refreshToken)
+                .flatMap(jwtTokenProvider::parseClaims)
+                .filter(jwtTokenProvider::isRefreshOrLegacyToken)
+                .orElseThrow(() -> new BadRequestException("Invalid refresh token"));
 
-        String email = jwtTokenProvider.getEmailFromToken(refreshToken);
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BadRequestException("User not found"));
+        User user = userRepository.findByEmail(claims.getSubject())
+                .filter(u -> jwtTokenProvider.isCurrentFor(claims, u))
+                .orElseThrow(() -> new BadRequestException("Invalid refresh token"));
 
-        String newAccessToken = jwtTokenProvider.generateAccessToken(email, user.getRole().name());
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(email);
+        // Rotate: every refresh also issues a new refresh token, so active users never get logged out
+        String newAccessToken = jwtTokenProvider.generateAccessToken(user);
+        String newRefreshToken = jwtTokenProvider.generateRefreshToken(user);
 
         return AuthResponse.builder()
                 .accessToken(newAccessToken)

@@ -11,6 +11,7 @@ import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.UserRepository;
 import com.ecommerce.security.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -73,8 +74,8 @@ class AuthServiceTest {
             when(userRepository.existsByEmail(request.email())).thenReturn(false);
             when(passwordEncoder.encode(request.password())).thenReturn("encoded");
             when(userRepository.save(any(User.class))).thenReturn(testUser);
-            when(jwtTokenProvider.generateAccessToken(testUser.getEmail())).thenReturn("access");
-            when(jwtTokenProvider.generateRefreshToken(testUser.getEmail())).thenReturn("refresh");
+            when(jwtTokenProvider.generateAccessToken(testUser)).thenReturn("access");
+            when(jwtTokenProvider.generateRefreshToken(testUser)).thenReturn("refresh");
 
             AuthResponse response = authService.register(request);
 
@@ -110,8 +111,8 @@ class AuthServiceTest {
             when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                     .thenReturn(auth);
             when(auth.getPrincipal()).thenReturn(testUser);
-            when(jwtTokenProvider.generateAccessToken(auth)).thenReturn("access");
-            when(jwtTokenProvider.generateRefreshToken(testUser.getEmail())).thenReturn("refresh");
+            when(jwtTokenProvider.generateAccessToken(testUser)).thenReturn("access");
+            when(jwtTokenProvider.generateRefreshToken(testUser)).thenReturn("refresh");
 
             AuthResponse response = authService.login(request);
 
@@ -203,29 +204,62 @@ class AuthServiceTest {
     @DisplayName("refreshToken")
     class RefreshToken {
 
-        @Test
-        @DisplayName("returns new tokens when refresh token is valid")
-        void refreshToken_success() {
-            when(jwtTokenProvider.validateToken("refresh")).thenReturn(true);
-            when(jwtTokenProvider.getEmailFromToken("refresh")).thenReturn("ana@example.com");
-            when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(testUser));
-            when(jwtTokenProvider.generateAccessToken("ana@example.com", "CUSTOMER")).thenReturn("new-access");
-            when(jwtTokenProvider.generateRefreshToken("ana@example.com")).thenReturn("new-refresh");
+        private JwtTokenProvider realProvider;
 
-            AuthResponse response = authService.refreshToken("refresh");
-
-            assertThat(response.getAccessToken()).isEqualTo("new-access");
-            assertThat(response.getRefreshToken()).isEqualTo("new-refresh");
+        @BeforeEach
+        void useRealTokens() {
+            realProvider = com.ecommerce.security.JwtTokenProviderTest.newProvider();
+            ReflectionTestUtils.setField(authService, "jwtTokenProvider", realProvider);
+            lenient().when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
         }
 
         @Test
-        @DisplayName("throws BadRequestException when refresh token is invalid")
-        void refreshToken_invalid() {
-            when(jwtTokenProvider.validateToken("bad")).thenReturn(false);
+        @DisplayName("returns a new access + refresh token pair for a valid refresh token")
+        void refreshToken_success() {
+            AuthResponse response = authService.refreshToken(realProvider.generateRefreshToken(testUser));
 
+            assertThat(realProvider.isAccessToken(realProvider.parseClaims(response.getAccessToken()).orElseThrow())).isTrue();
+            assertThat(realProvider.isRefreshOrLegacyToken(realProvider.parseClaims(response.getRefreshToken()).orElseThrow())).isTrue();
+        }
+
+        @Test
+        @DisplayName("accepts a legacy (pre-change) token so open sessions renew transparently")
+        void refreshToken_legacy() {
+            AuthResponse response = authService.refreshToken(
+                    com.ecommerce.security.JwtTokenProviderTest.legacyToken(testUser.getEmail()));
+
+            assertThat(response.getAccessToken()).isNotBlank();
+        }
+
+        @Test
+        @DisplayName("rejects an access token used as refresh token")
+        void refreshToken_accessTokenRejected() {
+            String access = realProvider.generateAccessToken(testUser);
+
+            assertThatThrownBy(() -> authService.refreshToken(access))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Invalid refresh token");
+        }
+
+        @Test
+        @DisplayName("rejects a refresh token issued before the password changed")
+        void refreshToken_passwordChanged() {
+            String refresh = realProvider.generateRefreshToken(testUser);
+            testUser.setPassword("a-new-hash");
+
+            assertThatThrownBy(() -> authService.refreshToken(refresh))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Invalid refresh token");
+        }
+
+        @Test
+        @DisplayName("throws BadRequestException when refresh token is invalid or missing")
+        void refreshToken_invalid() {
             assertThatThrownBy(() -> authService.refreshToken("bad"))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessage("Invalid refresh token");
+            assertThatThrownBy(() -> authService.refreshToken(null))
+                    .isInstanceOf(BadRequestException.class);
         }
     }
 
