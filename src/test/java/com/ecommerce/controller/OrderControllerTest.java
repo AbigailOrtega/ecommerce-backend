@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
+import com.ecommerce.ratelimit.RateLimiter;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.ComponentScan;
@@ -41,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthFilter.class)
     }
 )
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, RateLimiter.class})
 @DisplayName("OrderController")
 class OrderControllerTest {
 
@@ -267,6 +268,45 @@ class OrderControllerTest {
                     .andExpect(status().isOk());
 
             verify(orderService).getOrderByNumber("ORD-001", "customer@test.com");
+        }
+    }
+
+    // ── Rate limits on public endpoints ──────────────────────────────────────
+
+    @Nested
+    @DisplayName("rate limits")
+    class RateLimits {
+
+        private static final String GUEST_ORDER = """
+                {"guestFirstName":"Ana","guestLastName":"López","guestEmail":"ana@example.com",
+                 "items":[{"productId":1,"quantity":1}],"paymentMethod":"STRIPE","shippingType":"PICKUP"}
+                """;
+
+        @Test
+        @DisplayName("guest orders: 429 after 10 per hour from the same IP; other IPs are unaffected")
+        void guestOrder_429() throws Exception {
+            for (int i = 0; i < 10; i++) {
+                mockMvc.perform(post("/api/orders/guest").header("X-Forwarded-For", "203.0.113.30")
+                                .contentType(MediaType.APPLICATION_JSON).content(GUEST_ORDER))
+                        .andExpect(status().isCreated());
+            }
+            mockMvc.perform(post("/api/orders/guest").header("X-Forwarded-For", "203.0.113.30")
+                            .contentType(MediaType.APPLICATION_JSON).content(GUEST_ORDER))
+                    .andExpect(status().isTooManyRequests());
+            mockMvc.perform(post("/api/orders/guest").header("X-Forwarded-For", "198.51.100.30")
+                            .contentType(MediaType.APPLICATION_JSON).content(GUEST_ORDER))
+                    .andExpect(status().isCreated());
+        }
+
+        @Test
+        @DisplayName("order tracking: 429 after 30 per minute from the same IP")
+        void track_429() throws Exception {
+            for (int i = 0; i < 30; i++) {
+                mockMvc.perform(get("/api/orders/track/ORD-" + i).header("X-Forwarded-For", "203.0.113.40"))
+                        .andExpect(status().isOk());
+            }
+            mockMvc.perform(get("/api/orders/track/ORD-X").header("X-Forwarded-For", "203.0.113.40"))
+                    .andExpect(status().isTooManyRequests());
         }
     }
 }

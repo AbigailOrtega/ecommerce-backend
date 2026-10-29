@@ -5,10 +5,14 @@ import com.ecommerce.dto.request.OrderRequest;
 import com.ecommerce.dto.request.ReschedulePickupRequest;
 import com.ecommerce.dto.response.ApiResponse;
 import com.ecommerce.dto.response.OrderResponse;
+import com.ecommerce.ratelimit.ClientIp;
+import com.ecommerce.ratelimit.RateLimit;
+import com.ecommerce.ratelimit.RateLimiter;
 import com.ecommerce.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,16 +30,21 @@ import java.util.List;
 public class OrderController {
 
     private final OrderService orderService;
+    private final RateLimiter rateLimiter;
 
     @GetMapping("/track/{orderNumber}")
     @Operation(summary = "Track an order by order number (no authentication required)")
-    public ResponseEntity<ApiResponse<OrderResponse>> trackOrder(@PathVariable String orderNumber) {
+    public ResponseEntity<ApiResponse<OrderResponse>> trackOrder(@PathVariable String orderNumber,
+                                                                 HttpServletRequest httpRequest) {
+        rateLimiter.consume(RateLimit.TRACK_ORDER_PER_IP, ClientIp.of(httpRequest));
         return ResponseEntity.ok(ApiResponse.success(orderService.getOrderPublic(orderNumber)));
     }
 
     @PostMapping("/guest")
     @Operation(summary = "Create a guest order without authentication")
-    public ResponseEntity<ApiResponse<OrderResponse>> createGuestOrder(@Valid @RequestBody GuestOrderRequest request) {
+    public ResponseEntity<ApiResponse<OrderResponse>> createGuestOrder(@Valid @RequestBody GuestOrderRequest request,
+                                                                       HttpServletRequest httpRequest) {
+        rateLimiter.consume(RateLimit.GUEST_ORDER_PER_IP, ClientIp.of(httpRequest));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Order placed successfully", orderService.createGuestOrder(request)));
     }

@@ -7,6 +7,7 @@ import com.ecommerce.dto.request.RegisterRequest;
 import com.ecommerce.dto.request.ResetPasswordRequest;
 import com.ecommerce.dto.response.AuthResponse;
 import com.ecommerce.dto.response.UserResponse;
+import com.ecommerce.ratelimit.RateLimiter;
 import com.ecommerce.security.JwtAuthFilter;
 import com.ecommerce.service.AuthService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,6 +21,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -36,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthFilter.class)
     }
 )
+@Import(RateLimiter.class)
 @DisplayName("AuthController")
 class AuthControllerTest {
 
@@ -100,6 +104,50 @@ class AuthControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.accessToken").value("access-token"));
         }
+
+        private org.springframework.test.web.servlet.ResultActions login(String email, String ip) throws Exception {
+            return mockMvc.perform(post("/api/auth/login")
+                    .header("X-Forwarded-For", ip)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(new LoginRequest(email, "wrong-pass"))));
+        }
+
+        @Test
+        @DisplayName("returns 429 after 10 failed attempts from the same IP; other IPs are unaffected")
+        void login_429_afterTenFailuresPerIp() throws Exception {
+            when(authService.login(any())).thenThrow(new BadCredentialsException("bad"));
+
+            for (int i = 0; i < 10; i++) {
+                login("user" + i + "@example.com", "203.0.113.10").andExpect(status().isUnauthorized());
+            }
+            login("other@example.com", "203.0.113.10")
+                    .andExpect(status().isTooManyRequests())
+                    .andExpect(header().exists("Retry-After"))
+                    .andExpect(jsonPath("$.message").value("Demasiados intentos. Espera unos minutos e intenta de nuevo."));
+
+            login("other@example.com", "198.51.100.7").andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        @DisplayName("successful logins do not count towards the limit")
+        void login_successDoesNotCount() throws Exception {
+            when(authService.login(any())).thenReturn(stubAuthResponse());
+
+            for (int i = 0; i < 15; i++) {
+                login("ana@example.com", "203.0.113.20").andExpect(status().isOk());
+            }
+        }
+
+        @Test
+        @DisplayName("returns 429 after 20 failed attempts on the same email from many IPs")
+        void login_429_afterTwentyFailuresPerEmail() throws Exception {
+            when(authService.login(any())).thenThrow(new BadCredentialsException("bad"));
+
+            for (int i = 0; i < 20; i++) {
+                login("victim@example.com", "192.0.2." + i).andExpect(status().isUnauthorized());
+            }
+            login("victim@example.com", "192.0.2.99").andExpect(status().isTooManyRequests());
+        }
     }
 
     // ─── POST /api/auth/forgot-password ──────────────────────────────────────
@@ -129,6 +177,40 @@ class AuthControllerTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{\"email\": \"not-an-email\"}"))
                     .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("returns 429 after 3 requests for the same email in an hour")
+        void forgotPassword_429_perEmail() throws Exception {
+            for (int i = 0; i < 3; i++) {
+                mockMvc.perform(post("/api/auth/forgot-password")
+                        .header("X-Forwarded-For", "203.0.113." + (50 + i))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\": \"mailbomb@example.com\"}"))
+                        .andExpect(status().isOk());
+            }
+            mockMvc.perform(post("/api/auth/forgot-password")
+                    .header("X-Forwarded-For", "203.0.113.60")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"email\": \"mailbomb@example.com\"}"))
+                    .andExpect(status().isTooManyRequests());
+        }
+
+        @Test
+        @DisplayName("returns 429 after 5 requests from the same IP in an hour")
+        void forgotPassword_429_perIp() throws Exception {
+            for (int i = 0; i < 5; i++) {
+                mockMvc.perform(post("/api/auth/forgot-password")
+                        .header("X-Forwarded-For", "203.0.113.70")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\": \"u" + i + "@example.com\"}"))
+                        .andExpect(status().isOk());
+            }
+            mockMvc.perform(post("/api/auth/forgot-password")
+                    .header("X-Forwarded-For", "203.0.113.70")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"email\": \"u9@example.com\"}"))
+                    .andExpect(status().isTooManyRequests());
         }
     }
 

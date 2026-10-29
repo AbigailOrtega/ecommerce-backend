@@ -6,6 +6,9 @@ spring:
     password: test
 
 app:
+  rate-limit:
+    # the ITs log in many times from 127.0.0.1
+    enabled: false
   mail:
     from: test@example.com
   jwt:
