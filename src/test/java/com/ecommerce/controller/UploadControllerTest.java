@@ -5,6 +5,7 @@ import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.exception.GlobalExceptionHandler;
 import com.ecommerce.security.JwtAuthFilter;
 import com.ecommerce.service.CloudinaryService;
+import com.ecommerce.service.ImageCleanupService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,9 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -39,6 +42,7 @@ class UploadControllerTest {
 
     @Autowired MockMvc mockMvc;
     @MockBean CloudinaryService cloudinaryService;
+    @MockBean ImageCleanupService imageCleanupService;
 
     // ── POST /api/upload/image ─────────────────────────────────────────────────
 
@@ -89,6 +93,32 @@ class UploadControllerTest {
             // a MissingServletRequestPartException -> 400 before the controller runs.
             mockMvc.perform(multipart("/api/upload/image"))
                     .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
+    @DisplayName("DELETE /api/upload/image")
+    class DiscardImage {
+
+        @Test
+        @DisplayName("deletes the image when nothing uses it")
+        void discard_deleted() throws Exception {
+            String url = "https://res.cloudinary.com/demo/image/upload/v1/products/x.webp";
+            when(imageCleanupService.deleteIfUnused(url)).thenReturn(true);
+
+            mockMvc.perform(delete("/api/upload/image").param("url", url))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.deleted").value(true));
+        }
+
+        @Test
+        @DisplayName("reports deleted=false when the image is still in use")
+        void discard_kept() throws Exception {
+            when(imageCleanupService.deleteIfUnused(anyString())).thenReturn(false);
+
+            mockMvc.perform(delete("/api/upload/image").param("url", "https://x/used.webp"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.deleted").value(false));
         }
     }
 }

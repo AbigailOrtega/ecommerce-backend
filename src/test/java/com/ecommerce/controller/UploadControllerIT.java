@@ -128,4 +128,24 @@ class UploadControllerIT {
         assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
     }
+
+    @Test
+    @Order(4)
+    @DisplayName("DELETE /api/upload/image — 401 without token, 403 for customers, 200 for admins")
+    void discardImage_adminOnly() {
+        String url = baseUrl("/api/upload/image?url=https://example.com/not-ours.webp");
+
+        assertThat(restTemplate.exchange(url, HttpMethod.DELETE, HttpEntity.EMPTY, JsonNode.class).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(restTemplate.exchange(url, HttpMethod.DELETE, new HttpEntity<>(bearer(customerToken)), JsonNode.class).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(restTemplate.exchange(url, HttpMethod.DELETE, new HttpEntity<>(bearer(adminToken)), JsonNode.class).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    private HttpHeaders bearer(String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        return headers;
+    }
 }
