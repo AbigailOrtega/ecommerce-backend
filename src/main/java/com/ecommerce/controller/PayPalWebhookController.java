@@ -1,11 +1,11 @@
 package com.ecommerce.controller;
 
+import com.ecommerce.service.PayPalWebhookVerifier;
 import com.ecommerce.service.PaymentService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,10 +18,8 @@ import java.util.Map;
 public class PayPalWebhookController {
 
     private final PaymentService paymentService;
+    private final PayPalWebhookVerifier webhookVerifier;
     private final ObjectMapper objectMapper;
-
-    @Value("${app.paypal.webhook-id:}")
-    private String webhookId;
 
     @PostMapping("/paypal")
     public ResponseEntity<String> handlePayPalWebhook(
@@ -33,6 +31,10 @@ public class PayPalWebhookController {
             @RequestHeader(value = "PAYPAL-TRANSMISSION-SIG", required = false) String transmissionSig) {
 
         log.info("PayPal webhook received — transmissionId={}", transmissionId);
+
+        if (!webhookVerifier.verify(rawBody, transmissionId, transmissionTime, certUrl, authAlgo, transmissionSig)) {
+            return ResponseEntity.status(401).body("Unauthorized");
+        }
 
         try {
             Map<String, Object> payload = objectMapper.readValue(rawBody, new TypeReference<>() {});

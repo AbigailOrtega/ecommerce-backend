@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
@@ -36,17 +38,19 @@ public class SkydropxWebhookController {
 
         log.info("Skydropx webhook received");
 
-        // Verify HMAC-SHA512 signature if secret is configured
-        if (webhookSecret != null && !webhookSecret.isBlank()) {
-            if (authHeader == null || !authHeader.startsWith("HMAC ")) {
-                log.warn("Skydropx webhook rejected — missing or invalid Authorization header");
-                return ResponseEntity.status(401).body("Unauthorized");
-            }
-            String receivedSignature = authHeader.substring("HMAC ".length()).trim();
-            if (!verifyHmac(rawBody, receivedSignature)) {
-                log.warn("Skydropx webhook rejected — HMAC signature mismatch");
-                return ResponseEntity.status(401).body("Unauthorized");
-            }
+        // Verify HMAC-SHA512 signature; without a configured secret every request is rejected
+        if (webhookSecret == null || webhookSecret.isBlank()) {
+            log.error("Skydropx webhook rejected — SKYDROPX_WEBHOOK_SECRET is not configured");
+            return ResponseEntity.status(401).body("Unauthorized");
+        }
+        if (authHeader == null || !authHeader.startsWith("HMAC ")) {
+            log.warn("Skydropx webhook rejected — missing or invalid Authorization header");
+            return ResponseEntity.status(401).body("Unauthorized");
+        }
+        String receivedSignature = authHeader.substring("HMAC ".length()).trim();
+        if (!verifyHmac(rawBody, receivedSignature)) {
+            log.warn("Skydropx webhook rejected — HMAC signature mismatch");
+            return ResponseEntity.status(401).body("Unauthorized");
         }
 
         try {
@@ -102,10 +106,11 @@ public class SkydropxWebhookController {
     private boolean verifyHmac(String payload, String receivedSignature) {
         try {
             Mac mac = Mac.getInstance("HmacSHA512");
-            mac.init(new SecretKeySpec(webhookSecret.getBytes(), "HmacSHA512"));
-            byte[] computed = mac.doFinal(payload.getBytes());
-            String computedHex = HexFormat.of().formatHex(computed);
-            return computedHex.equalsIgnoreCase(receivedSignature);
+            mac.init(new SecretKeySpec(webhookSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA512"));
+            byte[] computed = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+            byte[] received = HexFormat.of().parseHex(receivedSignature.toLowerCase());
+            // Constant-time comparison so the signature can't be guessed byte by byte
+            return MessageDigest.isEqual(computed, received);
         } catch (Exception e) {
             log.error("HMAC verification error: {}", e.getMessage());
             return false;
