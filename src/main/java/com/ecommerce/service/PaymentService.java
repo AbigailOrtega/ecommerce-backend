@@ -1,15 +1,10 @@
 package com.ecommerce.service;
 
 import com.ecommerce.entity.Order;
-import com.ecommerce.entity.OrderItem;
 import com.ecommerce.entity.OrderStatus;
-import com.ecommerce.entity.Product;
-import com.ecommerce.entity.ProductSize;
 import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.repository.OrderRepository;
-import com.ecommerce.repository.ProductRepository;
-import com.ecommerce.repository.ProductSizeRepository;
 import com.paypal.core.PayPalEnvironment;
 import com.paypal.core.PayPalHttpClient;
 import com.paypal.http.HttpResponse;
@@ -42,8 +37,7 @@ import java.util.*;
 public class PaymentService {
 
     private final OrderRepository orderRepository;
-    private final ProductRepository productRepository;
-    private final ProductSizeRepository productSizeRepository;
+    private final StockService stockService;
 
     @Value("${app.stripe.secret-key:}")
     private String stripeSecretKey;
@@ -236,20 +230,8 @@ public class PaymentService {
             log.info("Order {} already cancelled", order.getOrderNumber());
             return;
         }
+        stockService.restore(order, order.getStatus());
         order.setStatus(OrderStatus.CANCELLED);
-        for (OrderItem item : order.getItems()) {
-            if (item.getProduct() != null) {
-                Product product = item.getProduct();
-                if (product.getColors().isEmpty()) {
-                    product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                    productRepository.save(product);
-                } else if (item.getSelectedSize() != null) {
-                    ProductSize size = item.getSelectedSize();
-                    size.setStock(size.getStock() + item.getQuantity());
-                    productSizeRepository.save(size);
-                }
-            }
-        }
         orderRepository.save(order);
         log.info("Order {} cancelled due to payment failure, stock restored", order.getOrderNumber());
     }
@@ -266,20 +248,8 @@ public class PaymentService {
             log.info("Order {} already refunded", order.getOrderNumber());
             return;
         }
+        stockService.restore(order, order.getStatus());
         order.setStatus(OrderStatus.REFUNDED);
-        for (OrderItem item : order.getItems()) {
-            if (item.getProduct() != null) {
-                Product product = item.getProduct();
-                if (product.getColors().isEmpty()) {
-                    product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                    productRepository.save(product);
-                } else if (item.getSelectedSize() != null) {
-                    ProductSize size = item.getSelectedSize();
-                    size.setStock(size.getStock() + item.getQuantity());
-                    productSizeRepository.save(size);
-                }
-            }
-        }
         orderRepository.save(order);
         log.info("Order {} refunded via webhook, stock restored", order.getOrderNumber());
     }
@@ -321,8 +291,8 @@ public class PaymentService {
     public void handlePayPalCaptureDenied(String captureId) {
         orderRepository.findByPaymentId(captureId).ifPresentOrElse(order -> {
             if (order.getStatus() == OrderStatus.CANCELLED) return;
+            stockService.restore(order, order.getStatus());
             order.setStatus(OrderStatus.CANCELLED);
-            restoreStock(order);
             orderRepository.save(order);
             log.info("Order {} cancelled via PayPal webhook captureId={}", order.getOrderNumber(), captureId);
         }, () -> log.warn("PayPal webhook CAPTURE.DENIED — no order found for captureId={}", captureId));
@@ -332,28 +302,13 @@ public class PaymentService {
     public void handlePayPalCaptureRefunded(String captureId) {
         orderRepository.findByPaymentId(captureId).ifPresentOrElse(order -> {
             if (order.getStatus() == OrderStatus.REFUNDED) return;
+            stockService.restore(order, order.getStatus());
             order.setStatus(OrderStatus.REFUNDED);
-            restoreStock(order);
             orderRepository.save(order);
             log.info("Order {} refunded via PayPal webhook captureId={}", order.getOrderNumber(), captureId);
         }, () -> log.warn("PayPal webhook CAPTURE.REFUNDED — no order found for captureId={}", captureId));
     }
 
-    private void restoreStock(Order order) {
-        for (OrderItem item : order.getItems()) {
-            if (item.getProduct() != null) {
-                Product product = item.getProduct();
-                if (product.getColors().isEmpty()) {
-                    product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                    productRepository.save(product);
-                } else if (item.getSelectedSize() != null) {
-                    ProductSize size = item.getSelectedSize();
-                    size.setStock(size.getStock() + item.getQuantity());
-                    productSizeRepository.save(size);
-                }
-            }
-        }
-    }
 
     public Map<String, Object> createPayPalOrder(BigDecimal amount) {
         if (!isPayPalConfigured()) {

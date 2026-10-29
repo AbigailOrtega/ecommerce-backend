@@ -4,6 +4,7 @@ import com.ecommerce.entity.Product;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -24,4 +25,13 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
     Page<Product> search(@Param("query") String query, Pageable pageable);
 
     List<Product> findTop8ByActiveTrueOrderByCreatedAtDesc();
+
+    /** Atomically takes stock; returns 0 (and changes nothing) if there is not enough. */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE Product p SET p.stockQuantity = p.stockQuantity - :qty WHERE p.id = :id AND p.stockQuantity >= :qty")
+    int decrementStock(@Param("id") Long id, @Param("qty") int qty);
+
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE Product p SET p.stockQuantity = p.stockQuantity + :qty WHERE p.id = :id")
+    int incrementStock(@Param("id") Long id, @Param("qty") int qty);
 }

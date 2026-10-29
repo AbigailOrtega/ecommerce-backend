@@ -52,6 +52,7 @@ public class OrderService {
     private final PickupLocationService pickupLocationService;
     private final SkydropxService skydropxService;
     private final PaymentService paymentService;
+    private final StockService stockService;
 
     @Transactional
     public OrderResponse createOrder(String email, OrderRequest request) {
@@ -108,13 +109,7 @@ public class OrderService {
             order.addItem(orderItem);
             totalAmount = totalAmount.add(subtotal);
 
-            if (product.getColors().isEmpty()) {
-                product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
-                productRepository.save(product);
-            } else if (selectedSize != null) {
-                selectedSize.setStock(selectedSize.getStock() - cartItem.getQuantity());
-                productSizeRepository.save(selectedSize);
-            }
+            stockService.reserve(product, selectedSize, cartItem.getQuantity());
         }
 
         // --- Coupon discount ---
@@ -287,13 +282,7 @@ public class OrderService {
             order.addItem(orderItem);
             totalAmount = totalAmount.add(subtotal);
 
-            if (product.getColors().isEmpty()) {
-                product.setStockQuantity(product.getStockQuantity() - itemReq.quantity());
-                productRepository.save(product);
-            } else if (selectedSize != null) {
-                selectedSize.setStock(selectedSize.getStock() - itemReq.quantity());
-                productSizeRepository.save(selectedSize);
-            }
+            stockService.reserve(product, selectedSize, itemReq.quantity());
         }
 
         // --- Coupon discount ---
@@ -451,22 +440,11 @@ public class OrderService {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "id", id));
 
+        OrderStatus previousStatus = order.getStatus();
         order.setStatus(request.status());
 
         if (request.status() == OrderStatus.CANCELLED) {
-            for (OrderItem item : order.getItems()) {
-                if (item.getProduct() != null) {
-                    Product product = item.getProduct();
-                    if (product.getColors().isEmpty()) {
-                        product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                        productRepository.save(product);
-                    } else if (item.getSelectedSize() != null) {
-                        ProductSize size = item.getSelectedSize();
-                        size.setStock(size.getStock() + item.getQuantity());
-                        productSizeRepository.save(size);
-                    }
-                }
-            }
+            stockService.restore(order, previousStatus);
         }
 
         OrderResponse orderResponse = mapToResponse(orderRepository.save(order), true);

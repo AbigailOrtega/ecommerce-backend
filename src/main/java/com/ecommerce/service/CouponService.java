@@ -87,8 +87,11 @@ public class CouponService {
     public Coupon consumeCoupon(String code) {
         Coupon coupon = couponRepository.findByCodeIgnoreCase(code.trim())
                 .orElseThrow(() -> new BadRequestException("Invalid coupon code"));
-        coupon.setUsageCount(coupon.getUsageCount() + 1);
-        return couponRepository.save(coupon);
+        // Atomic so two concurrent orders can't both take the last use of a limited coupon
+        if (couponRepository.incrementUsageIfAvailable(coupon.getId()) == 0) {
+            throw new BadRequestException("This coupon has reached its usage limit");
+        }
+        return coupon;
     }
 
     private Coupon findById(Long id) {

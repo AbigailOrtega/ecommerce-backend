@@ -42,6 +42,7 @@ class OrderServiceTest {
     @Mock private PromotionRepository promotionRepository;
     @Mock private SkydropxService skydropxService;
     @Mock private PaymentService paymentService;
+    @Mock private StockService stockService;
 
     @InjectMocks private OrderService orderService;
 
@@ -119,8 +120,25 @@ class OrderServiceTest {
             OrderResponse response = orderService.createOrder("ana@example.com", sampleRequest());
 
             assertThat(response).isNotNull();
+            verify(stockService).reserve(product, null, 2);
             verify(cartItemRepository).deleteByUserId(1L);
             verify(emailService).sendOrderConfirmationEmail(eq(customer), any());
+        }
+
+        @Test
+        @DisplayName("fails without saving when another order took the stock first")
+        void createOrder_stockTakenConcurrently() {
+            when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(customer));
+            when(cartItemRepository.findByUserId(1L)).thenReturn(List.of(cartItem));
+            when(promotionRepository.findBestActivePromotion(any(), any())).thenReturn(java.util.Optional.empty());
+            doThrow(new BadRequestException("Stock insuficiente para: Camiseta"))
+                    .when(stockService).reserve(product, null, 2);
+
+            assertThatThrownBy(() -> orderService.createOrder("ana@example.com", sampleRequest()))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining("Stock insuficiente");
+            verify(orderRepository, never()).save(any());
+            verify(cartItemRepository, never()).deleteByUserId(any());
         }
 
         @Test

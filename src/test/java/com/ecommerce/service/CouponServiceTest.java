@@ -326,16 +326,27 @@ class CouponServiceTest {
     class ConsumeCoupon {
 
         @Test
-        @DisplayName("increments usageCount by 1 and saves")
+        @DisplayName("counts one use atomically")
         void consumeCoupon_success() {
-            activeCoupon.setUsageCount(3);
             when(couponRepository.findByCodeIgnoreCase("SAVE10")).thenReturn(Optional.of(activeCoupon));
-            when(couponRepository.save(any(Coupon.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(couponRepository.incrementUsageIfAvailable(activeCoupon.getId())).thenReturn(1);
 
             Coupon result = couponService.consumeCoupon("SAVE10");
 
-            assertThat(result.getUsageCount()).isEqualTo(4);
-            verify(couponRepository).save(activeCoupon);
+            assertThat(result).isSameAs(activeCoupon);
+            verify(couponRepository).incrementUsageIfAvailable(activeCoupon.getId());
+            verify(couponRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("throws when a concurrent order took the last allowed use")
+        void consumeCoupon_limitReachedConcurrently() {
+            when(couponRepository.findByCodeIgnoreCase("SAVE10")).thenReturn(Optional.of(activeCoupon));
+            when(couponRepository.incrementUsageIfAvailable(activeCoupon.getId())).thenReturn(0);
+
+            assertThatThrownBy(() -> couponService.consumeCoupon("SAVE10"))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining("usage limit");
         }
 
         @Test

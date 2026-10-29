@@ -59,6 +59,8 @@ class PaymentServiceTest {
 
     @BeforeEach
     void injectValues() {
+        ReflectionTestUtils.setField(paymentService, "stockService",
+                new StockService(productRepository, productSizeRepository));
         ReflectionTestUtils.setField(paymentService, "stripeSecretKey", "sk_test_abc123");
         ReflectionTestUtils.setField(paymentService, "webhookSecret",   "whsec_test_secret");
         ReflectionTestUtils.setField(paymentService, "paypalClientId",     "");
@@ -368,8 +370,7 @@ class PaymentServiceTest {
             paymentService.handlePaymentFailure("pi_003");
 
             assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-            assertThat(product.getStockQuantity()).isEqualTo(8);
-            verify(productRepository).save(product);
+            verify(productRepository).incrementStock(1L, 3);
             verify(orderRepository).save(order);
         }
 
@@ -407,8 +408,7 @@ class PaymentServiceTest {
 
             paymentService.handlePaymentFailure("pi_004");
 
-            assertThat(size.getStock()).isEqualTo(6);
-            verify(productSizeRepository).save(size);
+            verify(productSizeRepository).incrementStock(20L, 4);
             verify(orderRepository).save(order);
         }
 
@@ -431,8 +431,7 @@ class PaymentServiceTest {
             assertThatNoException().isThrownBy(() ->
                     paymentService.handlePaymentFailure("pi_005"));
 
-            verify(productRepository, never()).save(any());
-            verify(productSizeRepository, never()).save(any());
+            verifyNoInteractions(productRepository, productSizeRepository);
         }
 
         @Test
@@ -469,6 +468,23 @@ class PaymentServiceTest {
     class HandleRefund {
 
         @Test
+        @DisplayName("does not restore stock again when the order was already CANCELLED")
+        void handleRefund_afterCancel_noDoubleRestore() {
+            Product product = Product.builder().id(7L).name("Hat").stockQuantity(1).colors(new ArrayList<>()).build();
+            Order order = Order.builder()
+                    .orderNumber("ORD-DBL")
+                    .status(OrderStatus.CANCELLED)
+                    .items(new ArrayList<>(List.of(OrderItem.builder().product(product).quantity(2).build())))
+                    .build();
+            when(orderRepository.findByPaymentId("pi_dbl")).thenReturn(Optional.of(order));
+
+            paymentService.handleRefund("pi_dbl");
+
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+            verifyNoInteractions(productRepository, productSizeRepository);
+        }
+
+        @Test
         @DisplayName("sets status to REFUNDED and restores stock for simple product")
         void handleRefund_restoresSimpleProductStock() {
             Product product = Product.builder()
@@ -494,8 +510,7 @@ class PaymentServiceTest {
             paymentService.handleRefund("pi_007");
 
             assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
-            assertThat(product.getStockQuantity()).isEqualTo(12);
-            verify(productRepository).save(product);
+            verify(productRepository).incrementStock(3L, 2);
             verify(orderRepository).save(order);
         }
 
