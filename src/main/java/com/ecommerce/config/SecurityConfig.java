@@ -57,6 +57,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/marketing/unsubscribe").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/analytics/pageview").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                // Customers post reviews under /api/products; every other catalog write is admin-only
+                .requestMatchers(HttpMethod.POST, "/api/products/*/reviews").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/products/**", "/api/categories/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/products/**", "/api/categories/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PATCH, "/api/products/**", "/api/categories/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/products/**", "/api/categories/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())
