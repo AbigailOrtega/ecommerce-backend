@@ -52,7 +52,8 @@ public class StripeWebhookController {
             case "payment_intent.succeeded" -> {
                 PaymentIntent pi = (PaymentIntent) stripeObject;
                 log.info("payment_intent.succeeded for pi_id={}", pi.getId());
-                paymentService.handlePaymentSuccess(pi.getId());
+                paymentService.handlePaymentSuccess(pi.getId(),
+                        pi.getAmountReceived() != null ? pi.getAmountReceived() : 0L, pi.getCurrency());
             }
             case "payment_intent.payment_failed" -> {
                 PaymentIntent pi = (PaymentIntent) stripeObject;

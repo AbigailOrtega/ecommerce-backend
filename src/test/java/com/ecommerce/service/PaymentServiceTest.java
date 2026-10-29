@@ -268,13 +268,46 @@ class PaymentServiceTest {
             Order order = Order.builder()
                     .orderNumber("ORD-001")
                     .status(OrderStatus.PENDING)
+                    .totalAmount(new BigDecimal("150.00"))
                     .build();
             when(orderRepository.findByPaymentId("pi_001")).thenReturn(Optional.of(order));
 
-            paymentService.handlePaymentSuccess("pi_001");
+            paymentService.handlePaymentSuccess("pi_001", 15000L, "mxn");
 
             assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
             verify(orderRepository).save(order);
+        }
+
+        @Test
+        @DisplayName("does not confirm when the amount received differs from the order total")
+        void handlePaymentSuccess_amountMismatch() {
+            Order order = Order.builder()
+                    .orderNumber("ORD-003")
+                    .status(OrderStatus.PENDING)
+                    .totalAmount(new BigDecimal("10000.00"))
+                    .build();
+            when(orderRepository.findByPaymentId("pi_003")).thenReturn(Optional.of(order));
+
+            paymentService.handlePaymentSuccess("pi_003", 100L, "mxn");
+
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+            verify(orderRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("does not confirm when the currency is not MXN")
+        void handlePaymentSuccess_wrongCurrency() {
+            Order order = Order.builder()
+                    .orderNumber("ORD-004")
+                    .status(OrderStatus.PENDING)
+                    .totalAmount(new BigDecimal("150.00"))
+                    .build();
+            when(orderRepository.findByPaymentId("pi_004")).thenReturn(Optional.of(order));
+
+            paymentService.handlePaymentSuccess("pi_004", 15000L, "usd");
+
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+            verify(orderRepository, never()).save(any());
         }
 
         @Test
@@ -283,7 +316,7 @@ class PaymentServiceTest {
             when(orderRepository.findByPaymentId("pi_ghost")).thenReturn(Optional.empty());
 
             assertThatNoException().isThrownBy(() ->
-                    paymentService.handlePaymentSuccess("pi_ghost"));
+                    paymentService.handlePaymentSuccess("pi_ghost", 15000L, "mxn"));
 
             verify(orderRepository, never()).save(any());
         }
@@ -297,7 +330,7 @@ class PaymentServiceTest {
                     .build();
             when(orderRepository.findByPaymentId("pi_002")).thenReturn(Optional.of(order));
 
-            paymentService.handlePaymentSuccess("pi_002");
+            paymentService.handlePaymentSuccess("pi_002", 15000L, "mxn");
 
             verify(orderRepository, never()).save(any());
         }
@@ -500,12 +533,10 @@ class PaymentServiceTest {
     class ConfirmPayPalPayment {
 
         @Test
-        @DisplayName("sets paymentId, status CONFIRMED and saves")
-        void confirmPayPalPayment_success() {
-            Order order = Order.builder()
-                    .orderNumber("ORD-PP01")
-                    .status(OrderStatus.PENDING)
-                    .build();
+        @DisplayName("confirms the order when its own capture is COMPLETED for the order total")
+        void confirmPayPalPayment_success() throws IOException {
+            mockPayPalCapture("CAPTURE-001", "COMPLETED", "MXN", "150.00");
+            Order order = paypalOrder("ORD-PP01", "CAPTURE-001", "150.00");
             when(orderRepository.findByOrderNumber("ORD-PP01")).thenReturn(Optional.of(order));
 
             paymentService.confirmPayPalPayment("ORD-PP01", "CAPTURE-001");
@@ -513,6 +544,30 @@ class PaymentServiceTest {
             assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
             assertThat(order.getPaymentId()).isEqualTo("CAPTURE-001");
             verify(orderRepository).save(order);
+        }
+
+        @Test
+        @DisplayName("rejects a capture id that is not the one attached to the order")
+        void confirmPayPalPayment_foreignCapture() {
+            Order order = paypalOrder("ORD-PP03", "CAPTURE-REAL", "150.00");
+            when(orderRepository.findByOrderNumber("ORD-PP03")).thenReturn(Optional.of(order));
+
+            assertThatThrownBy(() -> paymentService.confirmPayPalPayment("ORD-PP03", "CAPTURE-FAKE"))
+                    .isInstanceOf(BadRequestException.class);
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+            verify(orderRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("rejects when PayPal reports the capture is not COMPLETED")
+        void confirmPayPalPayment_captureNotCompleted() throws IOException {
+            mockPayPalCapture("CAPTURE-004", "PENDING", "MXN", "150.00");
+            Order order = paypalOrder("ORD-PP04", "CAPTURE-004", "150.00");
+            when(orderRepository.findByOrderNumber("ORD-PP04")).thenReturn(Optional.of(order));
+
+            assertThatThrownBy(() -> paymentService.confirmPayPalPayment("ORD-PP04", "CAPTURE-004"))
+                    .isInstanceOf(BadRequestException.class);
+            verify(orderRepository, never()).save(any());
         }
 
         @Test
@@ -672,6 +727,143 @@ class PaymentServiceTest {
             assertThatThrownBy(() -> paymentService.capturePayPalOrder("PAYPAL-ORDER-FAIL"))
                     .isInstanceOf(RuntimeException.class)
                     .hasMessageContaining("Failed to capture PayPal order");
+        }
+    }
+
+    // ─── verification helpers ─────────────────────────────────────────────────
+
+    private Order paypalOrder(String orderNumber, String captureId, String total) {
+        return Order.builder()
+                .orderNumber(orderNumber)
+                .status(OrderStatus.PENDING)
+                .paymentMethod("paypal")
+                .paymentId(captureId)
+                .totalAmount(new BigDecimal(total))
+                .build();
+    }
+
+    private void mockPayPalCapture(String captureId, String status, String currency, String value) throws IOException {
+        PayPalHttpClient mockClient = mock(PayPalHttpClient.class);
+        ReflectionTestUtils.setField(paymentService, "paypalClient", mockClient);
+        com.paypal.payments.Capture capture = new com.paypal.payments.Capture()
+                .id(captureId)
+                .status(status)
+                .amount(new com.paypal.payments.Money().currencyCode(currency).value(value));
+        @SuppressWarnings("unchecked")
+        HttpResponse<com.paypal.payments.Capture> response = mock(HttpResponse.class);
+        when(response.result()).thenReturn(capture);
+        when(mockClient.execute(any(com.paypal.payments.CapturesGetRequest.class))).thenReturn(response);
+    }
+
+    // ─── verifyPaymentForOrder ────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("verifyPaymentForOrder")
+    class VerifyPaymentForOrder {
+
+        @Test
+        @DisplayName("does nothing for payment methods other than stripe/paypal")
+        void otherMethod_noop() {
+            assertThatNoException().isThrownBy(() ->
+                    paymentService.verifyPaymentForOrder("COD", null, new BigDecimal("100.00")));
+            verifyNoInteractions(orderRepository);
+        }
+
+        @Test
+        @DisplayName("requires a paymentId for stripe")
+        void stripe_missingPaymentId() {
+            assertThatThrownBy(() -> paymentService.verifyPaymentForOrder("stripe", " ", new BigDecimal("100.00")))
+                    .isInstanceOf(BadRequestException.class);
+        }
+
+        @Test
+        @DisplayName("rejects a paymentId already used by another order")
+        void reusedPaymentId() {
+            when(orderRepository.findByPaymentId("pi_used")).thenReturn(Optional.of(new Order()));
+
+            assertThatThrownBy(() -> paymentService.verifyPaymentForOrder("stripe", "pi_used", new BigDecimal("100.00")))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining("otro pedido");
+        }
+
+        @Test
+        @DisplayName("accepts a Stripe intent whose amount equals the order total")
+        void stripe_amountMatches() throws StripeException {
+            PaymentIntent intent = mock(PaymentIntent.class);
+            when(intent.getCurrency()).thenReturn("mxn");
+            when(intent.getAmount()).thenReturn(15050L);
+            try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class)) {
+                piStatic.when(() -> PaymentIntent.retrieve("pi_ok")).thenReturn(intent);
+
+                paymentService.verifyPaymentForOrder("stripe", "pi_ok", new BigDecimal("150.50"));
+
+                verify(intent, never()).update(any(com.stripe.param.PaymentIntentUpdateParams.class));
+            }
+        }
+
+        @Test
+        @DisplayName("updates an unconfirmed Stripe intent to the server-computed total")
+        void stripe_unconfirmedIntentUpdated() throws StripeException {
+            PaymentIntent intent = mock(PaymentIntent.class);
+            when(intent.getCurrency()).thenReturn("mxn");
+            when(intent.getAmount()).thenReturn(100L);
+            when(intent.getStatus()).thenReturn("requires_payment_method");
+            try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class)) {
+                piStatic.when(() -> PaymentIntent.retrieve("pi_cheap")).thenReturn(intent);
+
+                paymentService.verifyPaymentForOrder("stripe", "pi_cheap", new BigDecimal("10000.00"));
+
+                verify(intent).update(argThat((com.stripe.param.PaymentIntentUpdateParams p) ->
+                        Long.valueOf(1000000L).equals(p.getAmount())));
+            }
+        }
+
+        @Test
+        @DisplayName("rejects an already-paid Stripe intent for a different amount")
+        void stripe_paidIntentMismatch() throws StripeException {
+            PaymentIntent intent = mock(PaymentIntent.class);
+            when(intent.getCurrency()).thenReturn("mxn");
+            when(intent.getAmount()).thenReturn(100L);
+            when(intent.getStatus()).thenReturn("succeeded");
+            try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class)) {
+                piStatic.when(() -> PaymentIntent.retrieve("pi_paid")).thenReturn(intent);
+
+                assertThatThrownBy(() -> paymentService.verifyPaymentForOrder("stripe", "pi_paid", new BigDecimal("10000.00")))
+                        .isInstanceOf(BadRequestException.class)
+                        .hasMessageContaining("monto");
+            }
+        }
+
+        @Test
+        @DisplayName("rejects a Stripe intent in another currency")
+        void stripe_wrongCurrency() {
+            PaymentIntent intent = mock(PaymentIntent.class);
+            when(intent.getCurrency()).thenReturn("usd");
+            try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class)) {
+                piStatic.when(() -> PaymentIntent.retrieve("pi_usd")).thenReturn(intent);
+
+                assertThatThrownBy(() -> paymentService.verifyPaymentForOrder("stripe", "pi_usd", new BigDecimal("100.00")))
+                        .isInstanceOf(BadRequestException.class);
+            }
+        }
+
+        @Test
+        @DisplayName("accepts a COMPLETED PayPal capture for the order total")
+        void paypal_ok() throws IOException {
+            mockPayPalCapture("CAP-OK", "COMPLETED", "MXN", "150.50");
+
+            assertThatNoException().isThrownBy(() ->
+                    paymentService.verifyPaymentForOrder("paypal", "CAP-OK", new BigDecimal("150.5")));
+        }
+
+        @Test
+        @DisplayName("rejects a PayPal capture for a smaller amount")
+        void paypal_amountMismatch() throws IOException {
+            mockPayPalCapture("CAP-LOW", "COMPLETED", "MXN", "1.00");
+
+            assertThatThrownBy(() -> paymentService.verifyPaymentForOrder("paypal", "CAP-LOW", new BigDecimal("10000.00")))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining("monto");
         }
     }
 }

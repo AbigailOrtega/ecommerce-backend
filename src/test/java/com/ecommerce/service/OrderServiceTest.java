@@ -41,6 +41,7 @@ class OrderServiceTest {
     @Mock private PickupTimeSlotRepository pickupTimeSlotRepository;
     @Mock private PromotionRepository promotionRepository;
     @Mock private SkydropxService skydropxService;
+    @Mock private PaymentService paymentService;
 
     @InjectMocks private OrderService orderService;
 
