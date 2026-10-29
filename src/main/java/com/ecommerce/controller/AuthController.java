@@ -49,7 +49,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request,
                                                            HttpServletRequest httpRequest) {
         String ip = ClientIp.of(httpRequest);
-        log.info("Login request received for email: {} from {}", request.email(), ip);
+        log.info("Login request received for email: {} from {} [{}]", request.email(), ip, ClientIp.describe(httpRequest));
         rateLimiter.checkNotBlocked(RateLimit.LOGIN_FAILURES_PER_IP, ip);
         rateLimiter.checkNotBlocked(RateLimit.LOGIN_FAILURES_PER_EMAIL, request.email());
         AuthResponse response;
