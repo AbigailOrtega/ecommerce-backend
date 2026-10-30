@@ -55,6 +55,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/payments/stripe/create-intent").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/payments/paypal/create-order").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/payments/paypal/capture-order").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/payments/paypal/capture-for-order").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/payments/paypal/confirm-payment").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/webhooks/stripe").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/webhooks/skydropx").permitAll()

@@ -768,6 +768,40 @@ class PaymentServiceTest {
         HttpResponse<com.paypal.payments.Capture> response = mock(HttpResponse.class);
         when(response.result()).thenReturn(capture);
         when(mockClient.execute(any(com.paypal.payments.CapturesGetRequest.class))).thenReturn(response);
+        // a capture id is not an order id: PayPal answers 404, so the legacy capture check runs
+        lenient().when(mockClient.execute(any(OrdersGetRequest.class)))
+                .thenThrow(new com.paypal.http.exceptions.HttpException("not found", 404, new com.paypal.http.Headers()));
+    }
+
+    /** A PayPal order as returned by OrdersGetRequest / OrdersCaptureRequest. */
+    private static com.paypal.orders.Order paypalApiOrder(String id, String status, String value,
+                                                          String captureId, String captureStatus) {
+        PurchaseUnit unit = new PurchaseUnit()
+                .amountWithBreakdown(new com.paypal.orders.AmountWithBreakdown().currencyCode("MXN").value(value));
+        if (captureId != null) {
+            unit.payments(new PaymentCollection().captures(List.of(new Capture().id(captureId).status(captureStatus)
+                    .amount(new com.paypal.orders.Money().currencyCode("MXN").value(value)))));
+        }
+        return new com.paypal.orders.Order().id(id).status(status).purchaseUnits(List.of(unit));
+    }
+
+    @SuppressWarnings("unchecked")
+    private PayPalHttpClient paypalClientReturning(com.paypal.orders.Order getResult) throws IOException {
+        PayPalHttpClient client = mock(PayPalHttpClient.class);
+        ReflectionTestUtils.setField(paymentService, "paypalClient", client);
+        if (getResult != null) {
+            HttpResponse<com.paypal.orders.Order> response = mock(HttpResponse.class);
+            when(response.result()).thenReturn(getResult);
+            lenient().when(client.execute(any(OrdersGetRequest.class))).thenReturn(response);
+        }
+        return client;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void captureReturns(PayPalHttpClient client, com.paypal.orders.Order result) throws IOException {
+        HttpResponse<com.paypal.orders.Order> response = mock(HttpResponse.class);
+        when(response.result()).thenReturn(result);
+        when(client.execute(any(OrdersCaptureRequest.class))).thenReturn(response);
     }
 
     // ─── verifyPaymentForOrder ────────────────────────────────────────────────
@@ -879,6 +913,116 @@ class PaymentServiceTest {
             assertThatThrownBy(() -> paymentService.verifyPaymentForOrder("paypal", "CAP-LOW", new BigDecimal("10000.00")))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessageContaining("monto");
+        }
+
+        @Test
+        @DisplayName("accepts an APPROVED (not yet captured) PayPal order for the order total")
+        void paypal_approvedOrder_ok() throws IOException {
+            paypalClientReturning(paypalApiOrder("PP-1", "APPROVED", "150.50", null, null));
+
+            assertThatNoException().isThrownBy(() ->
+                    paymentService.verifyPaymentForOrder("paypal", "PP-1", new BigDecimal("150.5")));
+        }
+
+        @Test
+        @DisplayName("rejects a PayPal order the buyer has not approved")
+        void paypal_notApproved() throws IOException {
+            paypalClientReturning(paypalApiOrder("PP-2", "CREATED", "150.50", null, null));
+
+            assertThatThrownBy(() -> paymentService.verifyPaymentForOrder("paypal", "PP-2", new BigDecimal("150.50")))
+                    .isInstanceOf(BadRequestException.class).hasMessageContaining("aprobado");
+        }
+
+        @Test
+        @DisplayName("rejects an approved PayPal order for a different amount")
+        void paypal_approvedOrder_amountMismatch() throws IOException {
+            paypalClientReturning(paypalApiOrder("PP-3", "APPROVED", "1.00", null, null));
+
+            assertThatThrownBy(() -> paymentService.verifyPaymentForOrder("paypal", "PP-3", new BigDecimal("150.50")))
+                    .isInstanceOf(BadRequestException.class).hasMessageContaining("monto");
+        }
+    }
+
+    // ─── capturePayPalForOrder ────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("capturePayPalForOrder")
+    class CapturePayPalForOrder {
+
+        private Order pendingOrder() {
+            Product product = Product.builder().id(1L).name("Shirt").stockQuantity(5).colors(new ArrayList<>()).build();
+            Order order = paypalOrder("ORD-PP", "PP-ORDER", "150.50");
+            order.setItems(new ArrayList<>(List.of(OrderItem.builder().product(product).quantity(2).build())));
+            when(orderRepository.findByOrderNumber("ORD-PP")).thenReturn(Optional.of(order));
+            return order;
+        }
+
+        @Test
+        @DisplayName("captures, stores the capture id and confirms the order")
+        void success() throws IOException {
+            Order order = pendingOrder();
+            PayPalHttpClient client = paypalClientReturning(null);
+            captureReturns(client, paypalApiOrder("PP-ORDER", "COMPLETED", "150.50", "CAP-1", "COMPLETED"));
+
+            paymentService.capturePayPalForOrder("ORD-PP");
+
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+            assertThat(order.getPaymentId()).isEqualTo("CAP-1");
+            verify(productRepository, never()).incrementStock(anyLong(), anyInt());
+        }
+
+        @Test
+        @DisplayName("when PayPal declines, cancels the order and restores its stock")
+        void declined() throws IOException {
+            Order order = pendingOrder();
+            PayPalHttpClient client = paypalClientReturning(paypalApiOrder("PP-ORDER", "APPROVED", "150.50", null, null));
+            when(client.execute(any(OrdersCaptureRequest.class))).thenThrow(new IOException("INSTRUMENT_DECLINED"));
+
+            assertThatThrownBy(() -> paymentService.capturePayPalForOrder("ORD-PP"))
+                    .isInstanceOf(BadRequestException.class).hasMessageContaining("cancelado");
+
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+            verify(productRepository).incrementStock(1L, 2);
+        }
+
+        @Test
+        @DisplayName("if a previous attempt already captured it, confirms instead of cancelling")
+        void alreadyCapturedByPreviousAttempt() throws IOException {
+            Order order = pendingOrder();
+            PayPalHttpClient client = paypalClientReturning(paypalApiOrder("PP-ORDER", "COMPLETED", "150.50", "CAP-2", "COMPLETED"));
+            when(client.execute(any(OrdersCaptureRequest.class))).thenThrow(new IOException("ORDER_ALREADY_CAPTURED"));
+
+            paymentService.capturePayPalForOrder("ORD-PP");
+
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+            assertThat(order.getPaymentId()).isEqualTo("CAP-2");
+        }
+
+        @Test
+        @DisplayName("a captured amount that differs from the total is left PENDING for manual review")
+        void amountMismatch() throws IOException {
+            Order order = pendingOrder();
+            PayPalHttpClient client = paypalClientReturning(null);
+            captureReturns(client, paypalApiOrder("PP-ORDER", "COMPLETED", "1.00", "CAP-3", "COMPLETED"));
+
+            assertThatThrownBy(() -> paymentService.capturePayPalForOrder("ORD-PP"))
+                    .isInstanceOf(BadRequestException.class).hasMessageContaining("monto");
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+        }
+
+        @Test
+        @DisplayName("is a no-op for an already confirmed order, and rejects non-PayPal orders")
+        void confirmedAndNonPayPal() {
+            Order confirmed = paypalOrder("ORD-OK", "CAP-OK", "10.00");
+            confirmed.setStatus(OrderStatus.CONFIRMED);
+            when(orderRepository.findByOrderNumber("ORD-OK")).thenReturn(Optional.of(confirmed));
+            assertThatNoException().isThrownBy(() -> paymentService.capturePayPalForOrder("ORD-OK"));
+
+            Order card = paypalOrder("ORD-CARD", "pi_1", "10.00");
+            card.setPaymentMethod("stripe");
+            when(orderRepository.findByOrderNumber("ORD-CARD")).thenReturn(Optional.of(card));
+            assertThatThrownBy(() -> paymentService.capturePayPalForOrder("ORD-CARD"))
+                    .isInstanceOf(BadRequestException.class);
         }
     }
 }

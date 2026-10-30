@@ -56,8 +56,16 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @PostMapping("/paypal/capture-for-order")
+    @Operation(summary = "Charge an order paid with PayPal, after the order was created")
+    public ResponseEntity<ApiResponse<Void>> capturePayPalForOrder(@RequestBody Map<String, String> request) {
+        paymentService.capturePayPalForOrder(request.get("orderNumber"));
+        return ResponseEntity.ok(ApiResponse.success("Pago completado", null));
+    }
+
+    /** Legacy: captured before the order existed (pages loaded before capture-for-order). */
     @PostMapping("/paypal/capture-order")
-    @Operation(summary = "Capture PayPal order")
+    @Operation(summary = "Capture PayPal order (legacy)")
     public ResponseEntity<ApiResponse<Map<String, Object>>> capturePayPalOrder(
             @RequestBody Map<String, Object> request) {
         String orderId = request.get("orderId").toString();

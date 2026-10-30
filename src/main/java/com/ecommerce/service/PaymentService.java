@@ -135,7 +135,27 @@ public class PaymentService {
         if (stripe) {
             verifyStripeIntentForOrder(paymentId, orderTotal);
         } else {
-            verifyPayPalCapture(paymentId, orderTotal);
+            Optional<PayPalOrderSnapshot> paypalOrder = findPayPalOrder(paymentId);
+            if (paypalOrder.isPresent()) {
+                verifyApprovedPayPalOrder(paypalOrder.get(), orderTotal);
+            } else {
+                // Legacy flow (checkout pages loaded before the change): captured before the order existed.
+                verifyPayPalCapture(paymentId, orderTotal);
+            }
+        }
+    }
+
+    /** The buyer approved the payment in PayPal; it is captured only after the order exists. */
+    private void verifyApprovedPayPalOrder(PayPalOrderSnapshot paypalOrder, BigDecimal orderTotal) {
+        if (!"APPROVED".equalsIgnoreCase(paypalOrder.status())) {
+            throw new BadRequestException("El pago de PayPal no fue aprobado");
+        }
+        if (!"MXN".equalsIgnoreCase(paypalOrder.currency())
+                || paypalOrder.amount() == null
+                || paypalOrder.amount().compareTo(orderTotal.setScale(2, RoundingMode.HALF_UP)) != 0) {
+            log.error("PayPal order {} amount {} {} does not match order total {}",
+                    paypalOrder.id(), paypalOrder.amount(), paypalOrder.currency(), orderTotal);
+            throw new BadRequestException("El monto del pago no coincide con el total del pedido");
         }
     }
 
@@ -274,6 +294,63 @@ public class PaymentService {
         log.info("Order {} confirmed via PayPal capture: {}", orderNumber, captureId);
     }
 
+    /**
+     * Charges an order paid with PayPal. The order was created (stock reserved) with the approved
+     * PayPal order id; if PayPal declines the capture the order is cancelled and its stock restored,
+     * so the buyer is never charged for an order that does not exist.
+     */
+    @Transactional(noRollbackFor = BadRequestException.class)
+    public void capturePayPalForOrder(String orderNumber) {
+        Order order = orderRepository.findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
+        if (!"paypal".equalsIgnoreCase(order.getPaymentMethod()) || order.getPaymentId() == null) {
+            throw new BadRequestException("El pedido no se paga con PayPal");
+        }
+        if (order.getStatus() == OrderStatus.CONFIRMED) return;
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new BadRequestException("El pedido ya no está pendiente de pago");
+        }
+
+        String paypalOrderId = order.getPaymentId();
+        PayPalOrderSnapshot captured;
+        try {
+            captured = capturePayPal(paypalOrderId);
+        } catch (IOException e) {
+            // a previous attempt may already have captured it
+            captured = findPayPalOrder(paypalOrderId)
+                    .filter(o -> "COMPLETED".equalsIgnoreCase(o.status()))
+                    .orElse(null);
+            if (captured == null) {
+                log.warn("PayPal capture failed for order {} (PayPal order {}): {}", orderNumber, paypalOrderId, e.getMessage());
+                cancelUnpaidOrder(order);
+                throw new BadRequestException("PayPal no pudo completar el pago. El pedido fue cancelado; intenta de nuevo.");
+            }
+        }
+
+        if (!"COMPLETED".equalsIgnoreCase(captured.captureStatus()) || captured.captureId() == null) {
+            log.warn("PayPal capture for order {} not completed: {}", orderNumber, captured.captureStatus());
+            cancelUnpaidOrder(order);
+            throw new BadRequestException("PayPal no pudo completar el pago. El pedido fue cancelado; intenta de nuevo.");
+        }
+        if (captured.amount() == null || captured.amount().compareTo(order.getTotalAmount().setScale(2, RoundingMode.HALF_UP)) != 0) {
+            // the approved amount was checked when the order was created; leave it for manual review
+            log.error("Order {} NOT confirmed: PayPal captured {} but order total is {} — review manually",
+                    orderNumber, captured.amount(), order.getTotalAmount());
+            throw new BadRequestException("El monto del pago no coincide con el total del pedido");
+        }
+
+        order.setPaymentId(captured.captureId());
+        order.setStatus(OrderStatus.CONFIRMED);
+        orderRepository.save(order);
+        log.info("Order {} confirmed via PayPal capture {}", orderNumber, captured.captureId());
+    }
+
+    private void cancelUnpaidOrder(Order order) {
+        stockService.restore(order, order.getStatus());
+        order.setStatus(OrderStatus.CANCELLED);
+        orderRepository.save(order);
+    }
+
     @Transactional
     public void handlePayPalCaptureCompleted(String captureId) {
         orderRepository.findByPaymentId(captureId).ifPresentOrElse(order -> {
@@ -341,35 +418,75 @@ public class PaymentService {
         }
     }
 
+    /**
+     * Legacy flow: captures before the order exists. Kept so checkout pages loaded before the
+     * capture moved after order creation keep working; the current checkout uses capturePayPalForOrder.
+     */
     public Map<String, Object> capturePayPalOrder(String orderId) {
         if (!isPayPalConfigured()) {
             throw new BadRequestException("PayPal is not configured.");
         }
-
-        OrdersCaptureRequest request = new OrdersCaptureRequest(orderId);
-        request.prefer("return=representation");
-
         try {
-            HttpResponse<com.paypal.orders.Order> response = paypalClient.execute(request);
-            com.paypal.orders.Order order = response.result();
-
-            String captureId = null;
-            if (order.purchaseUnits() != null && !order.purchaseUnits().isEmpty()) {
-                var captures = order.purchaseUnits().get(0).payments().captures();
-                if (captures != null && !captures.isEmpty()) {
-                    captureId = captures.get(0).id();
-                }
-            }
-
+            PayPalOrderSnapshot order = capturePayPal(orderId);
             Map<String, Object> result = new HashMap<>();
             result.put("orderId", order.id());
             result.put("status", order.status());
-            result.put("captureId", captureId);
+            result.put("captureId", order.captureId());
             log.info("PayPal order captured: {} status: {}", order.id(), order.status());
             return result;
         } catch (IOException e) {
             log.error("PayPal capture order error: {}", e.getMessage());
             throw new RuntimeException("Failed to capture PayPal order: " + e.getMessage());
         }
+    }
+
+    /** What we need from a PayPal order; the capture fields are set once it has been captured. */
+    public record PayPalOrderSnapshot(String id, String status, String currency, BigDecimal amount,
+                                         String captureId, String captureStatus) {}
+
+    /** The PayPal order with this id, or empty if PayPal has none (e.g. the id is a capture id). */
+    protected Optional<PayPalOrderSnapshot> findPayPalOrder(String paypalOrderId) {
+        if (!isPayPalConfigured()) {
+            throw new BadRequestException("PayPal is not configured.");
+        }
+        try {
+            return Optional.of(snapshot(paypalClient.execute(new OrdersGetRequest(paypalOrderId)).result()));
+        } catch (com.paypal.http.exceptions.HttpException e) {
+            if (e.statusCode() == 404) return Optional.empty();
+            log.error("PayPal error fetching order {}: {}", paypalOrderId, e.getMessage());
+            throw new BadRequestException("No se pudo verificar el pago con PayPal");
+        } catch (IOException e) {
+            log.error("PayPal error fetching order {}: {}", paypalOrderId, e.getMessage());
+            throw new BadRequestException("No se pudo verificar el pago con PayPal");
+        }
+    }
+
+    /** Captures an approved PayPal order; throws if PayPal refuses (e.g. the buyer's funding failed). */
+    protected PayPalOrderSnapshot capturePayPal(String paypalOrderId) throws IOException {
+        OrdersCaptureRequest request = new OrdersCaptureRequest(paypalOrderId);
+        request.prefer("return=representation");
+        return snapshot(paypalClient.execute(request).result());
+    }
+
+    private static PayPalOrderSnapshot snapshot(com.paypal.orders.Order order) {
+        String currency = null, captureId = null, captureStatus = null;
+        BigDecimal amount = null;
+        if (order.purchaseUnits() != null && !order.purchaseUnits().isEmpty()) {
+            PurchaseUnit unit = order.purchaseUnits().get(0);
+            if (unit.amountWithBreakdown() != null) {
+                currency = unit.amountWithBreakdown().currencyCode();
+                amount = new BigDecimal(unit.amountWithBreakdown().value());
+            }
+            if (unit.payments() != null && unit.payments().captures() != null && !unit.payments().captures().isEmpty()) {
+                com.paypal.orders.Capture capture = unit.payments().captures().get(0);
+                captureId = capture.id();
+                captureStatus = capture.status();
+                if (capture.amount() != null) {
+                    currency = capture.amount().currencyCode();
+                    amount = new BigDecimal(capture.amount().value());
+                }
+            }
+        }
+        return new PayPalOrderSnapshot(order.id(), order.status(), currency, amount, captureId, captureStatus);
     }
 }
