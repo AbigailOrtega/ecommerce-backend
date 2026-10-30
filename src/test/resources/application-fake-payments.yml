@@ -1,0 +1,4 @@
+# Used with the e2e profile by the Playwright suite (see FakePaymentService).
+app:
+  stripe:
+    public-key: pk_test_e2e_fake

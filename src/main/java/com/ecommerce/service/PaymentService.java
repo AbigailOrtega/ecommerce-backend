@@ -139,7 +139,7 @@ public class PaymentService {
         }
     }
 
-    private void verifyStripeIntentForOrder(String paymentIntentId, BigDecimal orderTotal) {
+    protected void verifyStripeIntentForOrder(String paymentIntentId, BigDecimal orderTotal) {
         if (!isStripeConfigured()) {
             throw new BadRequestException("Stripe is not configured.");
         }
@@ -166,7 +166,7 @@ public class PaymentService {
         }
     }
 
-    private void verifyPayPalCapture(String captureId, BigDecimal orderTotal) {
+    protected void verifyPayPalCapture(String captureId, BigDecimal orderTotal) {
         if (!isPayPalConfigured()) {
             throw new BadRequestException("PayPal is not configured.");
         }
