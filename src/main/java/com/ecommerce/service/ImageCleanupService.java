@@ -9,6 +9,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -24,14 +25,17 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class ImageCleanupService {
 
-    private static final List<String> REFERENCE_QUERIES = List.of(
-            "select count(p) from Product p where p.imageUrl = :url",
-            "select count(p) from Product p join p.images i where i = :url",
-            "select count(c) from ProductColor c join c.images i where i = :url",
-            "select count(c) from Category c where c.imageUrl = :url",
-            "select count(b) from PromoBanner b where b.imageUrl = :url",
-            "select count(s) from StoreImage s where s.url = :url",
-            "select count(s) from StoreInfo s where s.logoUrl = :url");
+    /** Every column that stores an image URL: alias, FROM clause and the selected URL expression. */
+    private record ImageColumn(String alias, String from, String url) {}
+
+    private static final List<ImageColumn> IMAGE_COLUMNS = List.of(
+            new ImageColumn("p", "Product p", "p.imageUrl"),
+            new ImageColumn("p", "Product p join p.images i", "i"),
+            new ImageColumn("c", "ProductColor c join c.images i", "i"),
+            new ImageColumn("c", "Category c", "c.imageUrl"),
+            new ImageColumn("b", "PromoBanner b", "b.imageUrl"),
+            new ImageColumn("s", "StoreImage s", "s.url"),
+            new ImageColumn("s", "StoreInfo s", "s.logoUrl"));
 
     private final CloudinaryService cloudinaryService;
 
@@ -75,7 +79,18 @@ public class ImageCleanupService {
     }
 
     boolean isReferenced(String url) {
-        return REFERENCE_QUERIES.stream().anyMatch(q ->
-                entityManager.createQuery(q, Long.class).setParameter("url", url).getSingleResult() > 0);
+        return IMAGE_COLUMNS.stream().anyMatch(col -> entityManager
+                .createQuery("select count(" + col.alias() + ") from " + col.from() + " where " + col.url() + " = :url", Long.class)
+                .setParameter("url", url).getSingleResult() > 0);
+    }
+
+    /** Every image URL used anywhere in the store. */
+    public Set<String> referencedUrls() {
+        Set<String> urls = new HashSet<>();
+        for (ImageColumn col : IMAGE_COLUMNS) {
+            entityManager.createQuery("select " + col.url() + " from " + col.from(), String.class)
+                    .getResultList().stream().filter(Objects::nonNull).forEach(urls::add);
+        }
+        return urls;
     }
 }

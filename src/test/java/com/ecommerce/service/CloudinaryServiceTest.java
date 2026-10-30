@@ -15,6 +15,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
@@ -189,6 +190,47 @@ class CloudinaryServiceTest {
         void delete_foreign() {
             cloudinaryService.delete("https://example.com/a.png");
             verifyNoInteractions(cloudinary);
+        }
+    }
+
+    @Nested
+    @DisplayName("listImages / deleteByPublicIds")
+    class AdminApi {
+
+        @Mock com.cloudinary.Api api;
+
+        @Test
+        @DisplayName("follows next_cursor across pages and reads public id and creation date")
+        void listImages_pages() throws Exception {
+            when(cloudinary.api()).thenReturn(api);
+            com.cloudinary.api.ApiResponse page1 = mock(com.cloudinary.api.ApiResponse.class);
+            com.cloudinary.api.ApiResponse page2 = mock(com.cloudinary.api.ApiResponse.class);
+            when(page1.getOrDefault(eq("resources"), any())).thenReturn(List.of(
+                    Map.of("public_id", "products/a", "created_at", "2026-01-01T00:00:00Z")));
+            when(page1.get("next_cursor")).thenReturn("c2");
+            when(page2.getOrDefault(eq("resources"), any())).thenReturn(List.of(
+                    Map.of("public_id", "products/b", "created_at", "2026-02-01T00:00:00Z")));
+            when(page2.get("next_cursor")).thenReturn(null);
+            when(api.resources(argThat(m -> m != null && !m.containsKey("next_cursor")))).thenReturn(page1);
+            when(api.resources(argThat(m -> m != null && "c2".equals(m.get("next_cursor"))))).thenReturn(page2);
+
+            List<CloudinaryService.StoredImage> images = cloudinaryService.listImages("products");
+
+            assertThat(images).extracting(CloudinaryService.StoredImage::publicId).containsExactly("products/a", "products/b");
+            assertThat(images.get(1).createdAt()).isEqualTo(java.time.Instant.parse("2026-02-01T00:00:00Z"));
+        }
+
+        @Test
+        @DisplayName("deletes in batches of 100")
+        void deleteByPublicIds_batches() throws Exception {
+            when(cloudinary.api()).thenReturn(api);
+            List<String> ids = java.util.stream.IntStream.range(0, 250).mapToObj(i -> "products/" + i).toList();
+
+            cloudinaryService.deleteByPublicIds(ids);
+
+            verify(api).deleteResources(eq(ids.subList(0, 100)), any(Map.class));
+            verify(api).deleteResources(eq(ids.subList(100, 200)), any(Map.class));
+            verify(api).deleteResources(eq(ids.subList(200, 250)), any(Map.class));
         }
     }
 }

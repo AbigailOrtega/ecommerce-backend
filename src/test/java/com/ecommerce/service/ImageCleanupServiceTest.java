@@ -54,6 +54,8 @@ class ImageCleanupServiceTest {
             assertThat(cleanup.isReferenced(url)).as(url).isTrue();
         }
         assertThat(cleanup.isReferenced("u-unused")).isFalse();
+        assertThat(cleanup.referencedUrls()).containsExactlyInAnyOrder(
+                "u-main", "u-gallery", "u-color", "u-category", "u-banner", "u-store", "u-logo");
     }
 
     @Test

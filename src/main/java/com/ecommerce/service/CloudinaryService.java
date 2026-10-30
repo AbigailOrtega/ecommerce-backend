@@ -16,7 +16,10 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -120,8 +123,36 @@ public class CloudinaryService {
         });
     }
 
+    public record StoredImage(String publicId, Instant createdAt) {}
+
+    /** Every image stored under {@code folder} (Cloudinary Admin API, 500 per page). */
+    public List<StoredImage> listImages(String folder) throws Exception {
+        List<StoredImage> images = new ArrayList<>();
+        String cursor = null;
+        do {
+            Map<String, Object> options = new HashMap<>(ObjectUtils.asMap(
+                    "type", "upload", "resource_type", "image", "prefix", folder + "/", "max_results", 500));
+            if (cursor != null) options.put("next_cursor", cursor);
+            Map response = cloudinary.api().resources(options);
+            for (Object o : (List<?>) response.getOrDefault("resources", List.of())) {
+                Map<?, ?> r = (Map<?, ?>) o;
+                images.add(new StoredImage((String) r.get("public_id"), Instant.parse((String) r.get("created_at"))));
+            }
+            cursor = (String) response.get("next_cursor");
+        } while (cursor != null);
+        return images;
+    }
+
+    /** Deletes by public id, 100 per request (the Admin API limit). */
+    public void deleteByPublicIds(List<String> publicIds) throws Exception {
+        for (int i = 0; i < publicIds.size(); i += 100) {
+            List<String> chunk = publicIds.subList(i, Math.min(i + 100, publicIds.size()));
+            cloudinary.api().deleteResources(chunk, ObjectUtils.asMap("resource_type", "image", "invalidate", true));
+        }
+    }
+
     /** "https://res.cloudinary.com/{cloud}/image/upload/v123/products/abc.webp" → "products/abc". */
-    Optional<String> publicIdOf(String url) {
+    public Optional<String> publicIdOf(String url) {
         if (url == null || cloudName == null || cloudName.isBlank()) return Optional.empty();
         String prefix = "https://res.cloudinary.com/" + cloudName + "/image/upload/";
         if (!url.startsWith(prefix)) return Optional.empty();

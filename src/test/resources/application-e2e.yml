@@ -25,6 +25,8 @@ app:
     client-id: ""
     client-secret: ""
   cloudinary:
+    cleanup:
+      enabled: false
     cloud-name: test
     api-key: test
     api-secret: test
