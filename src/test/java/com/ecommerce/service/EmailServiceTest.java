@@ -31,6 +31,7 @@ class EmailServiceTest {
 
     @Mock JavaMailSender mailSender;
     @Mock TemplateEngine templateEngine;
+    @Mock ResendClient resendClient;
     @InjectMocks EmailService emailService;
 
     private User testUser;
@@ -308,6 +309,52 @@ class EmailServiceTest {
 
             assertThatNoException().isThrownBy(() ->
                     emailService.sendOrderConfirmationEmail(testUser, order));
+        }
+    }
+
+    // ─── Resend transport ─────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("when RESEND_API_KEY is configured")
+    class WithResend {
+
+        @BeforeEach
+        void enableResend() {
+            when(resendClient.isConfigured()).thenReturn(true);
+        }
+
+        @Test
+        @DisplayName("sends through Resend and never opens an SMTP connection")
+        void sendsThroughResend() {
+            emailService.sendPasswordResetEmail("ana@example.com", "Ana", "tok");
+
+            verify(resendClient).send(eq("tienda@gmail.com"), eq("ana@example.com"),
+                    anyString(), eq("<html>ok</html>"), isNull());
+            verifyNoInteractions(mailSender);
+        }
+
+        @Test
+        @DisplayName("passes the marketing image as an inline cid:promoImage attachment")
+        void marketingImageIsInline() {
+            byte[] img = {1, 2, 3};
+            emailService.sendMarketingEmailBulk(java.util.List.of(testUser), "Promo", "Hola", img, "image/png");
+
+            ArgumentCaptor<ResendClient.InlineImage> captor = ArgumentCaptor.forClass(ResendClient.InlineImage.class);
+            verify(resendClient).send(eq("tienda@gmail.com"), eq("ana@example.com"), eq("Promo"),
+                    anyString(), captor.capture());
+            assertThat(captor.getValue().contentId()).isEqualTo("promoImage");
+            assertThat(captor.getValue().bytes()).isEqualTo(img);
+            assertThat(captor.getValue().contentType()).isEqualTo("image/png");
+        }
+
+        @Test
+        @DisplayName("sendTestEmail surfaces the Resend error to the admin")
+        void testEmailPropagatesResendError() {
+            doThrow(new org.springframework.mail.MailSendException("Resend rejected the email (403): domain not verified"))
+                    .when(resendClient).send(anyString(), anyString(), anyString(), anyString(), any());
+
+            assertThatThrownBy(() -> emailService.sendTestEmail("ana@example.com"))
+                    .hasMessageContaining("domain not verified");
         }
     }
 }

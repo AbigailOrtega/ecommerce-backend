@@ -22,6 +22,7 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
+    private final ResendClient resendClient;
 
     @Value("${app.mail.from:${spring.mail.username:noreply@ecommerce.com}}")
     private String fromEmail;
@@ -229,19 +230,11 @@ public class EmailService {
 
                 String html = templateEngine.process("email/marketing", context);
 
-                MimeMessage message = mailSender.createMimeMessage();
-                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-                helper.setFrom(fromEmail);
-                helper.setTo(user.getEmail());
-                helper.setSubject(subject);
-                helper.setText(html, true);
-
-                if (imageBytes != null && imageBytes.length > 0) {
-                    helper.addInline("promoImage",
-                            new org.springframework.core.io.ByteArrayResource(imageBytes),
-                            imageContentType != null ? imageContentType : "image/jpeg");
-                }
-                mailSender.send(message);
+                ResendClient.InlineImage image = imageBytes != null && imageBytes.length > 0
+                        ? new ResendClient.InlineImage("promoImage", imageBytes,
+                                imageContentType != null ? imageContentType : "image/jpeg")
+                        : null;
+                sendEmail(user.getEmail(), subject, html, image);
                 sent++;
             } catch (Exception e) {
                 log.error("Failed to send marketing email to: {}", user.getEmail(), e);
@@ -251,7 +244,7 @@ public class EmailService {
     }
 
     /**
-     * Synchronous (no @Async), no try/catch — lets the real SMTP error propagate
+     * Synchronous (no @Async), no try/catch — lets the real SMTP/Resend error propagate
      * to the caller so the admin can see exactly what went wrong.
      */
     public void sendTestEmail(String toEmail) throws MessagingException {
@@ -266,12 +259,27 @@ public class EmailService {
     }
 
     private void sendEmail(String to, String subject, String htmlContent) throws MessagingException {
+        sendEmail(to, subject, htmlContent, null);
+    }
+
+    // Resend (HTTPS) when RESEND_API_KEY is set, because Render's free plan blocks SMTP; SMTP otherwise.
+    private void sendEmail(String to, String subject, String htmlContent,
+                           ResendClient.InlineImage inlineImage) throws MessagingException {
+        if (resendClient.isConfigured()) {
+            resendClient.send(fromEmail, to, subject, htmlContent, inlineImage);
+            return;
+        }
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
         helper.setFrom(fromEmail);
         helper.setTo(to);
         helper.setSubject(subject);
         helper.setText(htmlContent, true);
+        if (inlineImage != null) {
+            helper.addInline(inlineImage.contentId(),
+                    new org.springframework.core.io.ByteArrayResource(inlineImage.bytes()),
+                    inlineImage.contentType());
+        }
         mailSender.send(message);
     }
 
