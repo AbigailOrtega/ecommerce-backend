@@ -148,7 +148,7 @@ class ReviewServiceTest {
 
             assertThatThrownBy(() -> reviewService.createReview("ghost@example.com", 1L, validRequest()))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("email");
+                    .hasMessage("Usuario no encontrado");
 
             verify(reviewRepository, never()).save(any());
         }
@@ -161,7 +161,7 @@ class ReviewServiceTest {
 
             assertThatThrownBy(() -> reviewService.createReview("jane@example.com", 999L, validRequest()))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("id");
+                    .hasMessage("Producto no encontrado");
 
             verify(reviewRepository, never()).save(any());
         }
@@ -176,7 +176,7 @@ class ReviewServiceTest {
 
             assertThatThrownBy(() -> reviewService.createReview("jane@example.com", 1L, validRequest()))
                     .isInstanceOf(AccessDeniedException.class)
-                    .hasMessageContaining("purchased");
+                    .hasMessageContaining("compraste y recibiste");
 
             verify(reviewRepository, never()).save(any());
         }
@@ -217,7 +217,7 @@ class ReviewServiceTest {
 
             assertThatThrownBy(() -> reviewService.createReview("jane@example.com", 1L, validRequest()))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("already reviewed");
+                    .hasMessageContaining("Ya dejaste una reseña");
 
             verify(reviewRepository, never()).save(any());
         }
@@ -503,7 +503,7 @@ class ReviewServiceTest {
 
             assertThatThrownBy(() -> reviewService.approveReview(999L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Review");
+                    .hasMessage("Reseña no encontrada");
 
             verify(reviewRepository, never()).save(any());
         }
@@ -589,7 +589,7 @@ class ReviewServiceTest {
 
             assertThatThrownBy(() -> reviewService.deleteReview("other@example.com", 200L))
                     .isInstanceOf(AccessDeniedException.class)
-                    .hasMessageContaining("not allowed");
+                    .hasMessageContaining("No puedes eliminar esta reseña");
 
             verify(reviewRepository, never()).delete(any());
         }
@@ -601,7 +601,7 @@ class ReviewServiceTest {
 
             assertThatThrownBy(() -> reviewService.deleteReview("jane@example.com", 999L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Review");
+                    .hasMessage("Reseña no encontrada");
 
             verify(reviewRepository, never()).delete(any());
         }
@@ -614,7 +614,7 @@ class ReviewServiceTest {
 
             assertThatThrownBy(() -> reviewService.deleteReview("ghost@example.com", 200L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("email");
+                    .hasMessage("Usuario no encontrado");
 
             verify(reviewRepository, never()).delete(any());
         }

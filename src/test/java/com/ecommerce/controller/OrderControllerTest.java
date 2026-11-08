@@ -8,16 +8,18 @@ import com.ecommerce.exception.GlobalExceptionHandler;
 import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.security.JwtAuthFilter;
 import com.ecommerce.service.OrderService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration;
 import com.ecommerce.ratelimit.RateLimiter;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
@@ -37,7 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(
     value = OrderController.class,
     properties = "app.rate-limit.enabled=true",
-    excludeAutoConfiguration = {SecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class},
+    excludeAutoConfiguration = {SecurityAutoConfiguration.class, ServletWebSecurityAutoConfiguration.class,
+        SecurityFilterAutoConfiguration.class, UserDetailsServiceAutoConfiguration.class},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class),
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthFilter.class)
@@ -49,7 +52,7 @@ class OrderControllerTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
-    @MockBean OrderService orderService;
+    @MockitoBean OrderService orderService;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -142,7 +145,7 @@ class OrderControllerTest {
         @DisplayName("returns 400 when cart is empty")
         void createOrder_400_emptyCart() throws Exception {
             when(orderService.createOrder(anyString(), any()))
-                    .thenThrow(new BadRequestException("Cart is empty"));
+                    .thenThrow(new BadRequestException("Tu carrito está vacío"));
 
             mockMvc.perform(post("/api/orders")
                     .principal(mockAuth())
@@ -150,7 +153,7 @@ class OrderControllerTest {
                     .content(objectMapper.writeValueAsString(validOrderRequest())))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.success").value(false))
-                    .andExpect(jsonPath("$.message").value("Cart is empty"));
+                    .andExpect(jsonPath("$.message").value("Tu carrito está vacío"));
         }
 
         @Test
@@ -251,7 +254,7 @@ class OrderControllerTest {
         @DisplayName("returns 400 when order belongs to a different user")
         void getOrderByNumber_400_wrongUser() throws Exception {
             when(orderService.getOrderByNumber(eq("ORD-OTHER"), anyString()))
-                    .thenThrow(new BadRequestException("Order does not belong to user"));
+                    .thenThrow(new BadRequestException("Este pedido no pertenece a tu cuenta"));
 
             mockMvc.perform(get("/api/orders/ORD-OTHER")
                     .principal(mockAuth()))

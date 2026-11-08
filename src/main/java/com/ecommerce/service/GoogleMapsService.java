@@ -25,13 +25,13 @@ public class GoogleMapsService {
      */
     public double calculateDistanceKm(String origin, String destination, String apiKey) {
         if (apiKey == null || apiKey.isBlank()) {
-            throw new BadRequestException("Google Maps API key is not configured.");
+            throw new BadRequestException("No está configurada la llave de Google Maps.");
         }
         if (origin == null || origin.isBlank()) {
-            throw new BadRequestException("Origin address (store address) is not configured.");
+            throw new BadRequestException("No está configurada la dirección de la tienda.");
         }
 
-        String url = UriComponentsBuilder.fromHttpUrl(DISTANCE_MATRIX_URL)
+        String url = UriComponentsBuilder.fromUriString(DISTANCE_MATRIX_URL)
                 .queryParam("origins", origin)
                 .queryParam("destinations", destination)
                 .queryParam("mode", "driving")
@@ -44,37 +44,37 @@ public class GoogleMapsService {
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
 
             if (response == null) {
-                throw new BadRequestException("No response from Google Maps API.");
+                throw new BadRequestException("Google Maps no respondió.");
             }
 
             String status = (String) response.get("status");
             if (!"OK".equals(status)) {
-                throw new BadRequestException("Google Maps API error: " + status);
+                throw new BadRequestException("Error de Google Maps: " + status);
             }
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> rows = (List<Map<String, Object>>) response.get("rows");
             if (rows == null || rows.isEmpty()) {
-                throw new BadRequestException("No routes found.");
+                throw new BadRequestException("No se encontró una ruta.");
             }
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> elements =
                     (List<Map<String, Object>>) rows.get(0).get("elements");
             if (elements == null || elements.isEmpty()) {
-                throw new BadRequestException("No route elements found.");
+                throw new BadRequestException("No se encontró una ruta.");
             }
 
             Map<String, Object> element = elements.get(0);
             String elementStatus = (String) element.get("status");
             if (!"OK".equals(elementStatus)) {
-                throw new BadRequestException("Route calculation failed: " + elementStatus);
+                throw new BadRequestException("No se pudo calcular la ruta: " + elementStatus);
             }
 
             @SuppressWarnings("unchecked")
             Map<String, Object> distanceMap = (Map<String, Object>) element.get("distance");
             if (distanceMap == null) {
-                throw new BadRequestException("Distance data not available.");
+                throw new BadRequestException("No hay datos de distancia.");
             }
 
             Number meters = (Number) distanceMap.get("value");
@@ -84,7 +84,7 @@ public class GoogleMapsService {
             throw e;
         } catch (Exception e) {
             log.error("Error calling Google Maps Distance Matrix API", e);
-            throw new BadRequestException("Failed to calculate distance: " + e.getMessage());
+            throw new BadRequestException("No se pudo calcular la distancia: " + e.getMessage());
         }
     }
 }

@@ -283,8 +283,7 @@ class PromoBannerServiceTest {
 
             assertThatThrownBy(() -> promoBannerService.updateBanner(999L, request))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("PromoBanner")
-                    .hasMessageContaining("999");
+                    .hasMessage("Banner no encontrado");
 
             verify(promoBannerRepository, never()).save(any());
         }
@@ -352,8 +351,7 @@ class PromoBannerServiceTest {
 
             assertThatThrownBy(() -> promoBannerService.deleteBanner(999L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("PromoBanner")
-                    .hasMessageContaining("999");
+                    .hasMessage("Banner no encontrado");
 
             verify(promoBannerRepository, never()).delete(any());
         }
@@ -428,8 +426,7 @@ class PromoBannerServiceTest {
 
             assertThatThrownBy(() -> promoBannerService.toggleBanner(999L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("PromoBanner")
-                    .hasMessageContaining("999");
+                    .hasMessage("Banner no encontrado");
         }
 
         @Test

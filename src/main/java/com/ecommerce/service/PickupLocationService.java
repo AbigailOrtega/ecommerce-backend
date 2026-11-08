@@ -248,17 +248,17 @@ public class PickupLocationService {
     public PickupLocation findActiveById(Long id) {
         PickupLocation loc = findById(id);
         if (!loc.isActive()) {
-            throw new BadRequestException("Pickup location is not active.");
+            throw new BadRequestException("Este punto de recolección no está activo.");
         }
         return loc;
     }
 
     private void validateAvailabilityRequest(PickupAvailabilityRequest request) {
         if (request.type() == AvailabilityType.RECURRING && request.dayOfWeek() == null) {
-            throw new BadRequestException("dayOfWeek is required for RECURRING availability.");
+            throw new BadRequestException("Indica el día de la semana.");
         }
         if (request.type() == AvailabilityType.SPECIFIC_DATE && request.specificDate() == null) {
-            throw new BadRequestException("specificDate is required for SPECIFIC_DATE availability.");
+            throw new BadRequestException("Indica la fecha específica.");
         }
     }
 

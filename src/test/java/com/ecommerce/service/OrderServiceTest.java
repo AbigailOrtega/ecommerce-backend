@@ -149,7 +149,7 @@ class OrderServiceTest {
 
             assertThatThrownBy(() -> orderService.createOrder("ana@example.com", sampleRequest()))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Cart is empty");
+                    .hasMessage("Tu carrito está vacío");
             verify(orderRepository, never()).save(any());
         }
     }
@@ -359,7 +359,7 @@ class OrderServiceTest {
 
             assertThatThrownBy(() -> orderService.getOrderByNumber("ORD-XYZ", "ana@example.com"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Order does not belong to user");
+                    .hasMessage("Este pedido no pertenece a tu cuenta");
         }
     }
 }

@@ -27,7 +27,7 @@ public class CouponService {
     public CouponResponse createCoupon(CouponRequest request) {
         String code = request.code().toUpperCase().trim();
         if (couponRepository.findByCode(code).isPresent()) {
-            throw new BadRequestException("Coupon code already exists: " + code);
+            throw new BadRequestException("Ya existe un cupón con el código: " + code);
         }
         Coupon coupon = Coupon.builder()
                 .code(code)
@@ -44,7 +44,7 @@ public class CouponService {
         Coupon coupon = findById(id);
         String code = request.code().toUpperCase().trim();
         couponRepository.findByCode(code).ifPresent(existing -> {
-            if (!existing.getId().equals(id)) throw new BadRequestException("Code already used by another coupon");
+            if (!existing.getId().equals(id)) throw new BadRequestException("Ese código ya lo usa otro cupón");
         });
         coupon.setCode(code);
         coupon.setDiscountPercent(request.discountPercent());
@@ -68,16 +68,16 @@ public class CouponService {
     /** Called by users to validate a code before checkout. Returns coupon if valid. */
     public CouponResponse validateCoupon(String code) {
         Coupon coupon = couponRepository.findByCodeIgnoreCase(code.trim())
-                .orElseThrow(() -> new BadRequestException("Invalid coupon code"));
+                .orElseThrow(() -> new BadRequestException("Cupón inválido"));
 
         if (!coupon.isActive()) {
-            throw new BadRequestException("This coupon is no longer active");
+            throw new BadRequestException("Este cupón ya no está activo");
         }
         if (coupon.getExpiresAt().isBefore(LocalDate.now())) {
-            throw new BadRequestException("This coupon has expired");
+            throw new BadRequestException("Este cupón ya expiró");
         }
         if (coupon.getUsageLimit() != null && coupon.getUsageCount() >= coupon.getUsageLimit()) {
-            throw new BadRequestException("This coupon has reached its usage limit");
+            throw new BadRequestException("Este cupón ya alcanzó su límite de usos");
         }
         return mapToResponse(coupon);
     }
@@ -86,10 +86,10 @@ public class CouponService {
     @Transactional
     public Coupon consumeCoupon(String code) {
         Coupon coupon = couponRepository.findByCodeIgnoreCase(code.trim())
-                .orElseThrow(() -> new BadRequestException("Invalid coupon code"));
+                .orElseThrow(() -> new BadRequestException("Cupón inválido"));
         // Atomic so two concurrent orders can't both take the last use of a limited coupon
         if (couponRepository.incrementUsageIfAvailable(coupon.getId()) == 0) {
-            throw new BadRequestException("This coupon has reached its usage limit");
+            throw new BadRequestException("Este cupón ya alcanzó su límite de usos");
         }
         return coupon;
     }

@@ -223,7 +223,7 @@ class PickupLocationServiceTest {
 
             assertThatThrownBy(() -> pickupLocationService.update(999L, request))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("PickupLocation");
+                    .hasMessage("Punto de recolección no encontrado");
 
             verify(locationRepository, never()).save(any());
         }
@@ -400,8 +400,7 @@ class PickupLocationServiceTest {
 
             assertThatThrownBy(() -> pickupLocationService.findById(404L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("PickupLocation")
-                    .hasMessageContaining("404");
+                    .hasMessage("Punto de recolección no encontrado");
         }
 
         @Test
@@ -431,8 +430,7 @@ class PickupLocationServiceTest {
 
             assertThatThrownBy(() -> pickupLocationService.findById(7L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("id")
-                    .hasMessageContaining("7");
+                    .hasMessage("Punto de recolección no encontrado");
         }
     }
 
@@ -460,7 +458,7 @@ class PickupLocationServiceTest {
 
             assertThatThrownBy(() -> pickupLocationService.findActiveById(2L))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("not active");
+                    .hasMessageContaining("no está activo");
         }
 
         @Test
@@ -487,7 +485,7 @@ class PickupLocationServiceTest {
 
             assertThatThrownBy(() -> pickupLocationService.findActiveById(2L))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Pickup location is not active.");
+                    .hasMessage("Este punto de recolección no está activo.");
         }
     }
 }

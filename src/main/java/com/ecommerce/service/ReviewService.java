@@ -42,11 +42,11 @@ public class ReviewService {
                 .anyMatch(item -> item.getProduct() != null && item.getProduct().getId().equals(productId));
 
         if (!hasPurchased) {
-            throw new AccessDeniedException("You can only review products you have purchased and received.");
+            throw new AccessDeniedException("Solo puedes reseñar productos que compraste y recibiste.");
         }
 
         if (reviewRepository.existsByProductIdAndUserId(productId, user.getId())) {
-            throw new BadRequestException("You have already reviewed this product.");
+            throw new BadRequestException("Ya dejaste una reseña para este producto.");
         }
 
         Review review = Review.builder()
@@ -114,7 +114,7 @@ public class ReviewService {
         boolean isAdmin = user.getRole() == Role.ADMIN;
 
         if (!isOwner && !isAdmin) {
-            throw new AccessDeniedException("You are not allowed to delete this review.");
+            throw new AccessDeniedException("No puedes eliminar esta reseña.");
         }
         reviewRepository.delete(review);
     }

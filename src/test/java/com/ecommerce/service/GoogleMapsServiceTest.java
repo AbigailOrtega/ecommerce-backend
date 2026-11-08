@@ -87,7 +87,7 @@ class GoogleMapsServiceTest {
             assertThatThrownBy(() ->
                     googleMapsService.calculateDistanceKm(ORIGIN, DESTINATION, null))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Google Maps API key is not configured");
+                    .hasMessageContaining("No está configurada la llave de Google Maps");
 
             verifyNoInteractions(restTemplate);
         }
@@ -98,7 +98,7 @@ class GoogleMapsServiceTest {
             assertThatThrownBy(() ->
                     googleMapsService.calculateDistanceKm(ORIGIN, DESTINATION, "   "))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Google Maps API key is not configured");
+                    .hasMessageContaining("No está configurada la llave de Google Maps");
 
             verifyNoInteractions(restTemplate);
         }
@@ -109,7 +109,7 @@ class GoogleMapsServiceTest {
             assertThatThrownBy(() ->
                     googleMapsService.calculateDistanceKm(null, DESTINATION, API_KEY))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Origin address");
+                    .hasMessageContaining("dirección de la tienda");
 
             verifyNoInteractions(restTemplate);
         }
@@ -120,7 +120,7 @@ class GoogleMapsServiceTest {
             assertThatThrownBy(() ->
                     googleMapsService.calculateDistanceKm("", DESTINATION, API_KEY))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Origin address");
+                    .hasMessageContaining("dirección de la tienda");
 
             verifyNoInteractions(restTemplate);
         }
@@ -133,7 +133,7 @@ class GoogleMapsServiceTest {
             assertThatThrownBy(() ->
                     googleMapsService.calculateDistanceKm(ORIGIN, DESTINATION, API_KEY))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("No response from Google Maps API");
+                    .hasMessageContaining("Google Maps no respondió");
         }
 
         @Test
@@ -145,7 +145,7 @@ class GoogleMapsServiceTest {
             assertThatThrownBy(() ->
                     googleMapsService.calculateDistanceKm(ORIGIN, DESTINATION, API_KEY))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Google Maps API error: REQUEST_DENIED");
+                    .hasMessageContaining("Error de Google Maps: REQUEST_DENIED");
         }
 
         @Test
@@ -157,7 +157,7 @@ class GoogleMapsServiceTest {
             assertThatThrownBy(() ->
                     googleMapsService.calculateDistanceKm(ORIGIN, DESTINATION, API_KEY))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("No routes found.");
+                    .hasMessage("No se encontró una ruta.");
         }
 
         @Test
@@ -170,7 +170,7 @@ class GoogleMapsServiceTest {
             assertThatThrownBy(() ->
                     googleMapsService.calculateDistanceKm(ORIGIN, DESTINATION, API_KEY))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("No route elements found.");
+                    .hasMessage("No se encontró una ruta.");
         }
 
         @Test
@@ -184,7 +184,7 @@ class GoogleMapsServiceTest {
             assertThatThrownBy(() ->
                     googleMapsService.calculateDistanceKm(ORIGIN, DESTINATION, API_KEY))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Route calculation failed: ZERO_RESULTS");
+                    .hasMessageContaining("No se pudo calcular la ruta: ZERO_RESULTS");
         }
 
         @Test
@@ -198,7 +198,7 @@ class GoogleMapsServiceTest {
             assertThatThrownBy(() ->
                     googleMapsService.calculateDistanceKm(ORIGIN, DESTINATION, API_KEY))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Distance data not available.");
+                    .hasMessage("No hay datos de distancia.");
         }
 
         @Test
@@ -210,7 +210,7 @@ class GoogleMapsServiceTest {
             assertThatThrownBy(() ->
                     googleMapsService.calculateDistanceKm(ORIGIN, DESTINATION, API_KEY))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Failed to calculate distance");
+                    .hasMessageContaining("No se pudo calcular la distancia");
         }
 
         @Test

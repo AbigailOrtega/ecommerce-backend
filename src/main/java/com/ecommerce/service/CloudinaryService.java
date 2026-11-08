@@ -73,7 +73,7 @@ public class CloudinaryService {
 
     public String upload(MultipartFile file, String type) {
         if (!isConfigured()) {
-            throw new BadRequestException("Cloudinary is not configured.");
+            throw new BadRequestException("Cloudinary no está configurado.");
         }
         try {
             int maxWidth;

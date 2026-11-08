@@ -41,7 +41,7 @@ public class AuthService {
         log.debug("Checking if email already exists: {}", request.email());
         if (userRepository.existsByEmail(request.email())) {
             log.warn("Registration failed - email already registered: {}", request.email());
-            throw new DuplicateResourceException("Email already registered");
+            throw new DuplicateResourceException("Este correo ya está registrado");
         }
 
         log.debug("Creating new user with role CUSTOMER");
@@ -102,11 +102,11 @@ public class AuthService {
         Claims claims = Optional.ofNullable(refreshToken)
                 .flatMap(jwtTokenProvider::parseClaims)
                 .filter(jwtTokenProvider::isRefreshOrLegacyToken)
-                .orElseThrow(() -> new BadRequestException("Invalid refresh token"));
+                .orElseThrow(() -> new BadRequestException("Tu sesión expiró. Inicia sesión de nuevo."));
 
         User user = userRepository.findByEmail(claims.getSubject())
                 .filter(u -> jwtTokenProvider.isCurrentFor(claims, u))
-                .orElseThrow(() -> new BadRequestException("Invalid refresh token"));
+                .orElseThrow(() -> new BadRequestException("Tu sesión expiró. Inicia sesión de nuevo."));
 
         // Rotate: every refresh also issues a new refresh token, so active users never get logged out
         String newAccessToken = jwtTokenProvider.generateAccessToken(user);
@@ -121,7 +121,7 @@ public class AuthService {
 
     public UserResponse getCurrentUser(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BadRequestException("User not found"));
+                .orElseThrow(() -> new BadRequestException("Usuario no encontrado"));
         return mapToUserResponse(user);
     }
 
@@ -137,9 +137,9 @@ public class AuthService {
 
     public void resetPassword(String token, String newPassword) {
         User user = userRepository.findByResetToken(token)
-                .orElseThrow(() -> new BadRequestException("Invalid or expired token"));
+                .orElseThrow(() -> new BadRequestException("El enlace no es válido o ya expiró. Solicita uno nuevo."));
         if (!user.getResetTokenExpiry().isAfter(LocalDateTime.now())) {
-            throw new BadRequestException("Invalid or expired token");
+            throw new BadRequestException("El enlace no es válido o ya expiró. Solicita uno nuevo.");
         }
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setResetToken(null);

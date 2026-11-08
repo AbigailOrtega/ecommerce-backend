@@ -179,7 +179,7 @@ class PromotionServiceTest {
 
             assertThatThrownBy(() -> promotionService.createPromotion(validRequest))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("One or more products not found");
+                    .hasMessageContaining("Uno o más productos no existen");
 
             verify(promotionRepository, never()).save(any());
         }
@@ -276,8 +276,7 @@ class PromotionServiceTest {
 
             assertThatThrownBy(() -> promotionService.updatePromotion(999L, updateRequest))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Promotion")
-                    .hasMessageContaining("999");
+                    .hasMessage("Promoción no encontrada");
 
             verify(promotionRepository, never()).save(any());
         }
@@ -290,7 +289,7 @@ class PromotionServiceTest {
 
             assertThatThrownBy(() -> promotionService.updatePromotion(1L, updateRequest))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("One or more products not found");
+                    .hasMessageContaining("Uno o más productos no existen");
 
             verify(promotionRepository, never()).save(any());
         }
@@ -360,8 +359,7 @@ class PromotionServiceTest {
 
             assertThatThrownBy(() -> promotionService.deletePromotion(999L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Promotion")
-                    .hasMessageContaining("999");
+                    .hasMessage("Promoción no encontrada");
 
             verify(promotionRepository, never()).delete(any());
         }
@@ -437,8 +435,7 @@ class PromotionServiceTest {
 
             assertThatThrownBy(() -> promotionService.togglePromotion(999L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Promotion")
-                    .hasMessageContaining("999");
+                    .hasMessage("Promoción no encontrada");
         }
 
         @Test

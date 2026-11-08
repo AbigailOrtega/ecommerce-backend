@@ -60,7 +60,7 @@ public class OrderService {
         List<CartItem> cartItems = cartItemRepository.findByUserId(user.getId());
 
         if (cartItems.isEmpty()) {
-            throw new BadRequestException("Cart is empty");
+            throw new BadRequestException("Tu carrito está vacío");
         }
 
         Order order = Order.builder()
@@ -131,11 +131,11 @@ public class OrderService {
             if (request.shippingAddress() == null || request.shippingAddress().isBlank()
                     || request.shippingCity() == null || request.shippingCity().isBlank()
                     || request.shippingCountry() == null || request.shippingCountry().isBlank()) {
-                throw new BadRequestException("Shipping address fields are required for national shipping.");
+                throw new BadRequestException("Completa la dirección de envío.");
             }
             ShippingConfig cfg = shippingConfigService.getOrCreate();
             if (!cfg.isNationalEnabled()) {
-                throw new BadRequestException("National shipping is not available.");
+                throw new BadRequestException("El envío a domicilio no está disponible.");
             }
             BigDecimal cost;
             String methodName = "Envío Nacional";
@@ -185,11 +185,11 @@ public class OrderService {
 
         } else if ("PICKUP".equals(shippingType)) {
             if (request.pickupLocationId() == null) {
-                throw new BadRequestException("pickupLocationId is required for PICKUP shipping.");
+                throw new BadRequestException("Elige un punto de recolección.");
             }
             ShippingConfig cfg = shippingConfigService.getOrCreate();
             if (!cfg.isPickupEnabled()) {
-                throw new BadRequestException("Pick Up is not available.");
+                throw new BadRequestException("La recolección en tienda no está disponible.");
             }
             PickupLocation loc = pickupLocationService.findActiveById(request.pickupLocationId());
             order.setShippingCost(cfg.getPickupCost());
@@ -209,7 +209,7 @@ public class OrderService {
             applyPickupDate(order, loc.getId(), request.pickupDate(), request.pickupAvailabilityId());
 
         } else {
-            throw new BadRequestException("shippingType must be NATIONAL or PICKUP");
+            throw new BadRequestException("Tipo de envío inválido");
         }
 
         order.setTotalAmount(totalAmount);
@@ -304,11 +304,11 @@ public class OrderService {
             if (request.shippingAddress() == null || request.shippingAddress().isBlank()
                     || request.shippingCity() == null || request.shippingCity().isBlank()
                     || request.shippingCountry() == null || request.shippingCountry().isBlank()) {
-                throw new BadRequestException("Shipping address fields are required for national shipping.");
+                throw new BadRequestException("Completa la dirección de envío.");
             }
             ShippingConfig cfg = shippingConfigService.getOrCreate();
             if (!cfg.isNationalEnabled()) {
-                throw new BadRequestException("National shipping is not available.");
+                throw new BadRequestException("El envío a domicilio no está disponible.");
             }
             BigDecimal cost;
             String methodName = "Envío Nacional";
@@ -357,11 +357,11 @@ public class OrderService {
 
         } else if ("PICKUP".equals(shippingType)) {
             if (request.pickupLocationId() == null) {
-                throw new BadRequestException("pickupLocationId is required for PICKUP shipping.");
+                throw new BadRequestException("Elige un punto de recolección.");
             }
             ShippingConfig cfg = shippingConfigService.getOrCreate();
             if (!cfg.isPickupEnabled()) {
-                throw new BadRequestException("Pick Up is not available.");
+                throw new BadRequestException("La recolección en tienda no está disponible.");
             }
             PickupLocation loc = pickupLocationService.findActiveById(request.pickupLocationId());
             order.setShippingCost(cfg.getPickupCost());
@@ -381,7 +381,7 @@ public class OrderService {
             applyPickupDate(order, loc.getId(), request.pickupDate(), request.pickupAvailabilityId());
 
         } else {
-            throw new BadRequestException("shippingType must be NATIONAL or PICKUP");
+            throw new BadRequestException("Tipo de envío inválido");
         }
 
         order.setTotalAmount(totalAmount);
@@ -412,7 +412,7 @@ public class OrderService {
 
         User user = findUserByEmail(email);
         if (order.getUser() == null || !order.getUser().getId().equals(user.getId())) {
-            throw new BadRequestException("Order does not belong to user");
+            throw new BadRequestException("Este pedido no pertenece a tu cuenta");
         }
 
         return mapToResponse(order, false);

@@ -108,7 +108,7 @@ class CouponServiceTest {
 
             assertThatThrownBy(() -> couponService.createCoupon(request))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("already exists");
+                    .hasMessageContaining("Ya existe un cupón con el código");
 
             verify(couponRepository, never()).save(any());
         }
@@ -162,7 +162,7 @@ class CouponServiceTest {
 
             assertThatThrownBy(() -> couponService.updateCoupon(1L, request))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Code already used by another coupon");
+                    .hasMessage("Ese código ya lo usa otro cupón");
         }
 
         @Test
@@ -261,7 +261,7 @@ class CouponServiceTest {
 
             assertThatThrownBy(() -> couponService.validateCoupon("NOPE"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Invalid coupon code");
+                    .hasMessage("Cupón inválido");
         }
 
         @Test
@@ -272,7 +272,7 @@ class CouponServiceTest {
 
             assertThatThrownBy(() -> couponService.validateCoupon("SAVE10"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("This coupon is no longer active");
+                    .hasMessage("Este cupón ya no está activo");
         }
 
         @Test
@@ -283,7 +283,7 @@ class CouponServiceTest {
 
             assertThatThrownBy(() -> couponService.validateCoupon("SAVE10"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("This coupon has expired");
+                    .hasMessage("Este cupón ya expiró");
         }
 
         @Test
@@ -295,7 +295,7 @@ class CouponServiceTest {
 
             assertThatThrownBy(() -> couponService.validateCoupon("SAVE10"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("This coupon has reached its usage limit");
+                    .hasMessage("Este cupón ya alcanzó su límite de usos");
         }
 
         @Test
@@ -346,7 +346,7 @@ class CouponServiceTest {
 
             assertThatThrownBy(() -> couponService.consumeCoupon("SAVE10"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("usage limit");
+                    .hasMessageContaining("límite de usos");
         }
 
         @Test
@@ -356,7 +356,7 @@ class CouponServiceTest {
 
             assertThatThrownBy(() -> couponService.consumeCoupon("GHOST"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Invalid coupon code");
+                    .hasMessage("Cupón inválido");
         }
     }
 }

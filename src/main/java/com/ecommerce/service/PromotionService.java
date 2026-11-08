@@ -29,7 +29,7 @@ public class PromotionService {
     public PromotionResponse createPromotion(PromotionRequest request) {
         List<Product> products = productRepository.findAllById(request.productIds());
         if (products.size() != request.productIds().size()) {
-            throw new ResourceNotFoundException("One or more products not found");
+            throw new ResourceNotFoundException("Uno o más productos no existen");
         }
         Promotion promotion = Promotion.builder()
                 .name(request.name())
@@ -47,7 +47,7 @@ public class PromotionService {
         Promotion promotion = findById(id);
         List<Product> products = productRepository.findAllById(request.productIds());
         if (products.size() != request.productIds().size()) {
-            throw new ResourceNotFoundException("One or more products not found");
+            throw new ResourceNotFoundException("Uno o más productos no existen");
         }
         promotion.setName(request.name());
         promotion.setDiscountPercent(request.discountPercent());

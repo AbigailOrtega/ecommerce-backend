@@ -109,7 +109,7 @@ class CloudinaryServiceTest {
 
             assertThatThrownBy(() -> cloudinaryService.upload(multipartFile, "product"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Cloudinary is not configured.");
+                    .hasMessage("Cloudinary no está configurado.");
 
             verifyNoInteractions(multipartFile);
         }

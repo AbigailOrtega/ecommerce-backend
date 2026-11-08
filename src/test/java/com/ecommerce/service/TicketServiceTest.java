@@ -127,7 +127,7 @@ class TicketServiceTest {
 
             assertThatThrownBy(() -> ticketService.createTicket("ghost@example.com", "ORD-ABC123", validRequest()))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("email");
+                    .hasMessage("Usuario no encontrado");
 
             verify(ticketRepository, never()).save(any());
         }
@@ -140,7 +140,7 @@ class TicketServiceTest {
 
             assertThatThrownBy(() -> ticketService.createTicket("jane@example.com", "ORD-GHOST", validRequest()))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("orderNumber");
+                    .hasMessage("Pedido no encontrado");
 
             verify(ticketRepository, never()).save(any());
         }
@@ -158,7 +158,7 @@ class TicketServiceTest {
 
             assertThatThrownBy(() -> ticketService.createTicket("other@example.com", "ORD-ABC123", validRequest()))
                     .isInstanceOf(AccessDeniedException.class)
-                    .hasMessageContaining("belong");
+                    .hasMessageContaining("no pertenece a tu cuenta");
 
             verify(ticketRepository, never()).save(any());
         }
@@ -172,7 +172,7 @@ class TicketServiceTest {
 
             assertThatThrownBy(() -> ticketService.createTicket("jane@example.com", "ORD-ABC123", validRequest()))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("delivered orders");
+                    .hasMessageContaining("pedidos entregados");
 
             verify(ticketRepository, never()).save(any());
         }
@@ -186,7 +186,7 @@ class TicketServiceTest {
 
             assertThatThrownBy(() -> ticketService.createTicket("jane@example.com", "ORD-ABC123", validRequest()))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("already submitted");
+                    .hasMessageContaining("Ya enviaste un reporte");
 
             verify(ticketRepository, never()).save(any());
         }
@@ -265,7 +265,7 @@ class TicketServiceTest {
 
             assertThatThrownBy(() -> ticketService.getUserTickets("ghost@example.com"))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("email");
+                    .hasMessage("Usuario no encontrado");
 
             verify(ticketRepository, never()).findByUserIdOrderByCreatedAtDesc(any());
         }
@@ -342,7 +342,7 @@ class TicketServiceTest {
 
             assertThatThrownBy(() -> ticketService.getTicketById("other@example.com", 300L))
                     .isInstanceOf(AccessDeniedException.class)
-                    .hasMessageContaining("Access denied");
+                    .hasMessageContaining("No tienes permiso para hacer esto");
         }
 
         @Test
@@ -352,7 +352,7 @@ class TicketServiceTest {
 
             assertThatThrownBy(() -> ticketService.getTicketById("jane@example.com", 999L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Ticket");
+                    .hasMessage("Ticket no encontrado");
         }
 
         @Test
@@ -363,7 +363,7 @@ class TicketServiceTest {
 
             assertThatThrownBy(() -> ticketService.getTicketById("ghost@example.com", 300L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("email");
+                    .hasMessage("Usuario no encontrado");
         }
     }
 
@@ -482,7 +482,7 @@ class TicketServiceTest {
 
             assertThatThrownBy(() -> ticketService.updateTicket(999L, request))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Ticket");
+                    .hasMessage("Ticket no encontrado");
 
             verify(ticketRepository, never()).save(any());
         }

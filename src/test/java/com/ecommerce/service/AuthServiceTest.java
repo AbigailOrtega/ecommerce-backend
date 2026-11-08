@@ -92,7 +92,7 @@ class AuthServiceTest {
 
             assertThatThrownBy(() -> authService.register(request))
                     .isInstanceOf(DuplicateResourceException.class)
-                    .hasMessageContaining("Email already registered");
+                    .hasMessageContaining("Este correo ya está registrado");
             verify(userRepository, never()).save(any());
         }
     }
@@ -181,7 +181,7 @@ class AuthServiceTest {
 
             assertThatThrownBy(() -> authService.resetPassword("bad-token", "newPass123"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Invalid or expired token");
+                    .hasMessage("El enlace no es válido o ya expiró. Solicita uno nuevo.");
         }
 
         @Test
@@ -193,7 +193,7 @@ class AuthServiceTest {
 
             assertThatThrownBy(() -> authService.resetPassword("expired-token", "newPass123"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Invalid or expired token");
+                    .hasMessage("El enlace no es válido o ya expiró. Solicita uno nuevo.");
             verify(userRepository, never()).save(any());
         }
     }
@@ -238,7 +238,7 @@ class AuthServiceTest {
 
             assertThatThrownBy(() -> authService.refreshToken(access))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Invalid refresh token");
+                    .hasMessage("Tu sesión expiró. Inicia sesión de nuevo.");
         }
 
         @Test
@@ -249,7 +249,7 @@ class AuthServiceTest {
 
             assertThatThrownBy(() -> authService.refreshToken(refresh))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Invalid refresh token");
+                    .hasMessage("Tu sesión expiró. Inicia sesión de nuevo.");
         }
 
         @Test
@@ -257,7 +257,7 @@ class AuthServiceTest {
         void refreshToken_invalid() {
             assertThatThrownBy(() -> authService.refreshToken("bad"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Invalid refresh token");
+                    .hasMessage("Tu sesión expiró. Inicia sesión de nuevo.");
             assertThatThrownBy(() -> authService.refreshToken(null))
                     .isInstanceOf(BadRequestException.class);
         }

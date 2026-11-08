@@ -31,13 +31,13 @@ public class TicketService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
 
         if (!order.getUser().getId().equals(user.getId())) {
-            throw new AccessDeniedException("This order does not belong to you.");
+            throw new AccessDeniedException("Este pedido no pertenece a tu cuenta.");
         }
         if (order.getStatus() != OrderStatus.DELIVERED) {
-            throw new BadRequestException("You can only report a problem on delivered orders.");
+            throw new BadRequestException("Solo puedes reportar un problema en pedidos entregados.");
         }
         if (ticketRepository.existsByOrderIdAndUserId(order.getId(), user.getId())) {
-            throw new BadRequestException("You have already submitted a ticket for this order.");
+            throw new BadRequestException("Ya enviaste un reporte para este pedido.");
         }
 
         Ticket ticket = Ticket.builder()
@@ -63,7 +63,7 @@ public class TicketService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
         boolean isOwner = ticket.getUser().getId().equals(user.getId());
         boolean isAdmin = user.getRole() == Role.ADMIN;
-        if (!isOwner && !isAdmin) throw new AccessDeniedException("Access denied.");
+        if (!isOwner && !isAdmin) throw new AccessDeniedException("No tienes permiso para hacer esto.");
         return mapToResponse(ticket);
     }
 

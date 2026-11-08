@@ -1,12 +1,14 @@
 package com.ecommerce.controller;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.*;
+import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -23,11 +25,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       ORD-E2E-PKUP (CONFIRMED) → contains Test Sneakers (slug: test-sneakers)
  *   - ReviewService.createReview checks for OrderStatus.DELIVERED orders only.
  *     Because neither seeded order is DELIVERED, POST /api/products/{id}/reviews
- *     will return 403 ("You can only review products you have purchased and received.").
+ *     will return 403 ("Solo puedes reseñar productos que compraste y recibiste.").
  *     The test captures a reviewId only when the server responds with 200 and skips
  *     delete/approve steps that depend on it via Assumptions.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 @ActiveProfiles("e2e")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)

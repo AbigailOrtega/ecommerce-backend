@@ -9,15 +9,17 @@ import com.ecommerce.exception.GlobalExceptionHandler;
 import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.security.JwtAuthFilter;
 import com.ecommerce.service.TicketService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
@@ -37,7 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(
     value = TicketController.class,
-    excludeAutoConfiguration = {SecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class},
+    excludeAutoConfiguration = {SecurityAutoConfiguration.class, ServletWebSecurityAutoConfiguration.class,
+        SecurityFilterAutoConfiguration.class, UserDetailsServiceAutoConfiguration.class},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class),
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthFilter.class)
@@ -49,7 +52,7 @@ class TicketControllerTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
-    @MockBean TicketService ticketService;
+    @MockitoBean TicketService ticketService;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -174,7 +177,7 @@ class TicketControllerTest {
         void createTicket_403_notOwner() throws Exception {
             TicketRequest req = new TicketRequest("Problem", "Not my order.");
             when(ticketService.createTicket(anyString(), eq("ORD-OTHER"), any()))
-                    .thenThrow(new AccessDeniedException("This order does not belong to you."));
+                    .thenThrow(new AccessDeniedException("Este pedido no pertenece a tu cuenta."));
 
             mockMvc.perform(post("/api/orders/ORD-OTHER/tickets")
                     .principal(customerAuth())
@@ -189,7 +192,7 @@ class TicketControllerTest {
         void createTicket_400_orderNotDelivered() throws Exception {
             TicketRequest req = new TicketRequest("Where is it?", "Still in transit.");
             when(ticketService.createTicket(anyString(), eq("ORD-2025-001"), any()))
-                    .thenThrow(new BadRequestException("You can only report a problem on delivered orders."));
+                    .thenThrow(new BadRequestException("Solo puedes reportar un problema en pedidos entregados."));
 
             mockMvc.perform(post("/api/orders/ORD-2025-001/tickets")
                     .principal(customerAuth())
@@ -204,7 +207,7 @@ class TicketControllerTest {
         void createTicket_400_alreadyExists() throws Exception {
             TicketRequest req = new TicketRequest("Again", "Another one.");
             when(ticketService.createTicket(anyString(), eq("ORD-2025-001"), any()))
-                    .thenThrow(new BadRequestException("You have already submitted a ticket for this order."));
+                    .thenThrow(new BadRequestException("Ya enviaste un reporte para este pedido."));
 
             mockMvc.perform(post("/api/orders/ORD-2025-001/tickets")
                     .principal(customerAuth())
@@ -308,7 +311,7 @@ class TicketControllerTest {
         @DisplayName("returns 403 when a different user tries to access the ticket")
         void getTicket_403_notOwner() throws Exception {
             when(ticketService.getTicketById(anyString(), eq(1L)))
-                    .thenThrow(new AccessDeniedException("Access denied."));
+                    .thenThrow(new AccessDeniedException("Acceso denegado."));
 
             mockMvc.perform(get("/api/tickets/1")
                     .principal(customerAuth()))

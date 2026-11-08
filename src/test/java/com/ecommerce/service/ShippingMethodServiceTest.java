@@ -302,7 +302,7 @@ class ShippingMethodServiceTest {
 
             assertThatThrownBy(() -> shippingMethodService.update(999L, request))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("ShippingMethod");
+                    .hasMessage("Método de envío no encontrado");
 
             verify(repository, never()).save(any());
         }
@@ -436,7 +436,7 @@ class ShippingMethodServiceTest {
 
             assertThatThrownBy(() -> shippingMethodService.delete(999L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("ShippingMethod");
+                    .hasMessage("Método de envío no encontrado");
 
             verify(repository, never()).delete(any());
         }
@@ -496,8 +496,7 @@ class ShippingMethodServiceTest {
 
             assertThatThrownBy(() -> shippingMethodService.findById(404L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("ShippingMethod")
-                    .hasMessageContaining("404");
+                    .hasMessage("Método de envío no encontrado");
         }
 
         @Test
@@ -507,7 +506,7 @@ class ShippingMethodServiceTest {
 
             assertThatThrownBy(() -> shippingMethodService.findById(7L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("ShippingMethod");
+                    .hasMessage("Método de envío no encontrado");
         }
 
         @Test
