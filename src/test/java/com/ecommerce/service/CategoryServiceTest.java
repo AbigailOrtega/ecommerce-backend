@@ -144,9 +144,7 @@ class CategoryServiceTest {
 
             assertThatThrownBy(() -> categoryService.getCategoryById(99L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Category")
-                    .hasMessageContaining("id")
-                    .hasMessageContaining("99");
+                    .hasMessage("Categoría no encontrada");
         }
 
         @Test
@@ -317,8 +315,7 @@ class CategoryServiceTest {
             assertThatThrownBy(() ->
                     categoryService.updateCategory(999L, "X", null, null))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Category")
-                    .hasMessageContaining("999");
+                    .hasMessage("Categoría no encontrada");
 
             verify(categoryRepository, never()).save(any());
         }
@@ -362,8 +359,7 @@ class CategoryServiceTest {
 
             assertThatThrownBy(() -> categoryService.deleteCategory(999L))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Category")
-                    .hasMessageContaining("999");
+                    .hasMessage("Categoría no encontrada");
 
             verify(categoryRepository, never()).delete(any());
         }

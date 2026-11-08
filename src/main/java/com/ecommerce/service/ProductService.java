@@ -6,7 +6,9 @@ import com.ecommerce.dto.response.ProductColorResponse;
 import com.ecommerce.dto.response.ProductResponse;
 import com.ecommerce.dto.response.ProductSizeResponse;
 import com.ecommerce.entity.*;
+import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.exception.ResourceNotFoundException;
+import com.ecommerce.util.Slugs;
 import com.ecommerce.repository.CartItemRepository;
 import com.ecommerce.repository.CategoryRepository;
 import com.ecommerce.repository.ProductRepository;
@@ -67,12 +69,18 @@ public class ProductService {
 
     @Transactional
     public ProductResponse createProduct(ProductRequest request) {
+        String sku = normalizeSku(request.sku());
+        if (sku != null && productRepository.existsBySku(sku)) {
+            throw new BadRequestException("Ya existe un producto con el SKU " + sku);
+        }
         Product product = Product.builder()
                 .name(request.name())
+                // two products may share a name ("Cojín" in two collections); the slug gets -2, -3…
+                .slug(Slugs.unique(request.name(), productRepository::existsBySlug))
                 .description(request.description())
                 .price(request.price())
                 .compareAtPrice(request.compareAtPrice())
-                .sku(request.sku())
+                .sku(sku)
                 .stockQuantity(request.stockQuantity() != null ? request.stockQuantity() : 0)
                 .imageUrl(request.imageUrl())
                 .images(request.images() != null ? request.images() : List.of())
@@ -83,7 +91,7 @@ public class ProductService {
         if (request.categoryIds() != null && !request.categoryIds().isEmpty()) {
             List<Category> categories = categoryRepository.findAllById(request.categoryIds());
             if (categories.size() != request.categoryIds().size()) {
-                throw new ResourceNotFoundException("One or more categories not found");
+                throw new ResourceNotFoundException("Una o más categorías no existen");
             }
             product.setCategories(categories);
         }
@@ -91,6 +99,11 @@ public class ProductService {
         Product saved = productRepository.save(product);
         applyColors(saved, request);
         return mapToResponse(productRepository.save(saved));
+    }
+
+    /** A blank SKU is stored as null: the column is unique, and "" would clash with the next blank one. */
+    private static String normalizeSku(String sku) {
+        return sku == null || sku.isBlank() ? null : sku.trim();
     }
 
     @Transactional
@@ -102,7 +115,11 @@ public class ProductService {
         product.setDescription(request.description());
         product.setPrice(request.price());
         product.setCompareAtPrice(request.compareAtPrice());
-        product.setSku(request.sku());
+        String sku = normalizeSku(request.sku());
+        if (sku != null && productRepository.existsBySkuAndIdNot(sku, id)) {
+            throw new BadRequestException("Ya existe un producto con el SKU " + sku);
+        }
+        product.setSku(sku);
         if (request.stockQuantity() != null) product.setStockQuantity(request.stockQuantity());
         if (request.imageUrl() != null) product.setImageUrl(request.imageUrl());
         if (request.images() != null) product.setImages(request.images());
@@ -112,7 +129,7 @@ public class ProductService {
         if (request.categoryIds() != null) {
             List<Category> categories = categoryRepository.findAllById(request.categoryIds());
             if (categories.size() != request.categoryIds().size()) {
-                throw new ResourceNotFoundException("One or more categories not found");
+                throw new ResourceNotFoundException("Una o más categorías no existen");
             }
             product.setCategories(categories);
         }

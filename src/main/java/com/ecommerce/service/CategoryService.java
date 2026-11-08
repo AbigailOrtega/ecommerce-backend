@@ -1,5 +1,6 @@
 package com.ecommerce.service;
 
+import com.ecommerce.util.Slugs;
 import com.ecommerce.dto.response.CategoryResponse;
 import com.ecommerce.entity.Category;
 import com.ecommerce.exception.ResourceNotFoundException;
@@ -32,6 +33,7 @@ public class CategoryService {
     public CategoryResponse createCategory(String name, String description, String imageUrl) {
         Category category = Category.builder()
                 .name(name)
+                .slug(Slugs.unique(name, categoryRepository::existsBySlug))
                 .description(description)
                 .imageUrl(imageUrl)
                 .build();

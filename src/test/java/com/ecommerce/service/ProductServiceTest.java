@@ -247,7 +247,7 @@ class ProductServiceTest {
 
             assertThatThrownBy(() -> productService.getProductBySlug("unknown-slug"))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("slug");
+                    .hasMessage("Producto no encontrado");
         }
 
         @Test
@@ -534,7 +534,7 @@ class ProductServiceTest {
 
             assertThatThrownBy(() -> productService.createProduct(request))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("categories");
+                    .hasMessageContaining("categorías");
 
             verify(productRepository, never()).save(any());
         }

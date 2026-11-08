@@ -85,7 +85,7 @@ public class Product {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
         if (slug == null || slug.isBlank()) {
-            slug = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+            slug = com.ecommerce.util.Slugs.slugify(name);
         }
     }
 
