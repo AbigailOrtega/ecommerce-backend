@@ -281,10 +281,14 @@ class OrderControllerTest {
     @DisplayName("rate limits")
     class RateLimits {
 
-        private static final String GUEST_ORDER = """
-                {"guestFirstName":"Ana","guestLastName":"López","guestEmail":"ana@example.com",
-                 "items":[{"productId":1,"quantity":1}],"paymentMethod":"STRIPE","shippingType":"PICKUP"}
-                """;
+        private static final String GUEST_ORDER = guestOrder("ana@example.com");
+
+        private static String guestOrder(String email) {
+            return """
+                    {"guestFirstName":"Ana","guestLastName":"López","guestEmail":"%s",
+                     "items":[{"productId":1,"quantity":1}],"paymentMethod":"STRIPE","shippingType":"PICKUP"}
+                    """.formatted(email);
+        }
 
         @Test
         @DisplayName("guest orders: 429 after 10 per hour from the same IP; other IPs are unaffected")
@@ -298,8 +302,21 @@ class OrderControllerTest {
                             .contentType(MediaType.APPLICATION_JSON).content(GUEST_ORDER))
                     .andExpect(status().isTooManyRequests());
             mockMvc.perform(post("/api/orders/guest").header("X-Forwarded-For", "198.51.100.30")
-                            .contentType(MediaType.APPLICATION_JSON).content(GUEST_ORDER))
+                            .contentType(MediaType.APPLICATION_JSON).content(guestOrder("otra@example.com")))
                     .andExpect(status().isCreated());
+        }
+
+        @Test
+        @DisplayName("guest orders: 429 after 10 per hour with the same email, whatever the IP")
+        void guestOrder_429_perEmail() throws Exception {
+            for (int i = 0; i < 10; i++) {
+                mockMvc.perform(post("/api/orders/guest").header("X-Forwarded-For", "198.51.100." + i)
+                                .contentType(MediaType.APPLICATION_JSON).content(guestOrder("bot@example.com")))
+                        .andExpect(status().isCreated());
+            }
+            mockMvc.perform(post("/api/orders/guest").header("X-Forwarded-For", "198.51.100.99")
+                            .contentType(MediaType.APPLICATION_JSON).content(guestOrder("BOT@example.com")))
+                    .andExpect(status().isTooManyRequests());
         }
 
         @Test

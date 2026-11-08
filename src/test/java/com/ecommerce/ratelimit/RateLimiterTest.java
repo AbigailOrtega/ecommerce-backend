@@ -89,6 +89,17 @@ class RateLimiterTest {
     }
 
     @Test
+    @DisplayName("with per-IP limits off, IP rules pass and email rules still apply")
+    void perIpOff() {
+        ReflectionTestUtils.setField(limiter, "perIpEnabled", false);
+        for (int i = 0; i < 100; i++) limiter.consume(RateLimit.GUEST_ORDER_PER_IP, "3.3.3.3");
+
+        for (int i = 0; i < 3; i++) limiter.consume(RateLimit.FORGOT_PASSWORD_PER_EMAIL, "ana@example.com");
+        assertThatThrownBy(() -> limiter.consume(RateLimit.FORGOT_PASSWORD_PER_EMAIL, "ana@example.com"))
+                .isInstanceOf(TooManyRequestsException.class);
+    }
+
+    @Test
     @DisplayName("expired counters are evicted once there are many")
     void cleanup() {
         for (int i = 0; i < 10_000; i++) limiter.consume(RateLimit.TRACK_ORDER_PER_IP, "ip-" + i);

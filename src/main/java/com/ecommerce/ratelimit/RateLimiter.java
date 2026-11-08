@@ -30,6 +30,10 @@ public class RateLimiter {
     @Value("${app.rate-limit.enabled:true}")
     private boolean enabled = true;
 
+    /** Off until the header carrying the visitor's IP behind Vercel + Render is confirmed. */
+    @Value("${app.rate-limit.per-ip-enabled:true}")
+    private boolean perIpEnabled = true;
+
     @Autowired
     public RateLimiter() {
         this(Clock.systemUTC());
@@ -41,7 +45,7 @@ public class RateLimiter {
 
     /** Counts one request and rejects it once the limit for the current window is exceeded. */
     public void consume(RateLimit rule, String subject) {
-        if (!enabled) return;
+        if (!applies(rule)) return;
         Window w = windows.compute(key(rule, subject), (k, old) ->
                 isActive(old, rule) ? new Window(old.start(), old.count() + 1) : new Window(clock.instant(), 1));
         if (w.count() > rule.limit) reject(rule, subject, w);
@@ -50,14 +54,14 @@ public class RateLimiter {
 
     /** Rejects without counting when the subject already used up its attempts (e.g. failed logins). */
     public void checkNotBlocked(RateLimit rule, String subject) {
-        if (!enabled) return;
+        if (!applies(rule)) return;
         Window w = windows.get(key(rule, subject));
         if (isActive(w, rule) && w.count() >= rule.limit) reject(rule, subject, w);
     }
 
     /** Counts a failed attempt, to be checked later with {@link #checkNotBlocked}. */
     public void recordFailure(RateLimit rule, String subject) {
-        if (!enabled) return;
+        if (!applies(rule)) return;
         windows.compute(key(rule, subject), (k, old) ->
                 isActive(old, rule) ? new Window(old.start(), old.count() + 1) : new Window(clock.instant(), 1));
         cleanupIfLarge();
@@ -65,6 +69,10 @@ public class RateLimiter {
 
     public void reset(RateLimit rule, String subject) {
         windows.remove(key(rule, subject));
+    }
+
+    private boolean applies(RateLimit rule) {
+        return enabled && (perIpEnabled || !rule.perIp);
     }
 
     private boolean isActive(Window w, RateLimit rule) {

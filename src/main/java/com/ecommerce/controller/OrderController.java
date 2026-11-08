@@ -45,6 +45,7 @@ public class OrderController {
     public ResponseEntity<ApiResponse<OrderResponse>> createGuestOrder(@Valid @RequestBody GuestOrderRequest request,
                                                                        HttpServletRequest httpRequest) {
         rateLimiter.consume(RateLimit.GUEST_ORDER_PER_IP, ClientIp.of(httpRequest));
+        rateLimiter.consume(RateLimit.GUEST_ORDER_PER_EMAIL, request.guestEmail());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Order placed successfully", orderService.createGuestOrder(request)));
     }
