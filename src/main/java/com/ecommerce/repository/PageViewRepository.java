@@ -2,6 +2,7 @@ package com.ecommerce.repository;
 
 import com.ecommerce.entity.PageView;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,6 +14,11 @@ import java.util.List;
 public interface PageViewRepository extends JpaRepository<PageView, Long> {
 
     long countByTimestampBetween(LocalDateTime from, LocalDateTime to);
+
+    /** One bulk DELETE (no entity loading); returns how many rows went. */
+    @Modifying
+    @Query("DELETE FROM PageView p WHERE p.timestamp < :before")
+    int deleteOlderThan(@Param("before") LocalDateTime before);
 
     // Visits grouped by hour (0-23)
     @Query(value = "SELECT CAST(EXTRACT(HOUR FROM timestamp) AS int) AS label, COUNT(*) AS count " +
