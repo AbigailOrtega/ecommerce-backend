@@ -202,6 +202,10 @@ The Dockerfile uses a multi-stage build with `eclipse-temurin:21` (Alpine).
 | `PAYPAL_CLIENT_SECRET` | No | - | PayPal client secret |
 | `REFRESH_COOKIE_SECURE` | No | `true` | `false` only for local http; the refresh token cookie is otherwise https-only |
 | `DB_POOL_SIZE` | No | `8` | Max Postgres connections (prod) |
+| `DDL_AUTO` | No | `validate` | Hibernate schema mode in prod; Flyway owns the schema (`db/migration`) |
+| `APP_TIME_ZONE` | No | `America/Mexico_City` | Store time zone: coupon/promotion dates and every stored timestamp |
+| `RATE_LIMIT_ENABLED` | No | `true` | All rate limits (per email and per IP) |
+| `RATE_LIMIT_PER_IP_ENABLED` | No | `false` in prod | Per-IP limits; turn on once the client IP header behind Vercel + Render is confirmed |
 | `PAYPAL_MODE` | No | `sandbox` | `sandbox` or `live` |
 | `CLOUDINARY_CLOUD_NAME` | No | - | Cloudinary cloud name |
 | `CLOUDINARY_API_KEY` | No | - | Cloudinary API key |
@@ -244,3 +248,12 @@ java -jar target/ecommerce-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
 
 `GET /actuator/health` answers `{"status":"UP"}` (no details). Point Render's health check path and the
 Docker `HEALTHCHECK` at it.
+
+## Database migrations
+
+Flyway runs `src/main/resources/db/migration` on startup in the `prod` profile (PostgreSQL). A
+database created before Flyway is recorded as version 1 (`baseline-on-migrate`) and gets V2 onwards.
+Add a change as a new `V<n>__description.sql`; never edit one that already ran.
+`FlywayNewDatabaseIT` and `FlywayLegacyDatabaseIT` run the migrations on a real PostgreSQL
+(Testcontainers, needs Docker). Dev, e2e and the other tests use H2 with a Hibernate-built schema.
+
