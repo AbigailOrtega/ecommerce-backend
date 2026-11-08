@@ -30,6 +30,12 @@ spring:
           timeout: 5000
           writetimeout: 5000
 
+  jpa:
+    properties:
+      hibernate:
+        # loads lazy collections (product colors → sizes, order items…) in batches instead of one query each
+        default_batch_fetch_size: 50
+
 # JWT Configuration
 app:
   rate-limit:
@@ -39,6 +45,8 @@ app:
     secret: ${JWT_SECRET}
     access-token-expiration: 1800000     # 30 minutes in milliseconds (renewed silently with the refresh token)
     refresh-token-expiration: 7776000000 # 90 days in milliseconds
+    # the refresh token cookie is Secure (https only); local http profiles turn it off
+    refresh-cookie-secure: ${REFRESH_COOKIE_SECURE:true}
 
   # Stripe Configuration
   stripe:
@@ -78,6 +86,22 @@ app:
       banner-max-width: ${CLOUDINARY_BANNER_MAX_WIDTH:1920}
       banner-max-height: ${CLOUDINARY_BANNER_MAX_HEIGHT:600}
 
+# Only the health check is exposed (Render / Docker probe /actuator/health); no details to anonymous callers
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+  health:
+    # mail is optional (Resend over HTTPS in production); a slow SMTP server must not mark the app down
+    mail:
+      enabled: false
+
 # SpringDoc / Swagger
 springdoc:
   api-docs:
@@ -108,10 +132,6 @@ spring:
       settings:
         web-allow-others: false
 
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
-
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
@@ -120,6 +140,11 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+app:
+  jwt:
+    # plain http on localhost
+    refresh-cookie-secure: false
 
 logging:
   level:
@@ -146,10 +171,6 @@ spring:
     console:
       enabled: false
 
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
-
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
@@ -160,6 +181,11 @@ spring:
   mail:
     host: localhost
     port: 25
+
+app:
+  jwt:
+    # plain http on localhost
+    refresh-cookie-secure: false
 
 logging:
   level:
@@ -181,8 +207,9 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     hikari:
-      maximum-pool-size: 20
-      minimum-idle: 5
+      # one small instance: a few connections are plenty, and managed Postgres plans cap connections
+      maximum-pool-size: ${DB_POOL_SIZE:8}
+      minimum-idle: 2
       idle-timeout: 300000
       connection-timeout: 20000
       keepalive-time: 60000
@@ -191,10 +218,6 @@ spring:
   h2:
     console:
       enabled: false
-
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
 
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect

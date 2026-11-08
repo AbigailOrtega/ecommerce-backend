@@ -1,13 +1,13 @@
 # ShopHub Backend
 
-Spring Boot 3.2 REST API powering the ShopHub e-commerce platform.
+Spring Boot 4.1 REST API powering the ShopHub e-commerce platform.
 
 ## Tech Stack
 
 | Technology | Version | Purpose |
 |---|---|---|
 | Java | 21 | Language |
-| Spring Boot | 3.2.1 | Framework |
+| Spring Boot | 4.1.2 | Framework (Jackson 3, Spring Security 7, Hibernate 7) |
 | Spring Security | 6.x | Authentication & Authorization |
 | Spring Data JPA | 3.2.x | Data Access |
 | H2 | - | Development Database |
@@ -85,7 +85,7 @@ src/main/java/com/ecommerce/
 ### Run in Development Mode
 
 ```bash
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 
 This starts the API on `http://localhost:8080` with:
@@ -99,7 +99,7 @@ This starts the API on `http://localhost:8080` with:
 ### Run in Production Mode
 
 ```bash
-mvn spring-boot:run -Dspring-boot.run.profiles=prod
+./mvnw spring-boot:run -Dspring-boot.run.profiles=prod
 ```
 
 Requires a PostgreSQL database and environment variables (see [Configuration](#configuration)).
@@ -200,6 +200,8 @@ The Dockerfile uses a multi-stage build with `eclipse-temurin:21` (Alpine).
 | `STRIPE_WEBHOOK_SECRET` | No | - | Stripe webhook signing secret |
 | `PAYPAL_CLIENT_ID` | No | - | PayPal client ID |
 | `PAYPAL_CLIENT_SECRET` | No | - | PayPal client secret |
+| `REFRESH_COOKIE_SECURE` | No | `true` | `false` only for local http; the refresh token cookie is otherwise https-only |
+| `DB_POOL_SIZE` | No | `8` | Max Postgres connections (prod) |
 | `PAYPAL_MODE` | No | `sandbox` | `sandbox` or `live` |
 | `CLOUDINARY_CLOUD_NAME` | No | - | Cloudinary cloud name |
 | `CLOUDINARY_API_KEY` | No | - | Cloudinary API key |
@@ -219,7 +221,7 @@ The Dockerfile uses a multi-stage build with `eclipse-temurin:21` (Alpine).
 ## Running Tests
 
 ```bash
-mvn test
+./mvnw verify   # unit tests + *IT integration tests
 ```
 
 ## Deployment
@@ -234,6 +236,11 @@ mvn test
 ### Manual JAR
 
 ```bash
-mvn clean package -DskipTests
+./mvnw clean package -DskipTests
 java -jar target/ecommerce-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
 ```
+
+## Health check
+
+`GET /actuator/health` answers `{"status":"UP"}` (no details). Point Render's health check path and the
+Docker `HEALTHCHECK` at it.

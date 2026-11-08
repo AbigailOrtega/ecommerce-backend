@@ -1,8 +1,9 @@
 package com.ecommerce.entity;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 
@@ -13,14 +14,14 @@ import java.util.Map;
 @Converter
 public class AttributeMapConverter implements AttributeConverter<Map<String, List<String>>, String> {
 
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper mapper = JsonMapper.builder().build();
 
     @Override
     public String convertToDatabaseColumn(Map<String, List<String>> attribute) {
         if (attribute == null || attribute.isEmpty()) return null;
         try {
             return mapper.writeValueAsString(attribute);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             return null;
         }
     }
@@ -30,7 +31,7 @@ public class AttributeMapConverter implements AttributeConverter<Map<String, Lis
         if (dbData == null || dbData.isBlank()) return new HashMap<>();
         try {
             return mapper.readValue(dbData, new TypeReference<>() {});
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             return new HashMap<>();
         }
     }

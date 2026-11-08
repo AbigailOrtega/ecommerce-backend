@@ -5,8 +5,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -30,7 +30,7 @@ class ImageCleanupServiceTest {
     @Autowired ImageCleanupService cleanup;
     @Autowired EntityManager em;
     @Autowired PlatformTransactionManager txManager;
-    @MockBean CloudinaryService cloudinaryService;
+    @MockitoBean CloudinaryService cloudinaryService;
 
     private Product product(String mainImage, List<String> images) {
         Product p = Product.builder().name("P").price(BigDecimal.TEN).imageUrl(mainImage).images(new ArrayList<>(images)).build();
