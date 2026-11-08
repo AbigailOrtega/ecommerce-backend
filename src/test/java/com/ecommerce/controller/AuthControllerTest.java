@@ -9,16 +9,20 @@ import com.ecommerce.dto.response.AuthResponse;
 import com.ecommerce.dto.response.UserResponse;
 import com.ecommerce.ratelimit.RateLimiter;
 import com.ecommerce.security.JwtAuthFilter;
+import com.ecommerce.security.RefreshTokenCookie;
+import jakarta.servlet.http.Cookie;
 import com.ecommerce.service.AuthService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
@@ -26,6 +30,8 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -33,20 +39,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(
     value = AuthController.class,
-    properties = "app.rate-limit.enabled=true",
-    excludeAutoConfiguration = {SecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class},
+    properties = {"app.rate-limit.enabled=true", "app.jwt.refresh-token-expiration=7776000000",
+                  "app.jwt.refresh-cookie-secure=true"},
+    excludeAutoConfiguration = {SecurityAutoConfiguration.class, ServletWebSecurityAutoConfiguration.class,
+        SecurityFilterAutoConfiguration.class, UserDetailsServiceAutoConfiguration.class},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class),
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthFilter.class)
     }
 )
-@Import(RateLimiter.class)
+@Import({RateLimiter.class, RefreshTokenCookie.class})
 @DisplayName("AuthController")
 class AuthControllerTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
-    @MockBean AuthService authService;
+    @MockitoBean AuthService authService;
 
     private AuthResponse stubAuthResponse() {
         return AuthResponse.builder()
@@ -241,6 +249,91 @@ class AuthControllerTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{\"token\":\"tok\", \"newPassword\":\"short\"}"))
                     .andExpect(status().isBadRequest());
+        }
+    }
+
+    // ─── Refresh token cookie ─────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("refresh token cookie")
+    class RefreshCookie {
+
+        @Test
+        @DisplayName("login sets an HttpOnly, Secure, SameSite=Strict cookie and leaves the token out of the body")
+        void login_setsCookie() throws Exception {
+            when(authService.login(any())).thenReturn(stubAuthResponse());
+
+            mockMvc.perform(post("/api/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(new LoginRequest("ana@example.com", "password123"))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
+                    .andExpect(header().string("Set-Cookie", allOf(
+                            org.hamcrest.Matchers.startsWith("refresh_token=refresh-token;"),
+                            containsString("Path=/api/auth"),
+                            containsString("HttpOnly"),
+                            containsString("Secure"),
+                            containsString("SameSite=Strict"),
+                            containsString("Max-Age=7776000"))));
+        }
+
+        @Test
+        @DisplayName("register also sets the cookie")
+        void register_setsCookie() throws Exception {
+            when(authService.register(any())).thenReturn(stubAuthResponse());
+
+            mockMvc.perform(post("/api/auth/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(
+                            new RegisterRequest("Ana", "López", "ana@example.com", "password123", null, false))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
+                    .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.startsWith("refresh_token=refresh-token;")));
+        }
+
+        @Test
+        @DisplayName("refresh reads the token from the cookie and rotates it")
+        void refresh_fromCookie() throws Exception {
+            when(authService.refreshToken("from-cookie")).thenReturn(stubAuthResponse());
+
+            mockMvc.perform(post("/api/auth/refresh").cookie(new Cookie("refresh_token", "from-cookie")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.accessToken").value("access-token"))
+                    .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.startsWith("refresh_token=refresh-token;")));
+        }
+
+        @Test
+        @DisplayName("refresh accepts a token in the body from sessions opened before the cookie")
+        void refresh_legacyBody() throws Exception {
+            when(authService.refreshToken("from-body")).thenReturn(stubAuthResponse());
+
+            mockMvc.perform(post("/api/auth/refresh")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"refreshToken\":\"from-body\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.startsWith("refresh_token=refresh-token;")));
+        }
+
+        @Test
+        @DisplayName("the cookie wins over a token in the body")
+        void refresh_cookieWins() throws Exception {
+            when(authService.refreshToken("from-cookie")).thenReturn(stubAuthResponse());
+
+            mockMvc.perform(post("/api/auth/refresh")
+                    .cookie(new Cookie("refresh_token", "from-cookie"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"refreshToken\":\"from-body\"}"))
+                    .andExpect(status().isOk());
+            verify(authService).refreshToken("from-cookie");
+        }
+
+        @Test
+        @DisplayName("logout expires the cookie")
+        void logout_clearsCookie() throws Exception {
+            mockMvc.perform(post("/api/auth/logout"))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Set-Cookie", allOf(
+                            org.hamcrest.Matchers.startsWith("refresh_token=;"), containsString("Max-Age=0"), containsString("Path=/api/auth"))));
         }
     }
 }

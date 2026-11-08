@@ -10,6 +10,7 @@ import com.ecommerce.dto.response.UserResponse;
 import com.ecommerce.ratelimit.ClientIp;
 import com.ecommerce.ratelimit.RateLimit;
 import com.ecommerce.ratelimit.RateLimiter;
+import com.ecommerce.security.RefreshTokenCookie;
 import com.ecommerce.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,6 +18,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -34,6 +36,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final RateLimiter rateLimiter;
+    private final RefreshTokenCookie refreshTokenCookie;
 
     @PostMapping("/register")
     @Operation(summary = "Register a new user")
@@ -41,7 +44,9 @@ public class AuthController {
         log.info("Register request received for email: {}", request.email());
         AuthResponse response = authService.register(request);
         log.info("Registration successful for email: {}", request.email());
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Registration successful", response));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .header(HttpHeaders.SET_COOKIE, refreshTokenCookie.create(response.getRefreshToken()))
+                .body(ApiResponse.success("Registration successful", response));
     }
 
     @PostMapping("/login")
@@ -62,15 +67,30 @@ public class AuthController {
         }
         rateLimiter.reset(RateLimit.LOGIN_FAILURES_PER_EMAIL, request.email());
         log.info("Login successful for email: {}", request.email());
-        return ResponseEntity.ok(ApiResponse.success("Login successful", response));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshTokenCookie.create(response.getRefreshToken()))
+                .body(ApiResponse.success("Login successful", response));
     }
 
     @PostMapping("/refresh")
-    @Operation(summary = "Refresh access token")
-    public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(@RequestBody Map<String, String> request) {
-        String refreshToken = request.get("refreshToken");
+    @Operation(summary = "Refresh access token (refresh token read from the HttpOnly cookie)")
+    public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(@RequestBody(required = false) Map<String, String> request,
+                                                                  HttpServletRequest httpRequest) {
+        // The body is only read for sessions opened before the cookie existed (token kept in localStorage)
+        String refreshToken = refreshTokenCookie.read(httpRequest)
+                .orElse(request != null ? request.get("refreshToken") : null);
         AuthResponse response = authService.refreshToken(refreshToken);
-        return ResponseEntity.ok(ApiResponse.success(response));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshTokenCookie.create(response.getRefreshToken()))
+                .body(ApiResponse.success(response));
+    }
+
+    @PostMapping("/logout")
+    @Operation(summary = "Logout: removes the refresh token cookie")
+    public ResponseEntity<ApiResponse<Void>> logout() {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshTokenCookie.clear())
+                .body(ApiResponse.<Void>success("Sesión cerrada", null));
     }
 
     @PostMapping("/forgot-password")
