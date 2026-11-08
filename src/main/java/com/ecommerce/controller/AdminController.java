@@ -44,6 +44,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -205,13 +206,15 @@ public class AdminController {
     }
 
     @GetMapping("/users")
-    @Operation(summary = "Get all users")
-    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers() {
-        List<UserResponse> users = userRepository.findAll().stream()
-                .map(u -> new UserResponse(u.getId(), u.getFirstName(), u.getLastName(),
-                        u.getEmail(), u.getPhone(), u.getRole().name()))
-                .toList();
-        return ResponseEntity.ok(ApiResponse.success(users));
+    @Operation(summary = "Get users (paginated, newest first; q filters by name or email)")
+    public ResponseEntity<ApiResponse<Page<UserResponse>>> getAllUsers(
+            @RequestParam(required = false) String q,
+            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        Page<User> page = (q == null || q.isBlank())
+                ? userRepository.findAll(pageable)
+                : userRepository.search(q.trim(), pageable);
+        return ResponseEntity.ok(ApiResponse.success(page.map(u -> new UserResponse(u.getId(), u.getFirstName(),
+                u.getLastName(), u.getEmail(), u.getPhone(), u.getRole().name()))));
     }
 
     @GetMapping("/users/{id}")

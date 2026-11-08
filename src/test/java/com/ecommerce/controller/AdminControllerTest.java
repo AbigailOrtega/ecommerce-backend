@@ -46,15 +46,17 @@ import com.ecommerce.service.ReviewService;
 import com.ecommerce.service.ShippingConfigService;
 import com.ecommerce.service.SkydropxService;
 import com.ecommerce.service.TicketService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
@@ -76,8 +78,10 @@ import java.util.Optional;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -90,7 +94,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(
     value = AdminController.class,
-    excludeAutoConfiguration = {SecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class},
+    excludeAutoConfiguration = {SecurityAutoConfiguration.class, ServletWebSecurityAutoConfiguration.class,
+        SecurityFilterAutoConfiguration.class, UserDetailsServiceAutoConfiguration.class},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class),
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthFilter.class)
@@ -104,21 +109,21 @@ class AdminControllerTest {
     @Autowired ObjectMapper objectMapper;
 
     // ── All service / repository dependencies must be mocked ─────────────────
-    @MockBean AnalyticsService analyticsService;
-    @MockBean ReportService reportService;
-    @MockBean EmailService emailService;
-    @MockBean OrderService orderService;
-    @MockBean ProductService productService;
-    @MockBean PromotionService promotionService;
-    @MockBean PromoBannerService promoBannerService;
-    @MockBean CouponService couponService;
-    @MockBean ReviewService reviewService;
-    @MockBean TicketService ticketService;
-    @MockBean ShippingConfigService shippingConfigService;
-    @MockBean PickupLocationService pickupLocationService;
-    @MockBean SkydropxService skydropxService;
-    @MockBean OrderRepository orderRepository;
-    @MockBean UserRepository userRepository;
+    @MockitoBean AnalyticsService analyticsService;
+    @MockitoBean ReportService reportService;
+    @MockitoBean EmailService emailService;
+    @MockitoBean OrderService orderService;
+    @MockitoBean ProductService productService;
+    @MockitoBean PromotionService promotionService;
+    @MockitoBean PromoBannerService promoBannerService;
+    @MockitoBean CouponService couponService;
+    @MockitoBean ReviewService reviewService;
+    @MockitoBean TicketService ticketService;
+    @MockitoBean ShippingConfigService shippingConfigService;
+    @MockitoBean PickupLocationService pickupLocationService;
+    @MockitoBean SkydropxService skydropxService;
+    @MockitoBean OrderRepository orderRepository;
+    @MockitoBean UserRepository userRepository;
 
     // ── Stub helpers ─────────────────────────────────────────────────────────
 
@@ -314,25 +319,40 @@ class AdminControllerTest {
     class GetAllUsers {
 
         @Test
-        @DisplayName("returns 200 with list of users")
+        @DisplayName("returns 200 with a page of users")
         void getAllUsers_200() throws Exception {
-            when(userRepository.findAll()).thenReturn(List.of(stubUserEntity(1L), stubUserEntity(2L)));
+            when(userRepository.findAll(any(org.springframework.data.domain.Pageable.class)))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(stubUserEntity(1L), stubUserEntity(2L)), org.springframework.data.domain.PageRequest.of(0, 20), 2));
 
             mockMvc.perform(get("/api/admin/users"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
-                    .andExpect(jsonPath("$.data").isArray())
-                    .andExpect(jsonPath("$.data[0].id").value(1));
+                    .andExpect(jsonPath("$.data.content").isArray())
+                    .andExpect(jsonPath("$.data.content[0].id").value(1))
+                    .andExpect(jsonPath("$.data.totalElements").value(2));
+        }
+
+        @Test
+        @DisplayName("filters by name or email when q is given")
+        void getAllUsers_search() throws Exception {
+            when(userRepository.search(eq("ana"), any(org.springframework.data.domain.Pageable.class)))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(stubUserEntity(1L)), org.springframework.data.domain.PageRequest.of(0, 20), 1));
+
+            mockMvc.perform(get("/api/admin/users").param("q", " ana "))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.content[0].id").value(1));
+            verify(userRepository, never()).findAll(any(org.springframework.data.domain.Pageable.class));
         }
 
         @Test
         @DisplayName("returns 200 with empty list when no users")
         void getAllUsers_200_empty() throws Exception {
-            when(userRepository.findAll()).thenReturn(Collections.emptyList());
+            when(userRepository.findAll(any(org.springframework.data.domain.Pageable.class)))
+                    .thenReturn(org.springframework.data.domain.Page.empty(org.springframework.data.domain.PageRequest.of(0, 20)));
 
             mockMvc.perform(get("/api/admin/users"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data").isEmpty());
+                    .andExpect(jsonPath("$.data.content").isEmpty());
         }
     }
 

@@ -17,7 +17,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -36,6 +37,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 @ActiveProfiles("e2e")
 @DisplayName("AdminController — Integration")
 class AdminControllerIT {
@@ -232,7 +234,7 @@ class AdminControllerIT {
             assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(resp.getBody().isSuccess()).isTrue();
             // Seeder guarantees at least 2 users (admin + customer)
-            List<?> users = (List<?>) resp.getBody().getData();
+            List<?> users = (List<?>) ((java.util.Map<?, ?>) resp.getBody().getData()).get("content");
             assertThat(users).hasSizeGreaterThanOrEqualTo(2);
         }
 
