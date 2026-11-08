@@ -1,11 +1,13 @@
 FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /app
-RUN apk add --no-cache maven
-# Dependencies get their own layer: rebuilt only when pom.xml changes, not on every code change
-COPY pom.xml .
-RUN mvn -B -q dependency:go-offline
+# The Maven wrapper pins the Maven version Spring Boot 4 needs (Alpine's package may lag behind)
+COPY mvnw pom.xml ./
+COPY .mvn .mvn
+# Dependencies get their own layer: re-downloaded only when pom.xml changes, not on every code change.
+# Not run offline afterwards: go-offline does not fetch every plugin dependency the build resolves.
+RUN ./mvnw -B -q dependency:go-offline
 COPY src ./src
-RUN mvn -B -q -o clean package -DskipTests
+RUN ./mvnw -B -q clean package -DskipTests
 
 FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S app && adduser -S app -G app
