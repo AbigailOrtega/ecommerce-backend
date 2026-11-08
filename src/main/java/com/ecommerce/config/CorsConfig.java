@@ -3,42 +3,44 @@ package com.ecommerce.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import java.util.Arrays;
 import java.util.List;
 
+/**
+ * CORS for /api/**, applied by Spring Security (see SecurityConfig). In production the browser calls
+ * the API through Vercel's same-origin /api rewrite, so only the frontend URL is allowed.
+ */
 @Configuration
-public class CorsConfig implements WebMvcConfigurer {
+public class CorsConfig {
 
-    @Value("${spring.profiles.active:dev}")
-    private String activeProfile;
+    private static final List<String> LOCAL_ORIGINS = List.of(
+            "http://localhost:4200",
+            "http://localhost:3000",
+            "http://127.0.0.1:4200",
+            "http://127.0.0.1:3000");
+
+    private final Environment environment;
 
     @Value("${app.mail.frontend-url:http://localhost:4200}")
     private String frontendUrl;
 
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**")
-                .allowedOrigins(getAllowedOrigins())
-                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-                .allowedHeaders("*")
-                .exposedHeaders("Authorization", "Content-Disposition")
-                .allowCredentials(true)
-                .maxAge(3600);
+    public CorsConfig(Environment environment) {
+        this.environment = environment;
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList(getAllowedOrigins()));
+        configuration.setAllowedOrigins(getAllowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("Authorization", "Content-Disposition"));
+        // the refresh token cookie must cross from localhost:4200 to localhost:8080 in development
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
@@ -47,15 +49,11 @@ public class CorsConfig implements WebMvcConfigurer {
         return source;
     }
 
-    private String[] getAllowedOrigins() {
-        if ("prod".equals(activeProfile)) {
-            return new String[]{ frontendUrl };
+    private List<String> getAllowedOrigins() {
+        // acceptsProfiles also sees profiles set with --spring.profiles.active or SPRING_PROFILES_ACTIVE
+        if (environment.acceptsProfiles(Profiles.of("prod"))) {
+            return List.of(frontendUrl);
         }
-        return new String[]{
-                "http://localhost:4200",
-                "http://localhost:3000",
-                "http://127.0.0.1:4200",
-                "http://127.0.0.1:3000"
-        };
+        return LOCAL_ORIGINS;
     }
 }
