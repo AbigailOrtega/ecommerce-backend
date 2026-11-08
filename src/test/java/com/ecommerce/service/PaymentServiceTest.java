@@ -10,15 +10,9 @@ import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.ProductRepository;
 import com.ecommerce.repository.ProductSizeRepository;
-import com.paypal.core.PayPalHttpClient;
-import com.paypal.http.HttpResponse;
-import com.paypal.orders.Capture;
-import com.paypal.orders.OrderActionRequest;
-import com.paypal.orders.OrdersCaptureRequest;
-import com.paypal.orders.OrdersCreateRequest;
-import com.paypal.orders.OrdersGetRequest;
-import com.paypal.orders.PaymentCollection;
-import com.paypal.orders.PurchaseUnit;
+import com.ecommerce.service.PayPalClient.CaptureSnapshot;
+import com.ecommerce.service.PayPalClient.PayPalApiException;
+import com.ecommerce.service.PaymentService.PayPalOrderSnapshot;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
@@ -54,6 +48,8 @@ class PaymentServiceTest {
     @Mock private OrderRepository orderRepository;
     @Mock private ProductRepository productRepository;
     @Mock private ProductSizeRepository productSizeRepository;
+    @Mock private CartService cartService;
+    @Mock private PayPalClient paypalClient;
 
     @InjectMocks private PaymentService paymentService;
 
@@ -64,9 +60,7 @@ class PaymentServiceTest {
         ReflectionTestUtils.setField(paymentService, "stripeSecretKey", "sk_test_abc123");
         ReflectionTestUtils.setField(paymentService, "webhookSecret",   "whsec_test_secret");
         ReflectionTestUtils.setField(paymentService, "paypalClientId",     "");
-        ReflectionTestUtils.setField(paymentService, "paypalClientSecret", "");
-        ReflectionTestUtils.setField(paymentService, "paypalMode",         "sandbox");
-        // paypalClient stays null — PayPal not configured by default in most tests
+        // paypalClient is a mock that answers isConfigured() == false unless a test says otherwise
     }
 
     // ─── isStripeConfigured ───────────────────────────────────────────────────
@@ -103,16 +97,15 @@ class PaymentServiceTest {
     class IsPayPalConfigured {
 
         @Test
-        @DisplayName("returns false when paypalClient is null")
+        @DisplayName("returns false when the PayPal credentials are missing")
         void isPayPalConfigured_notConfigured() {
             assertThat(paymentService.isPayPalConfigured()).isFalse();
         }
 
         @Test
-        @DisplayName("returns true when paypalClient is injected")
+        @DisplayName("returns true when the PayPal client has credentials")
         void isPayPalConfigured_configured() {
-            PayPalHttpClient mockClient = mock(PayPalHttpClient.class);
-            ReflectionTestUtils.setField(paymentService, "paypalClient", mockClient);
+            when(paypalClient.isConfigured()).thenReturn(true);
             assertThat(paymentService.isPayPalConfigured()).isTrue();
         }
     }
@@ -144,7 +137,7 @@ class PaymentServiceTest {
 
             assertThatThrownBy(() -> paymentService.createPaymentIntent(BigDecimal.TEN, "usd"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Stripe is not configured");
+                    .hasMessageContaining("Stripe no está configurado");
         }
 
         @Test
@@ -372,6 +365,7 @@ class PaymentServiceTest {
             assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
             verify(productRepository).incrementStock(1L, 3);
             verify(orderRepository).save(order);
+            verify(cartService).restoreFromOrder(order);
         }
 
         @Test
@@ -607,7 +601,7 @@ class PaymentServiceTest {
             assertThatThrownBy(() ->
                     paymentService.confirmPayPalPayment("ORD-GHOST", "CAPTURE-X"))
                     .isInstanceOf(RuntimeException.class)
-                    .hasMessageContaining("Order not found");
+                    .hasMessageContaining("Pedido no encontrado");
         }
     }
 
@@ -623,23 +617,15 @@ class PaymentServiceTest {
             assertThatThrownBy(() ->
                     paymentService.createPayPalOrder(BigDecimal.valueOf(50)))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("PayPal is not configured");
+                    .hasMessageContaining("PayPal no está configurado");
         }
 
         @Test
         @DisplayName("returns orderId and status from PayPal API response")
         void createPayPalOrder_success() throws IOException {
-            PayPalHttpClient mockClient = mock(PayPalHttpClient.class);
-            ReflectionTestUtils.setField(paymentService, "paypalClient", mockClient);
-
-            com.paypal.orders.Order ppOrder = mock(com.paypal.orders.Order.class);
-            when(ppOrder.id()).thenReturn("PAYPAL-ORDER-123");
-            when(ppOrder.status()).thenReturn("CREATED");
-
-            @SuppressWarnings("unchecked")
-            HttpResponse<com.paypal.orders.Order> mockResponse = mock(HttpResponse.class);
-            when(mockResponse.result()).thenReturn(ppOrder);
-            when(mockClient.execute(any(OrdersCreateRequest.class))).thenReturn(mockResponse);
+            when(paypalClient.isConfigured()).thenReturn(true);
+            when(paypalClient.createOrder(new BigDecimal("75.5")))
+                    .thenReturn(new PayPalOrderSnapshot("PAYPAL-ORDER-123", "CREATED", "MXN", new BigDecimal("75.50"), null, null));
 
             Map<String, Object> result = paymentService.createPayPalOrder(BigDecimal.valueOf(75.50));
 
@@ -650,11 +636,9 @@ class PaymentServiceTest {
         @Test
         @DisplayName("wraps IOException in RuntimeException")
         void createPayPalOrder_ioException() throws IOException {
-            PayPalHttpClient mockClient = mock(PayPalHttpClient.class);
-            ReflectionTestUtils.setField(paymentService, "paypalClient", mockClient);
-
-            when(mockClient.execute(any(OrdersCreateRequest.class)))
-                    .thenThrow(new IOException("connection refused"));
+            when(paypalClient.isConfigured()).thenReturn(true);
+            when(paypalClient.createOrder(any()))
+                    .thenThrow(new PayPalApiException("connection refused", null));
 
             assertThatThrownBy(() -> paymentService.createPayPalOrder(BigDecimal.TEN))
                     .isInstanceOf(RuntimeException.class)
@@ -674,33 +658,15 @@ class PaymentServiceTest {
             assertThatThrownBy(() ->
                     paymentService.capturePayPalOrder("PAYPAL-ORDER-XYZ"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("PayPal is not configured");
+                    .hasMessageContaining("PayPal no está configurado");
         }
 
         @Test
         @DisplayName("returns orderId, status, and captureId from PayPal response")
         void capturePayPalOrder_success() throws IOException {
-            PayPalHttpClient mockClient = mock(PayPalHttpClient.class);
-            ReflectionTestUtils.setField(paymentService, "paypalClient", mockClient);
-
-            Capture capture = mock(Capture.class);
-            when(capture.id()).thenReturn("CAPTURE-ABC");
-
-            PaymentCollection payments = mock(PaymentCollection.class);
-            when(payments.captures()).thenReturn(List.of(capture));
-
-            PurchaseUnit purchaseUnit = mock(PurchaseUnit.class);
-            when(purchaseUnit.payments()).thenReturn(payments);
-
-            com.paypal.orders.Order ppOrder = mock(com.paypal.orders.Order.class);
-            when(ppOrder.id()).thenReturn("PAYPAL-ORDER-456");
-            when(ppOrder.status()).thenReturn("COMPLETED");
-            when(ppOrder.purchaseUnits()).thenReturn(List.of(purchaseUnit));
-
-            @SuppressWarnings("unchecked")
-            HttpResponse<com.paypal.orders.Order> mockResponse = mock(HttpResponse.class);
-            when(mockResponse.result()).thenReturn(ppOrder);
-            when(mockClient.execute(any(OrdersCaptureRequest.class))).thenReturn(mockResponse);
+            when(paypalClient.isConfigured()).thenReturn(true);
+            when(paypalClient.captureOrder("PAYPAL-ORDER-456"))
+                    .thenReturn(paypalApiOrder("PAYPAL-ORDER-456", "COMPLETED", "10.00", "CAPTURE-ABC", "COMPLETED"));
 
             Map<String, Object> result = paymentService.capturePayPalOrder("PAYPAL-ORDER-456");
 
@@ -712,18 +678,9 @@ class PaymentServiceTest {
         @Test
         @DisplayName("returns null captureId when purchaseUnits is empty")
         void capturePayPalOrder_noCaptureId() throws IOException {
-            PayPalHttpClient mockClient = mock(PayPalHttpClient.class);
-            ReflectionTestUtils.setField(paymentService, "paypalClient", mockClient);
-
-            com.paypal.orders.Order ppOrder = mock(com.paypal.orders.Order.class);
-            when(ppOrder.id()).thenReturn("PAYPAL-ORDER-789");
-            when(ppOrder.status()).thenReturn("COMPLETED");
-            when(ppOrder.purchaseUnits()).thenReturn(List.of());
-
-            @SuppressWarnings("unchecked")
-            HttpResponse<com.paypal.orders.Order> mockResponse = mock(HttpResponse.class);
-            when(mockResponse.result()).thenReturn(ppOrder);
-            when(mockClient.execute(any(OrdersCaptureRequest.class))).thenReturn(mockResponse);
+            when(paypalClient.isConfigured()).thenReturn(true);
+            when(paypalClient.captureOrder("PAYPAL-ORDER-789"))
+                    .thenReturn(new PayPalOrderSnapshot("PAYPAL-ORDER-789", "COMPLETED", null, null, null, null));
 
             Map<String, Object> result = paymentService.capturePayPalOrder("PAYPAL-ORDER-789");
 
@@ -733,11 +690,9 @@ class PaymentServiceTest {
         @Test
         @DisplayName("wraps IOException in RuntimeException")
         void capturePayPalOrder_ioException() throws IOException {
-            PayPalHttpClient mockClient = mock(PayPalHttpClient.class);
-            ReflectionTestUtils.setField(paymentService, "paypalClient", mockClient);
-
-            when(mockClient.execute(any(OrdersCaptureRequest.class)))
-                    .thenThrow(new IOException("timeout"));
+            when(paypalClient.isConfigured()).thenReturn(true);
+            when(paypalClient.captureOrder(any()))
+                    .thenThrow(new PayPalApiException("timeout", null));
 
             assertThatThrownBy(() -> paymentService.capturePayPalOrder("PAYPAL-ORDER-FAIL"))
                     .isInstanceOf(RuntimeException.class)
@@ -758,50 +713,29 @@ class PaymentServiceTest {
     }
 
     private void mockPayPalCapture(String captureId, String status, String currency, String value) throws IOException {
-        PayPalHttpClient mockClient = mock(PayPalHttpClient.class);
-        ReflectionTestUtils.setField(paymentService, "paypalClient", mockClient);
-        com.paypal.payments.Capture capture = new com.paypal.payments.Capture()
-                .id(captureId)
-                .status(status)
-                .amount(new com.paypal.payments.Money().currencyCode(currency).value(value));
-        @SuppressWarnings("unchecked")
-        HttpResponse<com.paypal.payments.Capture> response = mock(HttpResponse.class);
-        when(response.result()).thenReturn(capture);
-        when(mockClient.execute(any(com.paypal.payments.CapturesGetRequest.class))).thenReturn(response);
+        lenient().when(paypalClient.isConfigured()).thenReturn(true);
+        when(paypalClient.getCapture(captureId))
+                .thenReturn(Optional.of(new CaptureSnapshot(captureId, status, currency, new BigDecimal(value))));
         // a capture id is not an order id: PayPal answers 404, so the legacy capture check runs
-        lenient().when(mockClient.execute(any(OrdersGetRequest.class)))
-                .thenThrow(new com.paypal.http.exceptions.HttpException("not found", 404, new com.paypal.http.Headers()));
+        lenient().when(paypalClient.getOrder(any())).thenReturn(Optional.empty());
     }
 
-    /** A PayPal order as returned by OrdersGetRequest / OrdersCaptureRequest. */
-    private static com.paypal.orders.Order paypalApiOrder(String id, String status, String value,
-                                                          String captureId, String captureStatus) {
-        PurchaseUnit unit = new PurchaseUnit()
-                .amountWithBreakdown(new com.paypal.orders.AmountWithBreakdown().currencyCode("MXN").value(value));
-        if (captureId != null) {
-            unit.payments(new PaymentCollection().captures(List.of(new Capture().id(captureId).status(captureStatus)
-                    .amount(new com.paypal.orders.Money().currencyCode("MXN").value(value)))));
-        }
-        return new com.paypal.orders.Order().id(id).status(status).purchaseUnits(List.of(unit));
+    /** A PayPal order as returned by get / capture. */
+    private static PayPalOrderSnapshot paypalApiOrder(String id, String status, String value,
+                                                      String captureId, String captureStatus) {
+        return new PayPalOrderSnapshot(id, status, "MXN", new BigDecimal(value), captureId, captureStatus);
     }
 
-    @SuppressWarnings("unchecked")
-    private PayPalHttpClient paypalClientReturning(com.paypal.orders.Order getResult) throws IOException {
-        PayPalHttpClient client = mock(PayPalHttpClient.class);
-        ReflectionTestUtils.setField(paymentService, "paypalClient", client);
+    private PayPalClient paypalClientReturning(PayPalOrderSnapshot getResult) throws IOException {
+        lenient().when(paypalClient.isConfigured()).thenReturn(true);
         if (getResult != null) {
-            HttpResponse<com.paypal.orders.Order> response = mock(HttpResponse.class);
-            when(response.result()).thenReturn(getResult);
-            lenient().when(client.execute(any(OrdersGetRequest.class))).thenReturn(response);
+            lenient().when(paypalClient.getOrder(any())).thenReturn(Optional.of(getResult));
         }
-        return client;
+        return paypalClient;
     }
 
-    @SuppressWarnings("unchecked")
-    private static void captureReturns(PayPalHttpClient client, com.paypal.orders.Order result) throws IOException {
-        HttpResponse<com.paypal.orders.Order> response = mock(HttpResponse.class);
-        when(response.result()).thenReturn(result);
-        when(client.execute(any(OrdersCaptureRequest.class))).thenReturn(response);
+    private static void captureReturns(PayPalClient client, PayPalOrderSnapshot result) throws IOException {
+        when(client.captureOrder(any())).thenReturn(result);
     }
 
     // ─── verifyPaymentForOrder ────────────────────────────────────────────────
@@ -961,7 +895,7 @@ class PaymentServiceTest {
         @DisplayName("captures, stores the capture id and confirms the order")
         void success() throws IOException {
             Order order = pendingOrder();
-            PayPalHttpClient client = paypalClientReturning(null);
+            PayPalClient client = paypalClientReturning(null);
             captureReturns(client, paypalApiOrder("PP-ORDER", "COMPLETED", "150.50", "CAP-1", "COMPLETED"));
 
             paymentService.capturePayPalForOrder("ORD-PP");
@@ -975,22 +909,24 @@ class PaymentServiceTest {
         @DisplayName("when PayPal declines, cancels the order and restores its stock")
         void declined() throws IOException {
             Order order = pendingOrder();
-            PayPalHttpClient client = paypalClientReturning(paypalApiOrder("PP-ORDER", "APPROVED", "150.50", null, null));
-            when(client.execute(any(OrdersCaptureRequest.class))).thenThrow(new IOException("INSTRUMENT_DECLINED"));
+            PayPalClient client = paypalClientReturning(paypalApiOrder("PP-ORDER", "APPROVED", "150.50", null, null));
+            when(client.captureOrder(any())).thenThrow(new PayPalApiException("INSTRUMENT_DECLINED", null));
 
             assertThatThrownBy(() -> paymentService.capturePayPalForOrder("ORD-PP"))
                     .isInstanceOf(BadRequestException.class).hasMessageContaining("cancelado");
 
             assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
             verify(productRepository).incrementStock(1L, 2);
+            // so a signed-in buyer can retry without rebuilding the cart
+            verify(cartService).restoreFromOrder(order);
         }
 
         @Test
         @DisplayName("if a previous attempt already captured it, confirms instead of cancelling")
         void alreadyCapturedByPreviousAttempt() throws IOException {
             Order order = pendingOrder();
-            PayPalHttpClient client = paypalClientReturning(paypalApiOrder("PP-ORDER", "COMPLETED", "150.50", "CAP-2", "COMPLETED"));
-            when(client.execute(any(OrdersCaptureRequest.class))).thenThrow(new IOException("ORDER_ALREADY_CAPTURED"));
+            PayPalClient client = paypalClientReturning(paypalApiOrder("PP-ORDER", "COMPLETED", "150.50", "CAP-2", "COMPLETED"));
+            when(client.captureOrder(any())).thenThrow(new PayPalApiException("ORDER_ALREADY_CAPTURED", null));
 
             paymentService.capturePayPalForOrder("ORD-PP");
 
@@ -1002,7 +938,7 @@ class PaymentServiceTest {
         @DisplayName("a captured amount that differs from the total is left PENDING for manual review")
         void amountMismatch() throws IOException {
             Order order = pendingOrder();
-            PayPalHttpClient client = paypalClientReturning(null);
+            PayPalClient client = paypalClientReturning(null);
             captureReturns(client, paypalApiOrder("PP-ORDER", "COMPLETED", "1.00", "CAP-3", "COMPLETED"));
 
             assertThatThrownBy(() -> paymentService.capturePayPalForOrder("ORD-PP"))

@@ -5,12 +5,6 @@ import com.ecommerce.entity.OrderStatus;
 import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.repository.OrderRepository;
-import com.paypal.core.PayPalEnvironment;
-import com.paypal.core.PayPalHttpClient;
-import com.paypal.http.HttpResponse;
-import com.paypal.orders.*;
-import com.paypal.payments.Capture;
-import com.paypal.payments.CapturesGetRequest;
 import com.stripe.Stripe;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
@@ -38,6 +32,8 @@ public class PaymentService {
 
     private final OrderRepository orderRepository;
     private final StockService stockService;
+    private final CartService cartService;
+    private final PayPalClient paypalClient;
 
     @Value("${app.stripe.secret-key:}")
     private String stripeSecretKey;
@@ -48,31 +44,15 @@ public class PaymentService {
     @Value("${app.paypal.client-id:}")
     private String paypalClientId;
 
-    @Value("${app.paypal.client-secret:}")
-    private String paypalClientSecret;
-
-    @Value("${app.paypal.mode:sandbox}")
-    private String paypalMode;
-
-    private PayPalHttpClient paypalClient;
-
     @PostConstruct
     public void init() {
         if (stripeSecretKey != null && !stripeSecretKey.isBlank()) {
             Stripe.apiKey = stripeSecretKey;
         }
-        if (paypalClientId != null && !paypalClientId.isBlank()
-                && paypalClientSecret != null && !paypalClientSecret.isBlank()) {
-            PayPalEnvironment environment = "live".equalsIgnoreCase(paypalMode)
-                    ? new PayPalEnvironment.Live(paypalClientId, paypalClientSecret)
-                    : new PayPalEnvironment.Sandbox(paypalClientId, paypalClientSecret);
-            paypalClient = new PayPalHttpClient(environment);
-            log.info("PayPal client initialized in {} mode", paypalMode);
-        }
     }
 
     public boolean isPayPalConfigured() {
-        return paypalClient != null;
+        return paypalClient != null && paypalClient.isConfigured();
     }
 
     public String getPayPalClientId() {
@@ -85,12 +65,12 @@ public class PaymentService {
 
     public Map<String, String> createPaymentIntent(BigDecimal amount, String currency) {
         if (!isStripeConfigured()) {
-            throw new BadRequestException("Stripe is not configured. Set STRIPE_SECRET_KEY to enable card payments.");
+            throw new BadRequestException("Stripe no está configurado. Define STRIPE_SECRET_KEY para aceptar tarjetas.");
         }
 
         try {
             PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
-                    .setAmount(amount.multiply(BigDecimal.valueOf(100)).longValue())
+                    .setAmount(toCents(amount))
                     .setCurrency(currency.toLowerCase())
                     .setAutomaticPaymentMethods(
                             PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
@@ -161,7 +141,7 @@ public class PaymentService {
 
     protected void verifyStripeIntentForOrder(String paymentIntentId, BigDecimal orderTotal) {
         if (!isStripeConfigured()) {
-            throw new BadRequestException("Stripe is not configured.");
+            throw new BadRequestException("Stripe no está configurado.");
         }
         long expectedCents = toCents(orderTotal);
         try {
@@ -188,11 +168,11 @@ public class PaymentService {
 
     protected void verifyPayPalCapture(String captureId, BigDecimal orderTotal) {
         if (!isPayPalConfigured()) {
-            throw new BadRequestException("PayPal is not configured.");
+            throw new BadRequestException("PayPal no está configurado.");
         }
-        Capture capture;
+        PayPalClient.CaptureSnapshot capture;
         try {
-            capture = paypalClient.execute(new CapturesGetRequest(captureId)).result();
+            capture = paypalClient.getCapture(captureId).orElse(null);
         } catch (IOException e) {
             log.error("PayPal error fetching capture {}: {}", captureId, e.getMessage());
             throw new BadRequestException("No se pudo verificar el pago con PayPal");
@@ -201,10 +181,10 @@ public class PaymentService {
             throw new BadRequestException("El pago de PayPal no está completado");
         }
         if (capture.amount() == null
-                || !"MXN".equalsIgnoreCase(capture.amount().currencyCode())
-                || new BigDecimal(capture.amount().value()).compareTo(orderTotal.setScale(2, RoundingMode.HALF_UP)) != 0) {
+                || !"MXN".equalsIgnoreCase(capture.currency())
+                || capture.amount().compareTo(orderTotal.setScale(2, RoundingMode.HALF_UP)) != 0) {
             log.error("PayPal capture {} amount {} does not match order total {}",
-                    captureId, capture.amount() != null ? capture.amount().value() : null, orderTotal);
+                    captureId, capture.amount(), orderTotal);
             throw new BadRequestException("El monto del pago no coincide con el total del pedido");
         }
     }
@@ -253,7 +233,8 @@ public class PaymentService {
         stockService.restore(order, order.getStatus());
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
-        log.info("Order {} cancelled due to payment failure, stock restored", order.getOrderNumber());
+        cartService.restoreFromOrder(order);
+        log.info("Order {} cancelled due to payment failure, stock and cart restored", order.getOrderNumber());
     }
 
     @Transactional
@@ -323,6 +304,7 @@ public class PaymentService {
             if (captured == null) {
                 log.warn("PayPal capture failed for order {} (PayPal order {}): {}", orderNumber, paypalOrderId, e.getMessage());
                 cancelUnpaidOrder(order);
+                cartService.restoreFromOrder(order);
                 throw new BadRequestException("PayPal no pudo completar el pago. El pedido fue cancelado; intenta de nuevo.");
             }
         }
@@ -330,6 +312,7 @@ public class PaymentService {
         if (!"COMPLETED".equalsIgnoreCase(captured.captureStatus()) || captured.captureId() == null) {
             log.warn("PayPal capture for order {} not completed: {}", orderNumber, captured.captureStatus());
             cancelUnpaidOrder(order);
+            cartService.restoreFromOrder(order);
             throw new BadRequestException("PayPal no pudo completar el pago. El pedido fue cancelado; intenta de nuevo.");
         }
         if (captured.amount() == null || captured.amount().compareTo(order.getTotalAmount().setScale(2, RoundingMode.HALF_UP)) != 0) {
@@ -343,6 +326,101 @@ public class PaymentService {
         order.setStatus(OrderStatus.CONFIRMED);
         orderRepository.save(order);
         log.info("Order {} confirmed via PayPal capture {}", orderNumber, captured.captureId());
+    }
+
+    public enum AbandonedOutcome { CONFIRMED, CANCELLED, KEPT }
+
+    /**
+     * Settles an order that has been PENDING too long. The provider decides: a payment that went
+     * through after all confirms the order (e.g. a webhook lost while the server slept); one that
+     * never happened is voided and the order cancelled so its stock can be sold again. When the
+     * provider cannot be asked, or the payment is still in flight, the order is left for the next run.
+     */
+    @Transactional
+    public AbandonedOutcome resolveAbandonedOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId).orElse(null);
+        if (order == null || order.getStatus() != OrderStatus.PENDING) return AbandonedOutcome.KEPT;
+        String paymentId = order.getPaymentId();
+        try {
+            if ("stripe".equalsIgnoreCase(order.getPaymentMethod())) {
+                return paymentId == null ? cancelAbandoned(order) : resolveAbandonedStripe(order, paymentId);
+            }
+            if ("paypal".equalsIgnoreCase(order.getPaymentMethod())) {
+                return paymentId == null ? cancelAbandoned(order) : resolveAbandonedPayPal(order, paymentId);
+            }
+        } catch (StripeException | BadRequestException e) {
+            log.warn("Could not check payment of pending order {}, will retry: {}", order.getOrderNumber(), e.getMessage());
+        }
+        return AbandonedOutcome.KEPT;
+    }
+
+    private AbandonedOutcome resolveAbandonedStripe(Order order, String intentId) throws StripeException {
+        if (!isStripeConfigured()) return AbandonedOutcome.KEPT;
+        StripeIntentSnapshot intent = findStripeIntent(intentId);
+        switch (intent.status()) {
+            case "succeeded" -> {
+                handlePaymentSuccess(intentId, intent.amountReceived(), intent.currency());
+                return order.getStatus() == OrderStatus.CONFIRMED ? AbandonedOutcome.CONFIRMED : AbandonedOutcome.KEPT;
+            }
+            case "processing", "requires_capture" -> {
+                return AbandonedOutcome.KEPT;
+            }
+            case "canceled" -> {
+                return cancelAbandoned(order);
+            }
+            default -> {
+                // void it first, so the buyer can no longer pay for an order that is about to be cancelled
+                cancelStripeIntent(intentId);
+                return cancelAbandoned(order);
+            }
+        }
+    }
+
+    private AbandonedOutcome resolveAbandonedPayPal(Order order, String paypalOrderId) {
+        if (!isPayPalConfigured()) return AbandonedOutcome.KEPT;
+        Optional<PayPalOrderSnapshot> paypalOrder = findPayPalOrder(paypalOrderId);
+        if (paypalOrder.isEmpty()) {
+            // a capture id from the old checkout flow; not worth guessing about
+            log.warn("Pending order {} has no PayPal order {} — review manually", order.getOrderNumber(), paypalOrderId);
+            return AbandonedOutcome.KEPT;
+        }
+        PayPalOrderSnapshot snapshot = paypalOrder.get();
+        if ("COMPLETED".equalsIgnoreCase(snapshot.status())) {
+            // captured, but the browser never told us (tab closed mid-payment)
+            if (snapshot.captureId() == null || snapshot.amount() == null
+                    || snapshot.amount().compareTo(order.getTotalAmount().setScale(2, RoundingMode.HALF_UP)) != 0) {
+                log.error("Order {} NOT confirmed: PayPal captured {} but order total is {} — review manually",
+                        order.getOrderNumber(), snapshot.amount(), order.getTotalAmount());
+                return AbandonedOutcome.KEPT;
+            }
+            order.setPaymentId(snapshot.captureId());
+            order.setStatus(OrderStatus.CONFIRMED);
+            orderRepository.save(order);
+            log.info("Pending order {} confirmed: PayPal capture {} found", order.getOrderNumber(), snapshot.captureId());
+            return AbandonedOutcome.CONFIRMED;
+        }
+        // CREATED / APPROVED / VOIDED: nothing was charged, and an uncaptured PayPal order expires on its own
+        return cancelAbandoned(order);
+    }
+
+    private AbandonedOutcome cancelAbandoned(Order order) {
+        cancelUnpaidOrder(order);
+        // the shopper can come back and pay without rebuilding the cart (guest carts live in the browser)
+        cartService.restoreFromOrder(order);
+        log.info("Pending order {} cancelled after going unpaid, stock and cart restored", order.getOrderNumber());
+        return AbandonedOutcome.CANCELLED;
+    }
+
+    public record StripeIntentSnapshot(String status, long amountReceived, String currency) {}
+
+    protected StripeIntentSnapshot findStripeIntent(String paymentIntentId) throws StripeException {
+        PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
+        return new StripeIntentSnapshot(intent.getStatus(),
+                intent.getAmountReceived() != null ? intent.getAmountReceived() : 0L, intent.getCurrency());
+    }
+
+    protected void cancelStripeIntent(String paymentIntentId) throws StripeException {
+        PaymentIntent.retrieve(paymentIntentId).cancel();
     }
 
     private void cancelUnpaidOrder(Order order) {
@@ -389,24 +467,11 @@ public class PaymentService {
 
     public Map<String, Object> createPayPalOrder(BigDecimal amount) {
         if (!isPayPalConfigured()) {
-            throw new BadRequestException("PayPal is not configured. Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET.");
+            throw new BadRequestException("PayPal no está configurado. Define PAYPAL_CLIENT_ID y PAYPAL_CLIENT_SECRET.");
         }
 
-        OrdersCreateRequest request = new OrdersCreateRequest();
-        request.prefer("return=representation");
-        request.requestBody(new OrderRequest()
-                .checkoutPaymentIntent("CAPTURE")
-                .purchaseUnits(List.of(
-                        new PurchaseUnitRequest()
-                                .amountWithBreakdown(new AmountWithBreakdown()
-                                        .currencyCode("MXN")
-                                        .value(amount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()))
-                )));
-
         try {
-            HttpResponse<com.paypal.orders.Order> response = paypalClient.execute(request);
-            com.paypal.orders.Order order = response.result();
-
+            PayPalOrderSnapshot order = paypalClient.createOrder(amount);
             Map<String, Object> result = new HashMap<>();
             result.put("orderId", order.id());
             result.put("status", order.status());
@@ -424,7 +489,7 @@ public class PaymentService {
      */
     public Map<String, Object> capturePayPalOrder(String orderId) {
         if (!isPayPalConfigured()) {
-            throw new BadRequestException("PayPal is not configured.");
+            throw new BadRequestException("PayPal no está configurado.");
         }
         try {
             PayPalOrderSnapshot order = capturePayPal(orderId);
@@ -447,14 +512,10 @@ public class PaymentService {
     /** The PayPal order with this id, or empty if PayPal has none (e.g. the id is a capture id). */
     protected Optional<PayPalOrderSnapshot> findPayPalOrder(String paypalOrderId) {
         if (!isPayPalConfigured()) {
-            throw new BadRequestException("PayPal is not configured.");
+            throw new BadRequestException("PayPal no está configurado.");
         }
         try {
-            return Optional.of(snapshot(paypalClient.execute(new OrdersGetRequest(paypalOrderId)).result()));
-        } catch (com.paypal.http.exceptions.HttpException e) {
-            if (e.statusCode() == 404) return Optional.empty();
-            log.error("PayPal error fetching order {}: {}", paypalOrderId, e.getMessage());
-            throw new BadRequestException("No se pudo verificar el pago con PayPal");
+            return paypalClient.getOrder(paypalOrderId);
         } catch (IOException e) {
             log.error("PayPal error fetching order {}: {}", paypalOrderId, e.getMessage());
             throw new BadRequestException("No se pudo verificar el pago con PayPal");
@@ -463,30 +524,6 @@ public class PaymentService {
 
     /** Captures an approved PayPal order; throws if PayPal refuses (e.g. the buyer's funding failed). */
     protected PayPalOrderSnapshot capturePayPal(String paypalOrderId) throws IOException {
-        OrdersCaptureRequest request = new OrdersCaptureRequest(paypalOrderId);
-        request.prefer("return=representation");
-        return snapshot(paypalClient.execute(request).result());
-    }
-
-    private static PayPalOrderSnapshot snapshot(com.paypal.orders.Order order) {
-        String currency = null, captureId = null, captureStatus = null;
-        BigDecimal amount = null;
-        if (order.purchaseUnits() != null && !order.purchaseUnits().isEmpty()) {
-            PurchaseUnit unit = order.purchaseUnits().get(0);
-            if (unit.amountWithBreakdown() != null) {
-                currency = unit.amountWithBreakdown().currencyCode();
-                amount = new BigDecimal(unit.amountWithBreakdown().value());
-            }
-            if (unit.payments() != null && unit.payments().captures() != null && !unit.payments().captures().isEmpty()) {
-                com.paypal.orders.Capture capture = unit.payments().captures().get(0);
-                captureId = capture.id();
-                captureStatus = capture.status();
-                if (capture.amount() != null) {
-                    currency = capture.amount().currencyCode();
-                    amount = new BigDecimal(capture.amount().value());
-                }
-            }
-        }
-        return new PayPalOrderSnapshot(order.id(), order.status(), currency, amount, captureId, captureStatus);
+        return paypalClient.captureOrder(paypalOrderId);
     }
 }

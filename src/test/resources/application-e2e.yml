@@ -6,6 +6,10 @@ spring:
     password: test
 
 app:
+  orders:
+    abandoned:
+      # e2e orders are never an hour old; keep runs deterministic anyway
+      enabled: false
   rate-limit:
     # the ITs log in many times from 127.0.0.1
     enabled: false

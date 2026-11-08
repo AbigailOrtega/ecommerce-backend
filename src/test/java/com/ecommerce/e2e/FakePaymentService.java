@@ -3,6 +3,8 @@ package com.ecommerce.e2e;
 import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.service.PaymentService;
+import com.ecommerce.service.CartService;
+import com.ecommerce.service.PayPalClient;
 import com.ecommerce.service.StockService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Primary;
@@ -34,8 +36,9 @@ public class FakePaymentService extends PaymentService {
     private final AtomicBoolean declineNextPayPalCapture = new AtomicBoolean();
     private final Map<String, Long> paypalCaptures = new ConcurrentHashMap<>();  // id → cents
 
-    public FakePaymentService(OrderRepository orderRepository, StockService stockService) {
-        super(orderRepository, stockService);
+    public FakePaymentService(OrderRepository orderRepository, StockService stockService, CartService cartService,
+                              PayPalClient paypalClient) {
+        super(orderRepository, stockService, cartService, paypalClient);
         log.warn("[e2e] FakePaymentService active: Stripe and PayPal are simulated");
     }
 

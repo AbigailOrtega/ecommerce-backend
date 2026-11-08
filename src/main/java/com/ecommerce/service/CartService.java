@@ -50,19 +50,16 @@ public class CartService {
         if (request.sizeId() != null) {
             selectedSize = productSizeRepository.findById(request.sizeId())
                     .orElseThrow(() -> new ResourceNotFoundException("ProductSize", "id", request.sizeId()));
-            if (selectedSize.getStock() < request.quantity()) {
-                throw new BadRequestException("Insufficient stock for this size");
-            }
-        } else if (product.getColors().isEmpty()) {
-            if (product.getStockQuantity() < request.quantity()) {
-                throw new BadRequestException("Insufficient stock for product: " + product.getName());
-            }
         }
 
         // Look up existing cart item for same product+size combination
         Optional<CartItem> existingItem = request.sizeId() != null
                 ? cartItemRepository.findByUserIdAndProductIdAndSelectedSizeId(user.getId(), product.getId(), request.sizeId())
                 : cartItemRepository.findByUserIdAndProductIdAndSelectedSizeIsNull(user.getId(), product.getId());
+
+        // what is already in the cart counts too, otherwise adding one at a time skips the limit
+        int alreadyInCart = existingItem.map(CartItem::getQuantity).orElse(0);
+        checkStock(product, selectedSize, alreadyInCart + request.quantity());
 
         CartItem cartItem;
         if (existingItem.isPresent()) {
@@ -87,7 +84,7 @@ public class CartService {
                 .orElseThrow(() -> new ResourceNotFoundException("CartItem", "id", itemId));
 
         if (!cartItem.getUser().getId().equals(user.getId())) {
-            throw new BadRequestException("Cart item does not belong to user");
+            throw new BadRequestException("Este producto no está en tu carrito");
         }
 
         if (quantity <= 0) {
@@ -95,8 +92,21 @@ public class CartService {
             return null;
         }
 
+        checkStock(cartItem.getProduct(), cartItem.getSelectedSize(), quantity);
         cartItem.setQuantity(quantity);
         return mapToResponse(cartItemRepository.save(cartItem));
+    }
+
+    /** Rejects a cart quantity above what is in stock, telling the shopper how many are left. */
+    private void checkStock(Product product, ProductSize size, int wanted) {
+        Integer available = size != null ? size.getStock()
+                : product.getColors().isEmpty() ? product.getStockQuantity() : null;
+        if (available == null || wanted <= available) return;
+
+        String what = product.getName() + (size != null ? " (talla " + size.getName() + ")" : "");
+        throw new BadRequestException(available <= 0 ? what + " está agotado"
+                : available == 1 ? "Solo queda 1 disponible de " + what
+                : "Solo quedan " + available + " disponibles de " + what);
     }
 
     @Transactional
@@ -106,7 +116,7 @@ public class CartService {
                 .orElseThrow(() -> new ResourceNotFoundException("CartItem", "id", itemId));
 
         if (!cartItem.getUser().getId().equals(user.getId())) {
-            throw new BadRequestException("Cart item does not belong to user");
+            throw new BadRequestException("Este producto no está en tu carrito");
         }
 
         cartItemRepository.delete(cartItem);
@@ -116,6 +126,28 @@ public class CartService {
     public void clearCart(String email) {
         User user = findUserByEmail(email);
         cartItemRepository.deleteByUserId(user.getId());
+    }
+
+    /**
+     * Puts a cancelled order's items back in its owner's cart, so a shopper whose payment failed
+     * can try again without rebuilding the cart. Guest carts live in the browser and are untouched.
+     */
+    @Transactional
+    public void restoreFromOrder(Order order) {
+        User user = order.getUser();
+        if (user == null) return;
+        for (OrderItem item : order.getItems()) {
+            Product product = item.getProduct();
+            if (product == null || !product.isActive()) continue;
+            ProductSize size = item.getSelectedSize();
+            Optional<CartItem> existing = size != null
+                    ? cartItemRepository.findByUserIdAndProductIdAndSelectedSizeId(user.getId(), product.getId(), size.getId())
+                    : cartItemRepository.findByUserIdAndProductIdAndSelectedSizeIsNull(user.getId(), product.getId());
+            CartItem cartItem = existing.orElseGet(() -> CartItem.builder()
+                    .user(user).product(product).selectedSize(size).quantity(0).build());
+            cartItem.setQuantity(cartItem.getQuantity() + item.getQuantity());
+            cartItemRepository.save(cartItem);
+        }
     }
 
     private User findUserByEmail(String email) {

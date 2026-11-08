@@ -4,15 +4,17 @@ import com.ecommerce.config.SecurityConfig;
 import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.security.JwtAuthFilter;
 import com.ecommerce.service.PaymentService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
@@ -32,7 +34,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(
     value = PaymentController.class,
-    excludeAutoConfiguration = {SecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class},
+    excludeAutoConfiguration = {SecurityAutoConfiguration.class, ServletWebSecurityAutoConfiguration.class,
+        SecurityFilterAutoConfiguration.class, UserDetailsServiceAutoConfiguration.class},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class),
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthFilter.class)
@@ -44,7 +47,7 @@ class PaymentControllerTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
-    @MockBean PaymentService paymentService;
+    @MockitoBean PaymentService paymentService;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -131,7 +134,7 @@ class PaymentControllerTest {
         void createIntent_400_stripeNotConfigured() throws Exception {
             when(paymentService.createPaymentIntent(any(), anyString()))
                     .thenThrow(new BadRequestException(
-                            "Stripe is not configured. Set STRIPE_SECRET_KEY to enable card payments."));
+                            "Stripe no está configurado. Define STRIPE_SECRET_KEY para aceptar tarjetas."));
 
             String body = "{\"amount\":49.99,\"currency\":\"usd\"}";
 
@@ -219,7 +222,7 @@ class PaymentControllerTest {
         void createPayPalOrder_400_notConfigured() throws Exception {
             when(paymentService.createPayPalOrder(any()))
                     .thenThrow(new BadRequestException(
-                            "PayPal is not configured. Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET."));
+                            "PayPal no está configurado. Define PAYPAL_CLIENT_ID y PAYPAL_CLIENT_SECRET."));
 
             String body = "{\"amount\":99.99}";
 
@@ -279,7 +282,7 @@ class PaymentControllerTest {
         @DisplayName("returns 400 when PayPal is not configured")
         void capturePayPalOrder_400_notConfigured() throws Exception {
             when(paymentService.capturePayPalOrder(anyString()))
-                    .thenThrow(new BadRequestException("PayPal is not configured."));
+                    .thenThrow(new BadRequestException("PayPal no está configurado."));
 
             String body = "{\"orderId\":\"PAYPAL-ORDER-001\"}";
 

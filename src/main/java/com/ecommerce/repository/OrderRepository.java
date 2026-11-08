@@ -20,6 +20,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByUserIdOrderByCreatedAtDesc(Long userId);
     Optional<Order> findByOrderNumber(String orderNumber);
     Optional<Order> findByPaymentId(String paymentId);
+
+    @Query("SELECT o.id FROM Order o WHERE o.status = :status AND o.createdAt < :before")
+    List<Long> findIdsByStatusAndCreatedAtBefore(@Param("status") OrderStatus status, @Param("before") LocalDateTime before);
     Optional<Order> findBySkydropxShipmentId(String skydropxShipmentId);
     Page<Order> findAllByOrderByCreatedAtDesc(Pageable pageable);
 

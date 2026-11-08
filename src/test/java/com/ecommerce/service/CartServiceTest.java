@@ -153,7 +153,7 @@ class CartServiceTest {
 
             assertThatThrownBy(() -> cartService.addToCart("ana@example.com", request))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Insufficient stock");
+                    .hasMessage("Solo queda 1 disponible de Camiseta");
 
             verify(cartItemRepository, never()).save(any());
         }
@@ -174,7 +174,7 @@ class CartServiceTest {
 
             assertThatThrownBy(() -> cartService.addToCart("ana@example.com", request))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Insufficient stock for this size");
+                    .hasMessage("Solo queda 1 disponible de Camiseta (talla M)");
         }
 
         @Test
@@ -220,6 +220,70 @@ class CartServiceTest {
 
             assertThat(response).isNotNull();
             assertThat(response.selectedSizeName()).isEqualTo("L");
+        }
+    }
+
+    // ─── stock limits ─────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("stock limits")
+    class StockLimits {
+
+        @Test
+        @DisplayName("counts what is already in the cart when adding more")
+        void addToCart_countsExistingQuantity() {
+            product.setStockQuantity(3);
+            CartItem existing = CartItem.builder().id(200L).user(user).product(product).quantity(2).build();
+            when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(user));
+            when(productRepository.findById(10L)).thenReturn(Optional.of(product));
+            when(cartItemRepository.findByUserIdAndProductIdAndSelectedSizeIsNull(1L, 10L))
+                    .thenReturn(Optional.of(existing));
+
+            assertThatThrownBy(() -> cartService.addToCart("ana@example.com", new CartItemRequest(10L, 2, null)))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Solo quedan 3 disponibles de Camiseta");
+            assertThat(existing.getQuantity()).isEqualTo(2);
+            verify(cartItemRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("says the product is sold out when stock is 0")
+        void addToCart_soldOut() {
+            product.setStockQuantity(0);
+            when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(user));
+            when(productRepository.findById(10L)).thenReturn(Optional.of(product));
+
+            assertThatThrownBy(() -> cartService.addToCart("ana@example.com", new CartItemRequest(10L, 1, null)))
+                    .hasMessage("Camiseta está agotado");
+        }
+
+        @Test
+        @DisplayName("rejects raising a cart quantity above stock")
+        void updateCartItem_aboveStock() {
+            product.setStockQuantity(4);
+            CartItem item = CartItem.builder().id(100L).user(user).product(product).quantity(1).build();
+            when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(user));
+            when(cartItemRepository.findById(100L)).thenReturn(Optional.of(item));
+
+            assertThatThrownBy(() -> cartService.updateCartItem("ana@example.com", 100L, 5))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Solo quedan 4 disponibles de Camiseta");
+            assertThat(item.getQuantity()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("checks the size's stock for products with sizes")
+        void updateCartItem_sizeStock() {
+            ProductSize size = new ProductSize();
+            size.setId(50L);
+            size.setName("M");
+            size.setStock(2);
+            CartItem item = CartItem.builder().id(100L).user(user).product(product).selectedSize(size).quantity(1).build();
+            when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(user));
+            when(cartItemRepository.findById(100L)).thenReturn(Optional.of(item));
+
+            assertThatThrownBy(() -> cartService.updateCartItem("ana@example.com", 100L, 3))
+                    .hasMessage("Solo quedan 2 disponibles de Camiseta (talla M)");
         }
     }
 
@@ -289,7 +353,7 @@ class CartServiceTest {
 
             assertThatThrownBy(() -> cartService.updateCartItem("ana@example.com", 100L, 3))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Cart item does not belong to user");
+                    .hasMessage("Este producto no está en tu carrito");
         }
 
         @Test
@@ -335,7 +399,7 @@ class CartServiceTest {
 
             assertThatThrownBy(() -> cartService.removeFromCart("ana@example.com", 100L))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessage("Cart item does not belong to user");
+                    .hasMessage("Este producto no está en tu carrito");
 
             verify(cartItemRepository, never()).delete(any());
         }
