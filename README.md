@@ -206,6 +206,8 @@ The Dockerfile uses a multi-stage build with `eclipse-temurin:21` (Alpine).
 | `APP_TIME_ZONE` | No | `America/Mexico_City` | Store time zone: coupon/promotion dates and every stored timestamp |
 | `RATE_LIMIT_ENABLED` | No | `true` | All rate limits (per email and per IP) |
 | `RATE_LIMIT_PER_IP_ENABLED` | No | `false` in prod | Per-IP limits; turn on once the client IP header behind Vercel + Render is confirmed |
+| `SENTRY_DSN` | No | - | Sentry project DSN; empty = no error reporting. Every `log.error` (500s included) becomes an event |
+| `SENTRY_ENVIRONMENT` | No | `production` | Environment name shown in Sentry |
 | `PAYPAL_MODE` | No | `sandbox` | `sandbox` or `live` |
 | `CLOUDINARY_CLOUD_NAME` | No | - | Cloudinary cloud name |
 | `CLOUDINARY_API_KEY` | No | - | Cloudinary API key |

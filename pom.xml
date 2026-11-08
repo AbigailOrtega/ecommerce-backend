@@ -24,6 +24,7 @@
         <stripe.version>24.3.0</stripe.version>
         <cloudinary.version>1.36.0</cloudinary.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
+        <sentry.version>8.63.0</sentry.version>
     </properties>
 
     <dependencies>
@@ -72,6 +73,17 @@
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <!-- Error reporting to Sentry; inactive while SENTRY_DSN is empty -->
+        <dependency>
+            <groupId>io.sentry</groupId>
+            <artifactId>sentry-spring-boot-4-starter</artifactId>
+            <version>${sentry.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.sentry</groupId>
+            <artifactId>sentry-logback</artifactId>
+            <version>${sentry.version}</version>
         </dependency>
         <!-- Schema migrations (src/main/resources/db/migration), PostgreSQL only -->
         <dependency>

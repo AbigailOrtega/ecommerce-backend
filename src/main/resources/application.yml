@@ -113,6 +113,17 @@ management:
     mail:
       enabled: false
 
+# Error reporting. Without SENTRY_DSN nothing is sent. Every log.error becomes a Sentry event, which
+# includes the 500s answered by GlobalExceptionHandler (Sentry never sees those as unhandled).
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${SENTRY_ENVIRONMENT:production}
+  send-default-pii: false
+  traces-sample-rate: 0.0
+  logging:
+    minimum-event-level: error
+    minimum-breadcrumb-level: info
+
 # SpringDoc / Swagger
 springdoc:
   api-docs:
