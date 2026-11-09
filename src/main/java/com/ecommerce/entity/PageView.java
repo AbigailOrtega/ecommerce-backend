@@ -28,4 +28,8 @@ public class PageView {
 
     @Column(nullable = false)
     private LocalDateTime timestamp;
+
+    /** utm_source or referring site of the visit, on its first page view; null = direct. */
+    @Column(length = 50)
+    private String source;
 }

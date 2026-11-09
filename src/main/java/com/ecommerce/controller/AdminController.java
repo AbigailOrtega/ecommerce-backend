@@ -144,6 +144,17 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success(analyticsService.getPageViewsByPeriod(period, fromDt, toDt)));
     }
 
+    @GetMapping("/analytics/pageviews/by-source")
+    @Operation(summary = "Get visits grouped by source (utm_source or referring site; empty = direct)")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getVisitsBySource(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+        DateTimeFormatter fmt = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+        LocalDateTime fromDt = from != null ? LocalDateTime.parse(from, fmt) : LocalDateTime.now().minusDays(30);
+        LocalDateTime toDt   = to   != null ? LocalDateTime.parse(to,   fmt) : LocalDateTime.now();
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.getVisitsBySource(fromDt, toDt)));
+    }
+
     @GetMapping("/analytics/pageviews/by-page")
     @Operation(summary = "Get page views grouped by page path (top 20)")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPageViewsByPage(
