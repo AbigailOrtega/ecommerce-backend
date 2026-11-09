@@ -45,3 +45,79 @@ jobs:
       - uses: actions/checkout@v4
       # the same build Render runs on every deploy
       - run: docker build -t ecommerce-backend .
+
+  # The checkout against Stripe in test mode. The suite lives in the frontend repo
+  # (e2e-stripe/, playwright.stripe.config.ts); it runs here too because most of what it
+  # checks (PaymentService, the webhook, OrderService) is backend code.
+  e2e-stripe:
+    name: Playwright against Stripe (test mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    container: mcr.microsoft.com/playwright:v1.58.2-noble
+    env:
+      # repository secrets; only test-mode keys (playwright.stripe.config.ts refuses live ones)
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      STRIPE_PUBLIC_KEY: ${{ secrets.STRIPE_TEST_PUBLIC_KEY }}
+    steps:
+      # pull requests from forks get no secrets: nothing to run against
+      - name: Stripe keys present
+        id: keys
+        run: |
+          if [ -n "$STRIPE_SECRET_KEY" ] && [ -n "$STRIPE_PUBLIC_KEY" ]; then echo "ok=true" >> "$GITHUB_OUTPUT";
+          else echo "::warning::STRIPE_TEST_SECRET_KEY / STRIPE_TEST_PUBLIC_KEY not set; Stripe suite skipped"; fi
+      # playwright.stripe.config.ts starts the backend from ../backend
+      # git (branch lookup) and curl (Stripe CLI download), in case the image lacks them
+      - name: Tools
+        if: steps.keys.outputs.ok
+        run: command -v git >/dev/null && command -v curl >/dev/null || (apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates)
+      # the branch of the same name in ecommerce-frontend when there is one (changes made in both repos
+      # together), main otherwise
+      - name: Pick the frontend branch
+        id: other
+        if: steps.keys.outputs.ok
+        run: |
+          branch="${{ github.head_ref || github.ref_name }}"
+          if git ls-remote --exit-code --heads https://github.com/AbigailOrtega/ecommerce-frontend.git "$branch" >/dev/null; then
+            echo "ref=$branch" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.keys.outputs.ok
+        with:
+          path: backend
+      - uses: actions/checkout@v4
+        if: steps.keys.outputs.ok
+        with:
+          repository: AbigailOrtega/ecommerce-frontend
+          ref: ${{ steps.other.outputs.ref }}
+          path: frontend
+      - uses: actions/setup-java@v4
+        if: steps.keys.outputs.ok
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - uses: actions/setup-node@v4
+        if: steps.keys.outputs.ok
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install the Stripe CLI
+        if: steps.keys.outputs.ok
+        run: curl -fsSL https://github.com/stripe/stripe-cli/releases/download/v1.35.0/stripe_1.35.0_linux_x86_64.tar.gz | tar -xz -C /usr/local/bin stripe
+      - run: npm ci
+        if: steps.keys.outputs.ok
+        working-directory: frontend
+      - run: npm run test:e2e:stripe
+        if: steps.keys.outputs.ok
+        working-directory: frontend
+        env:
+          PW_HEADLESS: '1'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-stripe-results
+          path: frontend/test-results

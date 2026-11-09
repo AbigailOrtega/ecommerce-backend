@@ -1,14 +1,18 @@
 package com.ecommerce.e2e;
 
 import com.ecommerce.dto.response.ApiResponse;
+import com.ecommerce.entity.Order;
 import com.ecommerce.entity.User;
 import com.ecommerce.exception.ResourceNotFoundException;
+import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.UserRepository;
+import com.ecommerce.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -28,7 +32,22 @@ import java.util.Optional;
 public class E2eSupportController {
 
     private final UserRepository userRepository;
+    private final OrderRepository orderRepository;
+    private final PaymentService paymentService;
     private final Optional<FakePaymentService> fakePayments;
+
+    /**
+     * Settles one pending order the way AbandonedOrderJob does once it is an hour old (asks the
+     * payment provider, then confirms or cancels it), so a test does not have to wait the hour.
+     */
+    @PostMapping("/orders/{orderNumber}/settle-abandoned")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, String>>> settleAbandoned(@PathVariable String orderNumber) {
+        Order order = orderRepository.findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
+        PaymentService.AbandonedOutcome outcome = paymentService.resolveAbandonedOrder(order.getId());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("outcome", outcome.name())));
+    }
 
     /** The password-reset token that the forgot-password email would contain. */
     @GetMapping("/reset-token")
