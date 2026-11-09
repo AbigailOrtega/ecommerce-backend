@@ -3,8 +3,12 @@ package com.ecommerce.ratelimit;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
- * The visitor's IP. Requests reach the backend through Vercel's /api rewrite and Render's proxy,
- * so the connection's own address is the proxy's; the client is the first X-Forwarded-For entry.
+ * The visitor's IP: the first X-Forwarded-For entry. Confirmed in production (2026-11): requests go
+ * browser → Vercel (/api rewrite) → Cloudflare at Render → app, and arrive with
+ * X-Forwarded-For "client, vercel-egress"; CF-Connecting-IP and the connection address are Vercel's
+ * and Cloudflare's, shared by every visitor. Vercel overwrites the header, so it cannot be forged
+ * through the store; a caller hitting Render directly can forge it, which only per-IP limits rely on
+ * (the per-email limits do not).
  */
 public final class ClientIp {
 
@@ -16,16 +20,5 @@ public final class ClientIp {
             return forwarded.split(",")[0].trim();
         }
         return request.getRemoteAddr();
-    }
-
-    /** Every header that may carry the visitor's IP, to find the right one behind the proxies. */
-    public static String describe(HttpServletRequest request) {
-        StringBuilder sb = new StringBuilder("remoteAddr=").append(request.getRemoteAddr());
-        for (String h : new String[]{"X-Forwarded-For", "X-Real-IP", "X-Vercel-Forwarded-For",
-                "X-Vercel-IP", "True-Client-IP", "CF-Connecting-IP", "Forwarded"}) {
-            String v = request.getHeader(h);
-            if (v != null) sb.append(' ').append(h).append('=').append(v);
-        }
-        return sb.toString();
     }
 }

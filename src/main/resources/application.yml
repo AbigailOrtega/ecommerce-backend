@@ -50,7 +50,6 @@ spring:
 app:
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
-    # per-IP limits; prod keeps them off until the header carrying the visitor's IP is confirmed
     per-ip-enabled: ${RATE_LIMIT_PER_IP_ENABLED:true}
   jwt:
     secret: ${JWT_SECRET}
@@ -271,8 +270,8 @@ springdoc:
 
 app:
   rate-limit:
-    # per-email limits stay on; per-IP waits until the client IP header is confirmed in Render's logs
-    per-ip-enabled: ${RATE_LIMIT_PER_IP_ENABLED:false}
+    # client IP header confirmed (see ClientIp); per-IP limits on unless RATE_LIMIT_PER_IP_ENABLED=false
+    per-ip-enabled: ${RATE_LIMIT_PER_IP_ENABLED:true}
 
 logging:
   level:

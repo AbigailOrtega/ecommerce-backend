@@ -205,7 +205,7 @@ The Dockerfile uses a multi-stage build with `eclipse-temurin:21` (Alpine).
 | `DDL_AUTO` | No | `validate` | Hibernate schema mode in prod; Flyway owns the schema (`db/migration`) |
 | `APP_TIME_ZONE` | No | `America/Mexico_City` | Store time zone: coupon/promotion dates and every stored timestamp |
 | `RATE_LIMIT_ENABLED` | No | `true` | All rate limits (per email and per IP) |
-| `RATE_LIMIT_PER_IP_ENABLED` | No | `false` in prod | Per-IP limits; turn on once the client IP header behind Vercel + Render is confirmed |
+| `RATE_LIMIT_PER_IP_ENABLED` | No | `true` | Per-IP limits (client IP = first X-Forwarded-For entry, see `ClientIp`) |
 | `SENTRY_DSN` | No | - | Sentry project DSN; empty = no error reporting. Every `log.error` (500s included) becomes an event |
 | `SENTRY_ENVIRONMENT` | No | `production` | Environment name shown in Sentry |
 | `PAYPAL_MODE` | No | `sandbox` | `sandbox` or `live` |
