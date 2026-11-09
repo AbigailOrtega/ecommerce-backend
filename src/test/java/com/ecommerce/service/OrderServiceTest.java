@@ -362,4 +362,45 @@ class OrderServiceTest {
                     .hasMessage("Este pedido no pertenece a tu cuenta");
         }
     }
+
+    // ─── onOrderPaid ──────────────────────────────────────────────────────────
+
+    @org.junit.jupiter.api.Nested
+    @org.junit.jupiter.api.DisplayName("onOrderPaid")
+    class OnOrderPaid {
+
+        @org.junit.jupiter.api.Test
+        @org.junit.jupiter.api.DisplayName("emails a signed-in shopper the CONFIRMED status")
+        void emailsUser() {
+            com.ecommerce.entity.User user = com.ecommerce.entity.User.builder().id(1L).email("ana@example.com")
+                    .firstName("Ana").lastName("L").role(com.ecommerce.entity.Role.CUSTOMER).build();
+            com.ecommerce.entity.Order order = com.ecommerce.entity.Order.builder().id(7L).orderNumber("ORD-7")
+                    .user(user).status(com.ecommerce.entity.OrderStatus.CONFIRMED)
+                    .totalAmount(java.math.BigDecimal.TEN).items(new java.util.ArrayList<>()).build();
+            org.mockito.Mockito.when(orderRepository.findById(7L)).thenReturn(java.util.Optional.of(order));
+
+            orderService.onOrderPaid(new OrderPaidEvent(7L));
+
+            org.mockito.Mockito.verify(emailService).sendOrderStatusUpdateEmail(
+                    org.mockito.ArgumentMatchers.eq(user),
+                    org.mockito.ArgumentMatchers.argThat(r -> "CONFIRMED".equals(r.getStatus())));
+        }
+
+        @org.junit.jupiter.api.Test
+        @org.junit.jupiter.api.DisplayName("emails a guest at the order's email")
+        void emailsGuest() {
+            com.ecommerce.entity.Order order = com.ecommerce.entity.Order.builder().id(8L).orderNumber("ORD-8")
+                    .guestEmail("invitada@example.com").guestFirstName("Luz")
+                    .status(com.ecommerce.entity.OrderStatus.CONFIRMED)
+                    .totalAmount(java.math.BigDecimal.TEN).items(new java.util.ArrayList<>()).build();
+            org.mockito.Mockito.when(orderRepository.findById(8L)).thenReturn(java.util.Optional.of(order));
+
+            orderService.onOrderPaid(new OrderPaidEvent(8L));
+
+            org.mockito.Mockito.verify(emailService).sendGuestOrderStatusUpdateEmail(
+                    org.mockito.ArgumentMatchers.eq("invitada@example.com"),
+                    org.mockito.ArgumentMatchers.eq("Luz"),
+                    org.mockito.ArgumentMatchers.argThat(r -> "CONFIRMED".equals(r.getStatus())));
+        }
+    }
 }

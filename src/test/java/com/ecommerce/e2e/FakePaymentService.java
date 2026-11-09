@@ -7,6 +7,7 @@ import com.ecommerce.service.CartService;
 import com.ecommerce.service.PayPalClient;
 import com.ecommerce.service.StockService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -37,8 +38,8 @@ public class FakePaymentService extends PaymentService {
     private final Map<String, Long> paypalCaptures = new ConcurrentHashMap<>();  // id → cents
 
     public FakePaymentService(OrderRepository orderRepository, StockService stockService, CartService cartService,
-                              PayPalClient paypalClient) {
-        super(orderRepository, stockService, cartService, paypalClient);
+                              PayPalClient paypalClient, ApplicationEventPublisher events) {
+        super(orderRepository, stockService, cartService, paypalClient, events);
         log.warn("[e2e] FakePaymentService active: Stripe and PayPal are simulated");
     }
 

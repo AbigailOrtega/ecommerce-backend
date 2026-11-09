@@ -24,7 +24,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -448,6 +451,23 @@ public class OrderService {
         }
 
         OrderResponse orderResponse = mapToResponse(orderRepository.save(order), true);
+        notifyStatusChange(order, orderResponse);
+        return orderResponse;
+    }
+
+    /**
+     * A payment confirmed the order (Stripe or PayPal, at checkout, by webhook or by the abandoned-order
+     * check): tell the shopper, as the admin's status changes do. Runs after the payment's transaction
+     * commits, so nobody is told about a confirmation that was rolled back.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public void onOrderPaid(OrderPaidEvent event) {
+        orderRepository.findById(event.orderId())
+                .ifPresent(order -> notifyStatusChange(order, mapToResponse(order, true)));
+    }
+
+    private void notifyStatusChange(Order order, OrderResponse orderResponse) {
         if (order.getUser() != null) {
             emailService.sendOrderStatusUpdateEmail(order.getUser(), orderResponse);
         } else if (order.getGuestEmail() != null) {
@@ -456,7 +476,6 @@ public class OrderService {
                     order.getGuestFirstName() != null ? order.getGuestFirstName() : "Cliente",
                     orderResponse);
         }
-        return orderResponse;
     }
 
     /**

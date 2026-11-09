@@ -49,7 +49,7 @@ class AbandonedOrderResolutionTest {
         boolean paypalDown;
 
         ProviderStub(OrderRepository orders, StockService stock, CartService cart) {
-            super(orders, stock, cart, null);
+            super(orders, stock, cart, null, event -> {});
         }
 
         @Override public boolean isPayPalConfigured() { return true; }

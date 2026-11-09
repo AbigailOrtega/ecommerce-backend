@@ -17,6 +17,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +35,7 @@ public class PaymentService {
     private final StockService stockService;
     private final CartService cartService;
     private final PayPalClient paypalClient;
+    private final ApplicationEventPublisher events;
 
     @Value("${app.stripe.secret-key:}")
     private String stripeSecretKey;
@@ -219,8 +221,7 @@ public class PaymentService {
                     order.getOrderNumber(), amountReceived, currency, order.getTotalAmount());
             return;
         }
-        order.setStatus(OrderStatus.CONFIRMED);
-        orderRepository.save(order);
+        markPaid(order);
         log.info("Order {} confirmed via webhook", order.getOrderNumber());
     }
 
@@ -279,8 +280,7 @@ public class PaymentService {
             throw new BadRequestException("El pago no corresponde a este pedido");
         }
         verifyPayPalCapture(captureId, order.getTotalAmount());
-        order.setStatus(OrderStatus.CONFIRMED);
-        orderRepository.save(order);
+        markPaid(order);
         log.info("Order {} confirmed via PayPal capture: {}", orderNumber, captureId);
     }
 
@@ -332,8 +332,7 @@ public class PaymentService {
         }
 
         order.setPaymentId(captured.captureId());
-        order.setStatus(OrderStatus.CONFIRMED);
-        orderRepository.save(order);
+        markPaid(order);
         log.info("Order {} confirmed via PayPal capture {}", orderNumber, captured.captureId());
     }
 
@@ -403,8 +402,7 @@ public class PaymentService {
                 return AbandonedOutcome.KEPT;
             }
             order.setPaymentId(snapshot.captureId());
-            order.setStatus(OrderStatus.CONFIRMED);
-            orderRepository.save(order);
+            markPaid(order);
             log.info("Pending order {} confirmed: PayPal capture {} found", order.getOrderNumber(), snapshot.captureId());
             return AbandonedOutcome.CONFIRMED;
         }
@@ -432,6 +430,13 @@ public class PaymentService {
         PaymentIntent.retrieve(paymentIntentId).cancel();
     }
 
+    /** PENDING → CONFIRMED once the payment is in; the shopper is emailed after the transaction commits. */
+    private void markPaid(Order order) {
+        order.setStatus(OrderStatus.CONFIRMED);
+        orderRepository.save(order);
+        events.publishEvent(new OrderPaidEvent(order.getId()));
+    }
+
     private void cancelUnpaidOrder(Order order) {
         stockService.restore(order, order.getStatus());
         order.setStatus(OrderStatus.CANCELLED);
@@ -441,12 +446,12 @@ public class PaymentService {
     @Transactional
     public void handlePayPalCaptureCompleted(String captureId) {
         orderRepository.findByPaymentId(captureId).ifPresentOrElse(order -> {
-            if (order.getStatus() == OrderStatus.CONFIRMED) {
-                log.info("Order {} already confirmed, skipping", order.getOrderNumber());
+            // like Stripe's: a resent or late event must not move a shipped order back to CONFIRMED
+            if (order.getStatus() != OrderStatus.PENDING) {
+                log.info("Order {} is already {}, skipping", order.getOrderNumber(), order.getStatus());
                 return;
             }
-            order.setStatus(OrderStatus.CONFIRMED);
-            orderRepository.save(order);
+            markPaid(order);
             log.info("Order {} confirmed via PayPal webhook captureId={}", order.getOrderNumber(), captureId);
         }, () -> log.warn("PayPal webhook CAPTURE.COMPLETED — no order found for captureId={}", captureId));
     }

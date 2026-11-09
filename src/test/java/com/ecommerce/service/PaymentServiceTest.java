@@ -50,6 +50,7 @@ class PaymentServiceTest {
     @Mock private ProductSizeRepository productSizeRepository;
     @Mock private CartService cartService;
     @Mock private PayPalClient paypalClient;
+    @Mock private org.springframework.context.ApplicationEventPublisher events;
 
     @InjectMocks private PaymentService paymentService;
 
@@ -351,6 +352,7 @@ class PaymentServiceTest {
             paymentService.handlePaymentSuccess("pi_ooo", 15000L, "mxn");
             assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPED);
             verify(orderRepository, never()).save(any());
+            verifyNoInteractions(events);
         }
 
         @Test
@@ -380,6 +382,8 @@ class PaymentServiceTest {
             paymentService.handlePaymentSuccess("pi_ooo", 15000L, "mxn");
             assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
             verify(orderRepository, times(1)).save(order);
+            // the shopper is told once
+            verify(events, times(1)).publishEvent(any(OrderPaidEvent.class));
         }
     }
 
