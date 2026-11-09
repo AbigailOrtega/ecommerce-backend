@@ -131,11 +131,10 @@ class StripeWebhookControllerTest {
         }
 
         @Test
-        @DisplayName("returns 200 and calls handlePaymentFailure on payment_intent.payment_failed")
+        @DisplayName("payment_intent.payment_failed leaves the order alone: the shopper may retry with another card")
         void webhook_200_paymentIntentFailed() throws Exception {
             Event event = mockEvent("payment_intent.payment_failed", "pi_failed_001");
             when(paymentService.constructWebhookEvent(anyString(), anyString())).thenReturn(event);
-            doNothing().when(paymentService).handlePaymentFailure("pi_failed_001");
 
             mockMvc.perform(post("/api/webhooks/stripe")
                     .contentType(MediaType.TEXT_PLAIN)
@@ -144,8 +143,23 @@ class StripeWebhookControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(content().string("OK"));
 
-            verify(paymentService).handlePaymentFailure("pi_failed_001");
+            verify(paymentService, never()).handlePaymentFailure(anyString());
             verify(paymentService, never()).handlePaymentSuccess(anyString(), anyLong(), any());
+        }
+
+        @Test
+        @DisplayName("payment_intent.canceled cancels the unpaid order")
+        void webhook_200_paymentIntentCanceled() throws Exception {
+            Event event = mockEvent("payment_intent.canceled", "pi_canceled_001");
+            when(paymentService.constructWebhookEvent(anyString(), anyString())).thenReturn(event);
+
+            mockMvc.perform(post("/api/webhooks/stripe")
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .header("Stripe-Signature", VALID_SIG)
+                    .content("{\"id\":\"evt_004\",\"type\":\"payment_intent.canceled\"}"))
+                    .andExpect(status().isOk());
+
+            verify(paymentService).handlePaymentFailure("pi_canceled_001");
         }
 
         @Test
@@ -153,6 +167,7 @@ class StripeWebhookControllerTest {
         void webhook_200_chargeRefunded() throws Exception {
             com.stripe.model.Charge charge = mock(com.stripe.model.Charge.class);
             when(charge.getPaymentIntent()).thenReturn("pi_refund_001");
+            when(charge.getRefunded()).thenReturn(true);
 
             EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
             when(deserializer.getObject()).thenReturn(Optional.of(charge));
@@ -172,6 +187,30 @@ class StripeWebhookControllerTest {
                     .andExpect(content().string("OK"));
 
             verify(paymentService).handleRefund("pi_refund_001");
+        }
+
+        @Test
+        @DisplayName("a partial refund leaves the order and its stock unchanged")
+        void webhook_200_partialRefund() throws Exception {
+            com.stripe.model.Charge charge = mock(com.stripe.model.Charge.class);
+            when(charge.getPaymentIntent()).thenReturn("pi_partial_001");
+            when(charge.getRefunded()).thenReturn(false);
+            when(charge.getAmountRefunded()).thenReturn(5000L);
+
+            EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
+            when(deserializer.getObject()).thenReturn(Optional.of(charge));
+            Event event = mock(Event.class);
+            when(event.getType()).thenReturn("charge.refunded");
+            when(event.getDataObjectDeserializer()).thenReturn(deserializer);
+            when(paymentService.constructWebhookEvent(anyString(), anyString())).thenReturn(event);
+
+            mockMvc.perform(post("/api/webhooks/stripe")
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .header("Stripe-Signature", VALID_SIG)
+                    .content("{\"id\":\"evt_005\",\"type\":\"charge.refunded\"}"))
+                    .andExpect(status().isOk());
+
+            verify(paymentService, never()).handleRefund(anyString());
         }
 
         @Test

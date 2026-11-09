@@ -55,15 +55,28 @@ public class StripeWebhookController {
                 paymentService.handlePaymentSuccess(pi.getId(),
                         pi.getAmountReceived() != null ? pi.getAmountReceived() : 0L, pi.getCurrency());
             }
+            // One attempt failed (e.g. a declined card); the shopper can still pay with another one, so
+            // the order stays PENDING. If they never do, AbandonedOrderJob settles it after an hour.
             case "payment_intent.payment_failed" -> {
                 PaymentIntent pi = (PaymentIntent) stripeObject;
-                log.info("payment_intent.payment_failed for pi_id={}", pi.getId());
+                log.info("payment_intent.payment_failed for pi_id={} (order kept, the shopper may retry)", pi.getId());
+            }
+            // Final: the intent can no longer be paid
+            case "payment_intent.canceled" -> {
+                PaymentIntent pi = (PaymentIntent) stripeObject;
+                log.info("payment_intent.canceled for pi_id={}", pi.getId());
                 paymentService.handlePaymentFailure(pi.getId());
             }
             case "charge.refunded" -> {
                 com.stripe.model.Charge charge = (com.stripe.model.Charge) stripeObject;
-                if (charge.getPaymentIntent() != null) {
-                    log.info("charge.refunded for pi_id={}", charge.getPaymentIntent());
+                if (charge.getPaymentIntent() == null) {
+                    log.warn("charge.refunded without a payment intent: {}", charge.getId());
+                } else if (!Boolean.TRUE.equals(charge.getRefunded())) {
+                    // charge.refunded also fires for partial refunds: the order and its stock stay as they are
+                    log.warn("Partial refund of {} on pi_id={}: order left unchanged, adjust it by hand if needed",
+                            charge.getAmountRefunded(), charge.getPaymentIntent());
+                } else {
+                    log.info("charge.refunded (full) for pi_id={}", charge.getPaymentIntent());
                     paymentService.handleRefund(charge.getPaymentIntent());
                 }
             }

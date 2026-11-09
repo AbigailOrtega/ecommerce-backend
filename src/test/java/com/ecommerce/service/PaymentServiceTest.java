@@ -331,6 +331,58 @@ class PaymentServiceTest {
         }
     }
 
+    // ─── events delivered late, twice or out of order ─────────────────────────
+
+    @Nested
+    @DisplayName("Stripe events out of order")
+    class OutOfOrderEvents {
+
+        private Order order(OrderStatus status) {
+            Order order = Order.builder().orderNumber("ORD-OOO").status(status)
+                    .totalAmount(new BigDecimal("150.00")).items(new ArrayList<>()).build();
+            when(orderRepository.findByPaymentId("pi_ooo")).thenReturn(Optional.of(order));
+            return order;
+        }
+
+        @Test
+        @DisplayName("a late 'succeeded' does not move a shipped order back to CONFIRMED")
+        void lateSuccessAfterShipping() {
+            Order order = order(OrderStatus.SHIPPED);
+            paymentService.handlePaymentSuccess("pi_ooo", 15000L, "mxn");
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPED);
+            verify(orderRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a payment for an order already cancelled is not confirmed silently (its stock was released)")
+        void successAfterCancel() {
+            Order order = order(OrderStatus.CANCELLED);
+            paymentService.handlePaymentSuccess("pi_ooo", 15000L, "mxn");
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+            verify(orderRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a late cancellation does not cancel a paid order")
+        void lateCancelAfterPayment() {
+            Order order = order(OrderStatus.CONFIRMED);
+            paymentService.handlePaymentFailure("pi_ooo");
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+            verify(orderRepository, never()).save(any());
+            verifyNoInteractions(cartService);
+        }
+
+        @Test
+        @DisplayName("the same 'succeeded' event twice confirms once")
+        void duplicateSuccess() {
+            Order order = order(OrderStatus.PENDING);
+            paymentService.handlePaymentSuccess("pi_ooo", 15000L, "mxn");
+            paymentService.handlePaymentSuccess("pi_ooo", 15000L, "mxn");
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+            verify(orderRepository, times(1)).save(order);
+        }
+    }
+
     // ─── handlePaymentFailure ─────────────────────────────────────────────────
 
     @Nested

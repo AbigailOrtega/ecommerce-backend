@@ -204,8 +204,14 @@ public class PaymentService {
             return;
         }
         Order order = orderOpt.get();
-        if (order.getStatus() == OrderStatus.CONFIRMED) {
-            log.info("Order {} already confirmed", order.getOrderNumber());
+        // Stripe may resend an event or deliver it late: only a PENDING order is confirmed
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            log.error("Order {} was already cancelled (stock released) when Stripe reported payment {} — "
+                    + "refund it or restore the order by hand", order.getOrderNumber(), paymentIntentId);
+            return;
+        }
+        if (order.getStatus() != OrderStatus.PENDING) {
+            log.info("Order {} is already {}; payment event ignored", order.getOrderNumber(), order.getStatus());
             return;
         }
         if (!"mxn".equalsIgnoreCase(currency) || amountReceived != toCents(order.getTotalAmount())) {
@@ -218,6 +224,7 @@ public class PaymentService {
         log.info("Order {} confirmed via webhook", order.getOrderNumber());
     }
 
+    /** The intent was cancelled for good (payment_intent.canceled): release the unpaid order's stock. */
     @Transactional
     public void handlePaymentFailure(String paymentIntentId) {
         Optional<Order> orderOpt = orderRepository.findByPaymentId(paymentIntentId);
@@ -226,8 +233,9 @@ public class PaymentService {
             return;
         }
         Order order = orderOpt.get();
-        if (order.getStatus() == OrderStatus.CANCELLED) {
-            log.info("Order {} already cancelled", order.getOrderNumber());
+        // only an unpaid order is cancelled: a late or repeated event must not cancel a paid one
+        if (order.getStatus() != OrderStatus.PENDING) {
+            log.info("Order {} is {}; cancellation event ignored", order.getOrderNumber(), order.getStatus());
             return;
         }
         stockService.restore(order, order.getStatus());
@@ -249,6 +257,7 @@ public class PaymentService {
             log.info("Order {} already refunded", order.getOrderNumber());
             return;
         }
+        // a CANCELLED order already released its stock; restore() knows and skips it
         stockService.restore(order, order.getStatus());
         order.setStatus(OrderStatus.REFUNDED);
         orderRepository.save(order);
