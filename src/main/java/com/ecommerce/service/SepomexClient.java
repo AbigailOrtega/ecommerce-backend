@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -23,6 +22,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -54,7 +54,8 @@ public class SepomexClient {
                 .build();
     }
 
-    public List<PostalCode> download() throws IOException, InterruptedException {
+    /** The catalog as Correos de México sends it: a ~2 MB zip (parse it with {@link #parseZip}). */
+    public byte[] downloadZip() throws IOException, InterruptedException {
         HttpResponse<byte[]> page = http.send(request(url).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
         if (page.statusCode() != 200) throw new IOException("Correos de México export page answered " + page.statusCode());
 
@@ -75,16 +76,26 @@ public class SepomexClient {
         if (export.statusCode() != 200 || type.startsWith("text/html")) {
             throw new IOException("Correos de México did not send the catalog (HTTP " + export.statusCode() + ", " + type + ")");
         }
-        return parseZip(new ByteArrayInputStream(export.body()));
+        return export.body();
     }
 
-    /** The settlements in the catalog zip; lines that do not parse are skipped. */
+    /** All the settlements in the catalog zip (tests; the app streams them, see the overload). */
     static List<PostalCode> parseZip(InputStream zip) throws IOException {
+        List<PostalCode> rows = new ArrayList<>();
+        parseZip(zip, rows::add);
+        return rows;
+    }
+
+    /**
+     * Hands each settlement of the catalog zip to {@code sink} as it is read, so the ~160k rows
+     * never sit in memory together. Lines that do not parse are skipped. Returns how many were read.
+     */
+    public static int parseZip(InputStream zip, Consumer<PostalCode> sink) throws IOException {
         try (ZipInputStream in = new ZipInputStream(zip, LATIN_1)) {
             ZipEntry entry;
             while ((entry = in.getNextEntry()) != null) {
                 if (!entry.isDirectory() && entry.getName().toLowerCase().endsWith(".txt")) {
-                    return parseText(in);
+                    return parseText(in, sink);
                 }
             }
         }
@@ -95,8 +106,8 @@ public class SepomexClient {
      * d_codigo|d_asenta|d_tipo_asenta|D_mnpio|d_estado|d_ciudad|… after a notice line and the
      * header line.
      */
-    static List<PostalCode> parseText(InputStream text) throws IOException {
-        List<PostalCode> rows = new ArrayList<>(170_000);
+    static int parseText(InputStream text, Consumer<PostalCode> sink) throws IOException {
+        int count = 0;
         // states, municipalities, cities and types repeat thousands of times: keep one copy each
         Map<String, String> shared = new java.util.HashMap<>();
         BufferedReader reader = new BufferedReader(new InputStreamReader(text, LATIN_1));
@@ -109,7 +120,8 @@ public class SepomexClient {
             }
             String[] f = line.split("\\|", -1);
             if (f.length < 6 || !f[0].matches("\\d{5}") || f[1].isBlank() || f[3].isBlank() || f[4].isBlank()) continue;
-            rows.add(PostalCode.builder()
+            count++;
+            sink.accept(PostalCode.builder()
                     .code(f[0])
                     .settlement(f[1].trim())
                     .settlementType(share(shared, blankToNull(f[2])))
@@ -118,7 +130,7 @@ public class SepomexClient {
                     .city(share(shared, blankToNull(f[5])))
                     .build());
         }
-        return rows;
+        return count;
     }
 
     static Map<String, String> hiddenFields(String html) {

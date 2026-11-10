@@ -12,7 +12,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -89,18 +93,19 @@ public class PostalCodeCatalogService {
         return true;
     }
 
-    /** Downloads the catalog and replaces the table with it, in one transaction. */
+    /**
+     * Downloads the catalog and replaces the table with it, in one transaction: rows are inserted
+     * in batches as the file is read (a few MB of memory instead of ~160k objects at once), and a
+     * short or broken file rolls everything back, keeping the catalog that was there.
+     */
     public void refresh() {
         if (!refreshing.compareAndSet(false, true)) return;
         try {
-            List<PostalCode> rows = client.download();
-            if (rows.size() < MIN_ROWS) {
-                throw new IllegalStateException("only " + rows.size() + " settlements in the download");
-            }
-            tx.executeWithoutResult(status -> replaceAll(rows));
+            byte[] zip = client.downloadZip();
+            int loaded = tx.execute(status -> replaceAll(zip));
             lastRefreshAt = LocalDateTime.now();
             lastRefreshError = null;
-            log.info("Postal code catalog loaded: {} settlements", rows.size());
+            log.info("Postal code catalog loaded: {} settlements", loaded);
         } catch (Exception e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             lastRefreshError = e.getMessage();
@@ -110,20 +115,37 @@ public class PostalCodeCatalogService {
         }
     }
 
-    private void replaceAll(List<PostalCode> rows) {
+    private int replaceAll(byte[] zip) {
         jdbc.update("DELETE FROM postal_codes");
-        for (int from = 0; from < rows.size(); from += BATCH) {
-            List<PostalCode> chunk = rows.subList(from, Math.min(from + BATCH, rows.size()));
-            jdbc.batchUpdate(
-                    "INSERT INTO postal_codes (code, settlement, settlement_type, municipality, state, city) VALUES (?, ?, ?, ?, ?, ?)",
-                    chunk, chunk.size(), (ps, r) -> {
-                        ps.setString(1, r.getCode());
-                        ps.setString(2, r.getSettlement());
-                        ps.setString(3, r.getSettlementType());
-                        ps.setString(4, r.getMunicipality());
-                        ps.setString(5, r.getState());
-                        ps.setString(6, r.getCity());
-                    });
+        List<PostalCode> batch = new ArrayList<>(BATCH);
+        int count;
+        try {
+            count = SepomexClient.parseZip(new ByteArrayInputStream(zip), row -> {
+                batch.add(row);
+                if (batch.size() == BATCH) { insert(batch); batch.clear(); }
+            });
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
+        insert(batch);
+        if (count < MIN_ROWS) {
+            // thrown inside the transaction: the DELETE and the inserts roll back
+            throw new IllegalStateException("only " + count + " settlements in the download");
+        }
+        return count;
+    }
+
+    private void insert(List<PostalCode> chunk) {
+        if (chunk.isEmpty()) return;
+        jdbc.batchUpdate(
+                "INSERT INTO postal_codes (code, settlement, settlement_type, municipality, state, city) VALUES (?, ?, ?, ?, ?, ?)",
+                chunk, chunk.size(), (ps, r) -> {
+                    ps.setString(1, r.getCode());
+                    ps.setString(2, r.getSettlement());
+                    ps.setString(3, r.getSettlementType());
+                    ps.setString(4, r.getMunicipality());
+                    ps.setString(5, r.getState());
+                    ps.setString(6, r.getCity());
+                });
     }
 }

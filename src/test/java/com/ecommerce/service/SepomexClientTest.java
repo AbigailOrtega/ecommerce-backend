@@ -28,7 +28,13 @@ class SepomexClientTest {
             "1234|Too short code|Colonia|X|Y|Z|||||||||",
             "");
 
-    private static byte[] zip(String name, String content) throws Exception {
+    /** A catalog zip with the notice and header lines, then {@code rows}. */
+    static byte[] catalogZip(List<String> rows) throws Exception {
+        return zip("CPdescarga.txt", "Aviso\r\nd_codigo|d_asenta|d_tipo_asenta|D_mnpio|d_estado|d_ciudad|d_CP\r\n"
+                + String.join("\r\n", rows));
+    }
+
+    static byte[] zip(String name, String content) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(out)) {
             zip.putNextEntry(new ZipEntry(name));
@@ -69,7 +75,8 @@ class SepomexClientTest {
     @EnabledIfSystemProperty(named = "sepomex.live", matches = "true")
     @DisplayName("(live) downloads the whole catalog from Correos de México")
     void liveDownload() throws Exception {
-        List<PostalCode> rows = new SepomexClient(SepomexClient.DEFAULT_URL).download();
+        byte[] zip = new SepomexClient(SepomexClient.DEFAULT_URL).downloadZip();
+        List<PostalCode> rows = SepomexClient.parseZip(new ByteArrayInputStream(zip));
         assertThat(rows.size()).isGreaterThan(PostalCodeCatalogService.MIN_ROWS);
         assertThat(rows).anySatisfy(r -> {
             assertThat(r.getCode()).isEqualTo("06700");

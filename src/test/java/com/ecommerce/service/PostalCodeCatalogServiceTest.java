@@ -8,12 +8,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ParameterizedPreparedStatementSetter;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,11 +33,16 @@ class PostalCodeCatalogServiceTest {
                 .municipality(municipality).state("Ciudad de México").city(city).build();
     }
 
+    private static byte[] catalogWith(int rows) throws Exception {
+        return SepomexClientTest.catalogZip(IntStream.range(0, rows)
+                .mapToObj(i -> String.format("%05d|Colonia %d|Colonia|Municipio|Estado||", i % 100_000, i)).toList());
+    }
+
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        doAnswer(inv -> { ((Consumer<Object>) inv.getArgument(0)).accept(null); return null; })
-                .when(tx).executeWithoutResult(any());
+        // runs the callback like the real template; an exception from it is what rolls back
+        when(tx.execute(any())).thenAnswer(inv -> ((TransactionCallback<Object>) inv.getArgument(0)).doInTransaction(null));
         service = new PostalCodeCatalogService(repository, client, jdbc, tx, true);
     }
 
@@ -74,13 +78,10 @@ class PostalCodeCatalogServiceTest {
     }
 
     @Test
-    @DisplayName("refresh: replaces the table with the download, in batches")
+    @DisplayName("refresh: replaces the table while reading the file, in batches of 2,000")
     @SuppressWarnings("unchecked")
     void refreshReplaces() throws Exception {
-        List<PostalCode> download = new ArrayList<>();
-        IntStream.range(0, PostalCodeCatalogService.MIN_ROWS + 1)
-                .forEach(i -> download.add(row(String.format("%05d", i % 100_000), "C" + i, "M", null)));
-        when(client.download()).thenReturn(download);
+        when(client.downloadZip()).thenReturn(catalogWith(PostalCodeCatalogService.MIN_ROWS + 1));
 
         service.refresh();
 
@@ -92,26 +93,26 @@ class PostalCodeCatalogServiceTest {
     }
 
     @Test
-    @DisplayName("refresh: a short download (broken file) keeps the current catalog")
-    void shortDownloadKeepsCatalog() throws Exception {
-        when(client.download()).thenReturn(List.of(row("06700", "Roma Norte", "Cuauhtémoc", null)));
+    @DisplayName("refresh: a short download (broken file) fails inside the transaction, so it rolls back")
+    void shortDownloadRollsBack() throws Exception {
+        when(client.downloadZip()).thenReturn(catalogWith(10));
 
         service.refresh();
 
-        verify(jdbc, never()).update(anyString());
-        assertThat(service.status().lastRefreshError()).contains("only 1 settlements");
+        assertThat(service.status().lastRefreshError()).contains("only 10 settlements");
+        assertThat(service.status().lastRefreshAt()).isNull();
+        assertThat(service.status().refreshing()).isFalse();
     }
 
     @Test
-    @DisplayName("refresh: a failed download keeps the current catalog and records why")
+    @DisplayName("refresh: a failed download changes nothing and records why")
     void failedDownloadKeepsCatalog() throws Exception {
-        when(client.download()).thenThrow(new IOException("Correos de México export page answered 503"));
+        when(client.downloadZip()).thenThrow(new IOException("Correos de México export page answered 503"));
 
         service.refresh();
 
-        verify(jdbc, never()).update(anyString());
+        verifyNoInteractions(jdbc);
         assertThat(service.status().lastRefreshError()).contains("503");
-        assertThat(service.status().refreshing()).isFalse();
     }
 
     @Test
@@ -124,6 +125,6 @@ class PostalCodeCatalogServiceTest {
         when(repository.count()).thenReturn(0L);
         off.loadIfEmpty();
 
-        verify(client, never()).download();
+        verify(client, never()).downloadZip();
     }
 }
