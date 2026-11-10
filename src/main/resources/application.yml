@@ -57,6 +57,10 @@ app:
     refresh-token-expiration: 7776000000 # 90 days in milliseconds
     # the refresh token cookie is Secure (https only); local http profiles turn it off
     refresh-cookie-secure: ${REFRESH_COOKIE_SECURE:true}
+  # The first admin. At startup, while the store has no admin, this account is made admin (or
+  # created, and sent a link to set its password). Ignored once an admin exists.
+  admin:
+    bootstrap-email: ${ADMIN_EMAIL:}
 
   # Stripe Configuration
   stripe:

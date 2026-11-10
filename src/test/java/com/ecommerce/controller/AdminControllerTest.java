@@ -33,6 +33,7 @@ import com.ecommerce.dto.response.ProductSalesItem;
 import com.ecommerce.dto.response.SalesDataPoint;
 import com.ecommerce.dto.response.SalesReportResponse;
 import com.ecommerce.dto.response.UpcomingScheduleResponse;
+import com.ecommerce.service.AdminAccountService;
 import com.ecommerce.service.AnalyticsService;
 import com.ecommerce.service.CouponService;
 import com.ecommerce.service.EmailService;
@@ -124,6 +125,7 @@ class AdminControllerTest {
     @MockitoBean SkydropxService skydropxService;
     @MockitoBean OrderRepository orderRepository;
     @MockitoBean UserRepository userRepository;
+    @MockitoBean AdminAccountService adminAccountService;
 
     // ── Stub helpers ─────────────────────────────────────────────────────────
 

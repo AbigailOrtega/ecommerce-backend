@@ -1,5 +1,6 @@
 package com.ecommerce.repository;
 
+import com.ecommerce.entity.Role;
 import com.ecommerce.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,11 +14,13 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
+    Optional<User> findFirstByEmailIgnoreCase(String email);
     boolean existsByEmail(String email);
     Optional<User> findByResetToken(String resetToken);
     Optional<User> findByUnsubscribeToken(String unsubscribeToken);
     java.util.List<User> findAllByMarketingOptInTrue();
     long countByMarketingOptInTrue();
+    long countByRole(Role role);
 
     @Query("SELECT u FROM User u WHERE LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%')) "
             + "OR LOWER(u.firstName) LIKE LOWER(CONCAT('%', :q, '%')) "

@@ -110,6 +110,27 @@ public class EmailService {
         }
     }
 
+    /**
+     * Tells someone they were made admin. With a token, the account is new and the email carries
+     * the link to set its password; without one, it links to the admin panel.
+     */
+    @Async
+    public void sendAdminInvitationEmail(String email, String firstName, String setPasswordToken) {
+        try {
+            Context context = new Context();
+            context.setVariable("firstName", firstName);
+            context.setVariable("setPasswordLink", setPasswordToken == null ? null
+                    : frontendUrl + "/reset-password?token=" + setPasswordToken + "&invite=1");
+            context.setVariable("adminLink", frontendUrl + "/admin");
+
+            String html = templateEngine.process("email/admin-invitation", context);
+            sendEmail(email, "Ahora tienes acceso de admin", html);
+            log.info("Admin invitation email sent to: {}", email);
+        } catch (Exception e) {
+            log.error("Failed to send admin invitation email to: {}", email, e);
+        }
+    }
+
     @Async
     public void sendPasswordResetEmail(String email, String firstName, String resetToken) {
         try {

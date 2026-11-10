@@ -1,5 +1,6 @@
 package com.ecommerce.controller;
 
+import com.ecommerce.dto.request.AdminInviteRequest;
 import com.ecommerce.dto.request.CouponRequest;
 import com.ecommerce.dto.request.PickupAvailabilityRequest;
 import com.ecommerce.dto.request.PickupExceptionRequest;
@@ -21,6 +22,7 @@ import com.ecommerce.entity.User;
 import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.UserRepository;
+import com.ecommerce.service.AdminAccountService;
 import com.ecommerce.service.AnalyticsService;
 import com.ecommerce.service.ReportService;
 import com.ecommerce.dto.response.SalesReportResponse;
@@ -50,6 +52,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -80,6 +83,7 @@ public class AdminController {
     private final SkydropxService skydropxService;
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
+    private final AdminAccountService adminAccountService;
 
     // ── Reports ───────────────────────────────────────────────────────────────
 
@@ -236,6 +240,26 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success(new UserResponse(
                 user.getId(), user.getFirstName(), user.getLastName(),
                 user.getEmail(), user.getPhone(), user.getRole().name())));
+    }
+
+    @PostMapping("/users/admins")
+    @Operation(summary = "Give admin access (promotes an account, or creates one and emails a link to set its password)")
+    public ResponseEntity<ApiResponse<UserResponse>> inviteAdmin(
+            Authentication authentication, @Valid @RequestBody AdminInviteRequest request) {
+        User user = adminAccountService.invite(request.email(), request.firstName(), request.lastName(),
+                authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success("Acceso de admin otorgado a " + user.getEmail(), toUserResponse(user)));
+    }
+
+    @DeleteMapping("/users/{id}/admin")
+    @Operation(summary = "Take admin access away (not your own, and never from the last admin)")
+    public ResponseEntity<ApiResponse<UserResponse>> revokeAdmin(Authentication authentication, @PathVariable Long id) {
+        User user = adminAccountService.revoke(id, authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success("Se quitó el acceso de admin a " + user.getEmail(), toUserResponse(user)));
+    }
+
+    private static UserResponse toUserResponse(User u) {
+        return new UserResponse(u.getId(), u.getFirstName(), u.getLastName(), u.getEmail(), u.getPhone(), u.getRole().name());
     }
 
     @GetMapping("/promotions")
