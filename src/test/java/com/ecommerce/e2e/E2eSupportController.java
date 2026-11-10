@@ -36,6 +36,15 @@ public class E2eSupportController {
     private final PaymentService paymentService;
     private final Optional<FakePaymentService> fakePayments;
 
+    /** The token of the pickup emails' link, which a real buyer finds in their inbox. */
+    @GetMapping("/orders/{orderNumber}/manage-token")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, String>>> manageToken(@PathVariable String orderNumber) {
+        Order order = orderRepository.findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
+        return ResponseEntity.ok(ApiResponse.success(Map.of("token", order.getManageToken())));
+    }
+
     /**
      * Settles one pending order the way AbandonedOrderJob does once it is an hour old (asks the
      * payment provider, then confirms or cancels it), so a test does not have to wait the hour.

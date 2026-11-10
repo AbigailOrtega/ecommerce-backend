@@ -164,6 +164,9 @@
                     <p class="info-value" th:text="${order.pickupTimeSlotLabel}">-</p>
                 </div>
             </div>
+            <p style="text-align:center; margin:16px 0 0;" th:if="${pickupManageUrl != null}">
+                <a th:href="${pickupManageUrl}" style="display:inline-block; background:#1a1a2e; color:#ffffff; text-decoration:none; padding:10px 22px; border-radius:6px; font-size:14px; font-weight:600;">¿No puedes ese día? Reprogramar o cancelar</a>
+            </p>
         </th:block>
         <th:block th:unless="${order.shippingType == 'PICKUP'}">
             <p class="section-title">Envío a</p>

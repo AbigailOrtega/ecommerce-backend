@@ -151,7 +151,7 @@ public class EmailService {
 
     @Async
     public void sendPickupRescheduleEmail(String toEmail, String firstName, String orderNumber,
-            String locationName, LocalDate pickupDate, String timeSlotLabel, String reason) {
+            String locationName, LocalDate pickupDate, String timeSlotLabel, String reason, String manageToken) {
         try {
             Context context = new Context();
             context.setVariable("firstName", firstName);
@@ -161,6 +161,7 @@ public class EmailService {
             context.setVariable("timeSlotLabel", timeSlotLabel);
             context.setVariable("reason", reason);
             context.setVariable("frontendUrl", frontendUrl);
+            context.setVariable("pickupManageUrl", pickupManageUrl(orderNumber, manageToken));
 
             String html = render("email/pickup-reschedule", context);
             sendEmail(toEmail, "Tu recolección ha sido cancelada — Pedido #" + orderNumber, html);
@@ -172,7 +173,7 @@ public class EmailService {
 
     @Async
     public void sendPickupRescheduledConfirmationEmail(String toEmail, String firstName, String orderNumber,
-            String locationName, LocalDate pickupDate, String timeSlotLabel) {
+            String locationName, LocalDate pickupDate, String timeSlotLabel, String manageToken) {
         try {
             Context context = new Context();
             context.setVariable("firstName", firstName);
@@ -181,6 +182,7 @@ public class EmailService {
             context.setVariable("pickupDate", pickupDate);
             context.setVariable("timeSlotLabel", timeSlotLabel);
             context.setVariable("frontendUrl", frontendUrl);
+            context.setVariable("pickupManageUrl", pickupManageUrl(orderNumber, manageToken));
 
             String html = render("email/pickup-rescheduled-confirmation", context);
             sendEmail(toEmail, "Tu recolección ha sido confirmada — Pedido #" + orderNumber, html);
@@ -282,12 +284,23 @@ public class EmailService {
         log.info("Test email sent to: {}", toEmail);
     }
 
+    /** The page where the buyer reschedules or cancels a pickup; null without a token. */
+    String pickupManageUrl(String orderNumber, String manageToken) {
+        if (orderNumber == null || manageToken == null) return null;
+        return frontendUrl + "/recoleccion/" + orderNumber + "?t=" + manageToken;
+    }
+
     /** Name shown when the store info has none (or cannot be read). */
     static final String DEFAULT_STORE_NAME = "Marea";
 
     /** Every email carries the store's name (from the admin's store info) and the current year. */
     private String render(String template, Context context) {
         context.setVariable("storeName", storeName());
+        // order emails: a pickup order carries its reschedule/cancel link
+        if (context.getVariable("order") instanceof OrderResponse order && "PICKUP".equals(order.getShippingType())
+                && !context.containsVariable("pickupManageUrl")) {
+            context.setVariable("pickupManageUrl", pickupManageUrl(order.getOrderNumber(), order.getManageToken()));
+        }
         context.setVariable("year", Year.now().getValue());
         return templateEngine.process(template, context);
     }

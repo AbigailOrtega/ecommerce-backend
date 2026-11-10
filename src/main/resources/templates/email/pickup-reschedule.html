@@ -81,12 +81,12 @@
         </div>
 
         <p class="text">
-            Puedes ver tu pedido y coordinar una nueva fecha de recolección desde tu cuenta.
+            Elige una nueva fecha y horario de recolección cuando quieras.
         </p>
 
-        <!-- CTA button -->
+        <!-- CTA button: the pickup page of this order (works with or without an account) -->
         <div class="cta-wrapper">
-            <a class="cta-btn" th:href="${frontendUrl + '/pedidos/' + orderNumber}">Ver mi pedido</a>
+            <a class="cta-btn" th:href="${pickupManageUrl != null ? pickupManageUrl : frontendUrl + '/rastrear-pedido'}">Elegir nueva fecha</a>
         </div>
 
         <hr class="divider">

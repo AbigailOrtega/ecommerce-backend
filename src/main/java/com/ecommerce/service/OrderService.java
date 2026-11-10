@@ -520,65 +520,122 @@ public class OrderService {
         order.setPickupTimeSlotLabel(timeLabel);
     }
 
+    // ── Pickup: reschedule / cancel by the buyer ────────────────────────────────
+    // Two ways in: the account that placed the order, or the secret link of the pickup emails
+    // (guests have no account). Both end in the same rules.
+
     @Transactional
     public OrderResponse reschedulePickup(String userEmail, String orderNumber, LocalDate newDate, Long availabilityId) {
-        User user = findUserByEmail(userEmail);
-        Order order = orderRepository.findByOrderNumber(orderNumber)
-                .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
-
-        if (order.getUser() == null || !order.getUser().getId().equals(user.getId())) {
-            throw new BadRequestException("No tienes permiso para modificar este pedido.");
-        }
-        if (!"PICKUP".equals(order.getShippingType())) {
-            throw new BadRequestException("Este pedido no es de tipo recolección.");
-        }
-        List<OrderStatus> terminalStatuses = List.of(OrderStatus.CANCELLED, OrderStatus.DELIVERED, OrderStatus.REFUNDED);
-        if (terminalStatuses.contains(order.getStatus())) {
-            throw new BadRequestException("No se puede reagendar un pedido " + order.getStatus().name().toLowerCase() + ".");
-        }
-        applyPickupDate(order, order.getPickupLocationId(), newDate, availabilityId);
-        order.setPickupCancelled(false);
-        Order saved = orderRepository.save(order);
-        emailService.sendPickupRescheduledConfirmationEmail(
-                saved.getUser().getEmail(),
-                saved.getUser().getFirstName(),
-                saved.getOrderNumber(),
-                saved.getPickupLocationName(),
-                saved.getPickupDate(),
-                saved.getPickupTimeSlotLabel());
-        return mapToResponse(saved, true);
+        return doReschedule(ownedBy(userEmail, orderNumber), newDate, availabilityId);
     }
 
     @Transactional
     public OrderResponse customerCancelPickup(String userEmail, String orderNumber) {
+        return doCancelPickup(ownedBy(userEmail, orderNumber));
+    }
+
+    /** The order of the pickup link, with what its page needs (no personal data). */
+    @Transactional(readOnly = true)
+    public OrderResponse getPickupWithToken(String orderNumber, String token) {
+        Order order = withToken(orderNumber, token);
+        OrderResponse response = getOrderPublic(orderNumber);
+        response.setPickupLocationId(order.getPickupLocationId());
+        response.setNotes(null);
+        return response;
+    }
+
+    @Transactional
+    public OrderResponse reschedulePickupWithToken(String orderNumber, String token, LocalDate newDate, Long availabilityId) {
+        doReschedule(withToken(orderNumber, token), newDate, availabilityId);
+        return getPickupWithToken(orderNumber, token);
+    }
+
+    @Transactional
+    public OrderResponse cancelPickupWithToken(String orderNumber, String token) {
+        doCancelPickup(withToken(orderNumber, token));
+        return getPickupWithToken(orderNumber, token);
+    }
+
+    private Order ownedBy(String userEmail, String orderNumber) {
         User user = findUserByEmail(userEmail);
         Order order = orderRepository.findByOrderNumber(orderNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
-
         if (order.getUser() == null || !order.getUser().getId().equals(user.getId())) {
             throw new BadRequestException("No tienes permiso para modificar este pedido.");
         }
+        return order;
+    }
+
+    /** A wrong token answers like an unknown order: nothing to learn by guessing. */
+    private Order withToken(String orderNumber, String token) {
+        Order order = orderRepository.findByOrderNumber(orderNumber).orElse(null);
+        if (order == null || token == null || order.getManageToken() == null
+                || !java.security.MessageDigest.isEqual(
+                        order.getManageToken().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        token.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+            throw new ResourceNotFoundException("Order", "orderNumber", orderNumber);
+        }
+        return order;
+    }
+
+    private void requireOpenPickup(Order order, String action) {
         if (!"PICKUP".equals(order.getShippingType())) {
             throw new BadRequestException("Este pedido no es de tipo recolección.");
         }
+        List<OrderStatus> terminalStatuses = List.of(OrderStatus.CANCELLED, OrderStatus.DELIVERED, OrderStatus.REFUNDED);
+        if (terminalStatuses.contains(order.getStatus())) {
+            throw new BadRequestException("No se puede " + action + " de un pedido " + statusLabel(order.getStatus()) + ".");
+        }
+    }
+
+    private OrderResponse doReschedule(Order order, LocalDate newDate, Long availabilityId) {
+        requireOpenPickup(order, "reagendar la recolección");
+        applyPickupDate(order, order.getPickupLocationId(), newDate, availabilityId);
+        order.setPickupCancelled(false);
+        Order saved = orderRepository.save(order);
+        String to = recipientEmail(saved);
+        if (to != null) {
+            emailService.sendPickupRescheduledConfirmationEmail(
+                    to, recipientFirstName(saved), saved.getOrderNumber(), saved.getPickupLocationName(),
+                    saved.getPickupDate(), saved.getPickupTimeSlotLabel(), saved.ensureManageToken());
+        }
+        return mapToResponse(saved, true);
+    }
+
+    private OrderResponse doCancelPickup(Order order) {
+        requireOpenPickup(order, "cancelar la recolección");
         if (order.isPickupCancelled()) {
             throw new BadRequestException("La recolección ya está cancelada.");
         }
-        List<OrderStatus> terminalStatuses = List.of(OrderStatus.CANCELLED, OrderStatus.DELIVERED, OrderStatus.REFUNDED);
-        if (terminalStatuses.contains(order.getStatus())) {
-            throw new BadRequestException("No se puede cancelar la recolección de un pedido " + order.getStatus().name().toLowerCase() + ".");
-        }
         order.setPickupCancelled(true);
+        order.ensureManageToken();
         Order saved = orderRepository.save(order);
-        emailService.sendPickupRescheduleEmail(
-                saved.getUser().getEmail(),
-                saved.getUser().getFirstName(),
-                saved.getOrderNumber(),
-                saved.getPickupLocationName(),
-                saved.getPickupDate(),
-                saved.getPickupTimeSlotLabel(),
-                "Cancelado a tu solicitud — puedes reagendar cuando quieras desde tu cuenta.");
+        String to = recipientEmail(saved);
+        if (to != null) {
+            emailService.sendPickupRescheduleEmail(
+                    to, recipientFirstName(saved), saved.getOrderNumber(), saved.getPickupLocationName(),
+                    saved.getPickupDate(), saved.getPickupTimeSlotLabel(),
+                    "Cancelada a tu solicitud: elige una nueva fecha cuando quieras con el botón de este correo.",
+                    saved.getManageToken());
+        }
         return mapToResponse(saved, true);
+    }
+
+    private static String recipientEmail(Order order) {
+        return order.getUser() != null ? order.getUser().getEmail() : order.getGuestEmail();
+    }
+
+    private static String recipientFirstName(Order order) {
+        return order.getUser() != null ? order.getUser().getFirstName() : order.getGuestFirstName();
+    }
+
+    private static String statusLabel(OrderStatus status) {
+        return switch (status) {
+            case CANCELLED -> "cancelado";
+            case DELIVERED -> "entregado";
+            case REFUNDED -> "reembolsado";
+            default -> status.name().toLowerCase();
+        };
     }
 
     public OrderResponse getOrderPublic(String orderNumber) {
@@ -638,14 +695,14 @@ public class OrderService {
             throw new BadRequestException("No se puede cancelar la recolección de un pedido " + order.getStatus().name().toLowerCase() + ".");
         }
         order.setPickupCancelled(true);
+        order.ensureManageToken();
         Order saved = orderRepository.save(order);
-        String recipientEmail = saved.getUser() != null ? saved.getUser().getEmail() : saved.getGuestEmail();
-        String firstName = saved.getUser() != null ? saved.getUser().getFirstName() : saved.getGuestFirstName();
+        String recipientEmail = recipientEmail(saved);
         if (recipientEmail != null) {
             emailService.sendPickupRescheduleEmail(
-                    recipientEmail, firstName,
+                    recipientEmail, recipientFirstName(saved),
                     saved.getOrderNumber(), saved.getPickupLocationName(),
-                    saved.getPickupDate(), saved.getPickupTimeSlotLabel(), reason);
+                    saved.getPickupDate(), saved.getPickupTimeSlotLabel(), reason, saved.getManageToken());
         }
         return mapToResponse(saved, true);
     }
@@ -732,6 +789,7 @@ public class OrderService {
                 .guestLastName(order.getGuestLastName())
                 .guestPhone(order.getGuestPhone())
                 .pickupCancelled(order.isPickupCancelled())
+                .manageToken(order.getManageToken())
                 .build();
     }
 

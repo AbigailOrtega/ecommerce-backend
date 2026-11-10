@@ -309,6 +309,7 @@ public class PickupLocationService {
         List<Order> affected = orderRepository.findAffectedPickupOrders(aid, req.date(), EXCLUDED_STATUSES);
         for (Order order : affected) {
             order.setPickupCancelled(true);
+            order.ensureManageToken();
             orderRepository.save(order);
 
             String toEmail;
@@ -324,7 +325,7 @@ public class PickupLocationService {
                 emailService.sendPickupRescheduleEmail(
                         toEmail, firstName, order.getOrderNumber(),
                         order.getPickupLocationName(), req.date(),
-                        order.getPickupTimeSlotLabel(), req.reason());
+                        order.getPickupTimeSlotLabel(), req.reason(), order.getManageToken());
             }
         }
 

@@ -98,6 +98,19 @@ public class Order {
     @Builder.Default
     private boolean pickupCancelled = false; // set true when admin blocks the pickup date
 
+    /**
+     * Secret in the link of the pickup emails: whoever has it can reschedule or cancel the
+     * pickup (guests have no account). Never sent in API responses.
+     */
+    @Column(name = "manage_token", length = 36)
+    private String manageToken;
+
+    /** The token, created on the spot for orders placed before it existed. */
+    public String ensureManageToken() {
+        if (manageToken == null) manageToken = UUID.randomUUID().toString();
+        return manageToken;
+    }
+
     // ── Skydropx ─────────────────────────────────────────────────────────────
     private String skydropxRateId;         // rate chosen by customer at checkout
     private String skydropxShipmentId;
@@ -119,6 +132,7 @@ public class Order {
         if (orderNumber == null) {
             orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
+        ensureManageToken();
     }
 
     @PreUpdate

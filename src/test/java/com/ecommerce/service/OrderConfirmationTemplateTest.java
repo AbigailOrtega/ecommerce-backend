@@ -65,6 +65,27 @@ class OrderConfirmationTemplateTest {
     }
 
     @Test
+    @DisplayName("a pickup order shows the button to reschedule or cancel")
+    void pickupButton() {
+        ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/"); resolver.setSuffix(".html"); resolver.setCharacterEncoding("UTF-8");
+        SpringTemplateEngine engine = new SpringTemplateEngine();
+        engine.setTemplateResolver(resolver);
+        Context context = new Context();
+        context.setVariable("firstName", "Lucía");
+        context.setVariable("storeName", "Marea");
+        context.setVariable("year", 2026);
+        context.setVariable("order", OrderResponse.builder().orderNumber("ORD-PK1").status("CONFIRMED")
+                .totalAmount(new BigDecimal("100.00")).shippingType("PICKUP").pickupLocationName("Sucursal Centro")
+                .pickupTimeSlotLabel("Lunes 10:00 – 14:00").items(List.of()).build());
+        context.setVariable("pickupManageUrl", "https://www.mareatextiles.com/recoleccion/ORD-PK1?t=abc");
+
+        assertThat(engine.process("email/order-confirmation", context))
+                .contains("Reprogramar o cancelar")
+                .contains("href=\"https://www.mareatextiles.com/recoleccion/ORD-PK1?t=abc\"");
+    }
+
+    @Test
     @DisplayName("has no instructions section when there are none")
     void withoutNotes() {
         assertThat(render(null)).doesNotContain("Tus indicaciones de entrega");

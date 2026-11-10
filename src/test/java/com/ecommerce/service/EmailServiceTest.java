@@ -1,5 +1,7 @@
 package com.ecommerce.service;
 
+import com.ecommerce.dto.response.OrderResponse;
+
 import com.ecommerce.entity.Role;
 import com.ecommerce.entity.User;
 import jakarta.mail.Session;
@@ -62,6 +64,36 @@ class EmailServiceTest {
     }
 
     // ─── sendWelcomeEmail ─────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("pickup link (reschedule / cancel) in order emails")
+    class PickupLink {
+
+        private Context contextOf(OrderResponse order) {
+            ArgumentCaptor<Context> ctx = ArgumentCaptor.forClass(Context.class);
+            emailService.sendGuestOrderConfirmationEmail("lucia@example.com", "Lucía", order);
+            verify(templateEngine).process(eq("email/order-confirmation"), ctx.capture());
+            return ctx.getValue();
+        }
+
+        @Test
+        @DisplayName("a pickup order's email links to its pickup page, with the order's token")
+        void pickupOrder() {
+            OrderResponse order = OrderResponse.builder().orderNumber("ORD-PK1").shippingType("PICKUP")
+                    .manageToken("11111111-2222-3333-4444-555555555555").build();
+            assertThat(contextOf(order).getVariable("pickupManageUrl"))
+                    .isEqualTo(ReflectionTestUtils.getField(emailService, "frontendUrl")
+                            + "/recoleccion/ORD-PK1?t=11111111-2222-3333-4444-555555555555");
+        }
+
+        @Test
+        @DisplayName("a home-delivery order has no pickup link")
+        void nationalOrder() {
+            OrderResponse order = OrderResponse.builder().orderNumber("ORD-NA1").shippingType("NATIONAL")
+                    .manageToken("11111111-2222-3333-4444-555555555555").build();
+            assertThat(contextOf(order).getVariable("pickupManageUrl")).isNull();
+        }
+    }
 
     @Nested
     @DisplayName("store name and year in every email")

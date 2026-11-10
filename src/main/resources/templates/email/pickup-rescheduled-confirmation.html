@@ -73,7 +73,7 @@
 
         <!-- CTA button -->
         <div class="cta-wrapper">
-            <a class="cta-btn" th:href="${frontendUrl + '/pedidos/' + orderNumber}">Ver mi pedido</a>
+            <a class="cta-btn" th:href="${pickupManageUrl != null ? pickupManageUrl : frontendUrl + '/rastrear-pedido'}">Ver o cambiar mi recolección</a>
         </div>
 
         <hr class="divider">

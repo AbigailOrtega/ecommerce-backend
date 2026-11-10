@@ -51,6 +51,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/shipping/calculate-national").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/orders/guest").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/orders/track/**").permitAll()
+                // the emailed pickup link: authorized by its token, checked in OrderService
+                .requestMatchers(HttpMethod.GET, "/api/orders/*/pickup").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/orders/*/pickup/reschedule", "/api/orders/*/pickup/cancel").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/*/reviews/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/payments/stripe/config", "/api/payments/paypal/config").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/payments/stripe/create-intent").permitAll()

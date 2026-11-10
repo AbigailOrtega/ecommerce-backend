@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -54,4 +55,8 @@ public class OrderResponse {
     private String guestLastName;
     private String guestPhone;
     private boolean pickupCancelled;
+
+    /** For the emails' pickup link only (see Order.manageToken): never serialized. */
+    @JsonIgnore
+    private String manageToken;
 }

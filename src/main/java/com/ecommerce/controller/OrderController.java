@@ -91,4 +91,35 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Recolección cancelada",
                 orderService.customerCancelPickup(authentication.getName(), orderNumber)));
     }
+
+    // ── The pickup link of the emails (guests have no account): the token is the permission ──
+
+    @GetMapping("/{orderNumber}/pickup")
+    @Operation(summary = "The pickup of an order, for its emailed link (X-Pickup-Token)")
+    public ResponseEntity<ApiResponse<OrderResponse>> pickupWithToken(
+            @PathVariable String orderNumber, @RequestHeader(value = "X-Pickup-Token", required = false) String token,
+            HttpServletRequest httpRequest) {
+        rateLimiter.consume(RateLimit.PICKUP_MANAGE_PER_IP, ClientIp.of(httpRequest));
+        return ResponseEntity.ok(ApiResponse.success(orderService.getPickupWithToken(orderNumber, token)));
+    }
+
+    @PostMapping("/{orderNumber}/pickup/reschedule")
+    @Operation(summary = "Reschedule a pickup from its emailed link (X-Pickup-Token)")
+    public ResponseEntity<ApiResponse<OrderResponse>> reschedulePickupWithToken(
+            @PathVariable String orderNumber, @RequestHeader(value = "X-Pickup-Token", required = false) String token,
+            @Valid @RequestBody ReschedulePickupRequest request, HttpServletRequest httpRequest) {
+        rateLimiter.consume(RateLimit.PICKUP_MANAGE_PER_IP, ClientIp.of(httpRequest));
+        return ResponseEntity.ok(ApiResponse.success("Recolección reagendada",
+                orderService.reschedulePickupWithToken(orderNumber, token, request.pickupDate(), request.pickupAvailabilityId())));
+    }
+
+    @PostMapping("/{orderNumber}/pickup/cancel")
+    @Operation(summary = "Cancel a pickup from its emailed link (X-Pickup-Token); it can be rescheduled later")
+    public ResponseEntity<ApiResponse<OrderResponse>> cancelPickupWithToken(
+            @PathVariable String orderNumber, @RequestHeader(value = "X-Pickup-Token", required = false) String token,
+            HttpServletRequest httpRequest) {
+        rateLimiter.consume(RateLimit.PICKUP_MANAGE_PER_IP, ClientIp.of(httpRequest));
+        return ResponseEntity.ok(ApiResponse.success("Recolección cancelada",
+                orderService.cancelPickupWithToken(orderNumber, token)));
+    }
 }

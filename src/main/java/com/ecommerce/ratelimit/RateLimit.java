@@ -13,6 +13,8 @@ public enum RateLimit {
     FORGOT_PASSWORD_PER_IP(5, Duration.ofHours(1), true),
     FORGOT_PASSWORD_PER_EMAIL(3, Duration.ofHours(1), false),
     TRACK_ORDER_PER_IP(30, Duration.ofMinutes(1), true),
+    /** The pickup link of the emails: a few views and changes a minute. */
+    PICKUP_MANAGE_PER_IP(30, Duration.ofMinutes(1), true),
     GUEST_ORDER_PER_IP(10, Duration.ofHours(1), true),
     GUEST_ORDER_PER_EMAIL(10, Duration.ofHours(1), false),
     /** A person browsing fast opens a few pages a minute; this only stops scripted inflation. */
