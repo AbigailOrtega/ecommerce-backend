@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
+import java.time.Year;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -23,6 +25,7 @@ public class EmailService {
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
     private final ResendClient resendClient;
+    private final StoreInfoService storeInfoService;
 
     @Value("${app.mail.from:${spring.mail.username:noreply@ecommerce.com}}")
     private String fromEmail;
@@ -38,7 +41,7 @@ public class EmailService {
             context.setVariable("email", user.getEmail());
             context.setVariable("frontendUrl", frontendUrl);
 
-            String html = templateEngine.process("email/welcome", context);
+            String html = render("email/welcome", context);
             sendEmail(user.getEmail(), "¡Bienvenido a nuestra tienda!", html);
             log.info("Welcome email sent to: {}", user.getEmail());
         } catch (Exception e) {
@@ -53,7 +56,7 @@ public class EmailService {
             context.setVariable("firstName", user.getFirstName());
             context.setVariable("order", order);
 
-            String html = templateEngine.process("email/order-confirmation", context);
+            String html = render("email/order-confirmation", context);
             sendEmail(user.getEmail(), "Confirmación de tu pedido #" + order.getOrderNumber(), html);
             log.info("Order confirmation email sent to: {} for order: {}", user.getEmail(), order.getOrderNumber());
         } catch (Exception e) {
@@ -68,7 +71,7 @@ public class EmailService {
             context.setVariable("firstName", firstName);
             context.setVariable("order", order);
 
-            String html = templateEngine.process("email/order-confirmation", context);
+            String html = render("email/order-confirmation", context);
             sendEmail(email, "Confirmación de tu pedido #" + order.getOrderNumber(), html);
             log.info("Guest order confirmation email sent to: {} for order: {}", email, order.getOrderNumber());
         } catch (Exception e) {
@@ -84,7 +87,7 @@ public class EmailService {
             context.setVariable("order", order);
             context.setVariable("statusLabel", getStatusLabel(order.getStatus()));
 
-            String html = templateEngine.process("email/order-status", context);
+            String html = render("email/order-status", context);
             sendEmail(user.getEmail(), "Actualización de tu pedido #" + order.getOrderNumber(), html);
             log.info("Order status email sent to: {} for order: {} - status: {}",
                     user.getEmail(), order.getOrderNumber(), order.getStatus());
@@ -101,7 +104,7 @@ public class EmailService {
             context.setVariable("order", order);
             context.setVariable("statusLabel", getStatusLabel(order.getStatus()));
 
-            String html = templateEngine.process("email/order-status", context);
+            String html = render("email/order-status", context);
             sendEmail(email, "Actualización de tu pedido #" + order.getOrderNumber(), html);
             log.info("Guest order status email sent to: {} for order: {} - status: {}",
                     email, order.getOrderNumber(), order.getStatus());
@@ -123,7 +126,7 @@ public class EmailService {
                     : frontendUrl + "/reset-password?token=" + setPasswordToken + "&invite=1");
             context.setVariable("adminLink", frontendUrl + "/admin");
 
-            String html = templateEngine.process("email/admin-invitation", context);
+            String html = render("email/admin-invitation", context);
             sendEmail(email, "Ahora tienes acceso de admin", html);
             log.info("Admin invitation email sent to: {}", email);
         } catch (Exception e) {
@@ -138,7 +141,7 @@ public class EmailService {
             context.setVariable("firstName", firstName);
             context.setVariable("resetLink", frontendUrl + "/reset-password?token=" + resetToken);
 
-            String html = templateEngine.process("email/password-reset", context);
+            String html = render("email/password-reset", context);
             sendEmail(email, "Restablecer tu contraseña", html);
             log.info("Password reset email sent to: {}", email);
         } catch (Exception e) {
@@ -159,7 +162,7 @@ public class EmailService {
             context.setVariable("reason", reason);
             context.setVariable("frontendUrl", frontendUrl);
 
-            String html = templateEngine.process("email/pickup-reschedule", context);
+            String html = render("email/pickup-reschedule", context);
             sendEmail(toEmail, "Tu recolección ha sido cancelada — Pedido #" + orderNumber, html);
             log.info("Pickup reschedule email sent to: {} for order: {}", toEmail, orderNumber);
         } catch (Exception e) {
@@ -179,7 +182,7 @@ public class EmailService {
             context.setVariable("timeSlotLabel", timeSlotLabel);
             context.setVariable("frontendUrl", frontendUrl);
 
-            String html = templateEngine.process("email/pickup-rescheduled-confirmation", context);
+            String html = render("email/pickup-rescheduled-confirmation", context);
             sendEmail(toEmail, "Tu recolección ha sido confirmada — Pedido #" + orderNumber, html);
             log.info("Pickup rescheduled confirmation email sent to: {} for order: {}", toEmail, orderNumber);
         } catch (Exception e) {
@@ -196,7 +199,7 @@ public class EmailService {
             context.setVariable("shipmentId", shipmentId);
             context.setVariable("adminUrl", frontendUrl);
 
-            String html = templateEngine.process("email/label-pending", context);
+            String html = render("email/label-pending", context);
             sendEmail(toEmail, "Acción requerida: guía pendiente — Pedido #" + orderNumber, html);
             log.info("Label pending alert sent to: {} for order: {}", toEmail, orderNumber);
         } catch (Exception e) {
@@ -212,7 +215,7 @@ public class EmailService {
             context.setVariable("order", order);
             context.setVariable("frontendUrl", frontendUrl);
 
-            String html = templateEngine.process("email/shipment-tracking", context);
+            String html = render("email/shipment-tracking", context);
             sendEmail(user.getEmail(), "Tu pedido #" + order.getOrderNumber() + " está en camino", html);
             log.info("Shipment tracking email sent to: {} for order: {}", user.getEmail(), order.getOrderNumber());
         } catch (Exception e) {
@@ -228,7 +231,7 @@ public class EmailService {
             context.setVariable("order", order);
             context.setVariable("frontendUrl", frontendUrl);
 
-            String html = templateEngine.process("email/shipment-tracking", context);
+            String html = render("email/shipment-tracking", context);
             sendEmail(email, "Tu pedido #" + order.getOrderNumber() + " está en camino", html);
             log.info("Guest shipment tracking email sent to: {} for order: {}", email, order.getOrderNumber());
         } catch (Exception e) {
@@ -249,7 +252,7 @@ public class EmailService {
                 context.setVariable("unsubscribeUrl", frontendUrl + "/unsubscribe?token=" + user.getUnsubscribeToken());
                 context.setVariable("frontendUrl", frontendUrl);
 
-                String html = templateEngine.process("email/marketing", context);
+                String html = render("email/marketing", context);
 
                 ResendClient.InlineImage image = imageBytes != null && imageBytes.length > 0
                         ? new ResendClient.InlineImage("promoImage", imageBytes,
@@ -274,9 +277,29 @@ public class EmailService {
         context.setVariable("email", toEmail);
         context.setVariable("frontendUrl", frontendUrl);
 
-        String html = templateEngine.process("email/welcome", context);
-        sendEmail(toEmail, "Correo de prueba — E-Commerce Store", html);
+        String html = render("email/welcome", context);
+        sendEmail(toEmail, "Correo de prueba — " + storeName(), html);
         log.info("Test email sent to: {}", toEmail);
+    }
+
+    /** Name shown when the store info has none (or cannot be read). */
+    static final String DEFAULT_STORE_NAME = "Marea";
+
+    /** Every email carries the store's name (from the admin's store info) and the current year. */
+    private String render(String template, Context context) {
+        context.setVariable("storeName", storeName());
+        context.setVariable("year", Year.now().getValue());
+        return templateEngine.process(template, context);
+    }
+
+    String storeName() {
+        try {
+            String name = storeInfoService.getOrCreate().getName();
+            return name == null || name.isBlank() ? DEFAULT_STORE_NAME : name.trim();
+        } catch (RuntimeException e) {
+            log.warn("Store name unavailable for emails, using \"{}\": {}", DEFAULT_STORE_NAME, e.getMessage());
+            return DEFAULT_STORE_NAME;
+        }
     }
 
     private void sendEmail(String to, String subject, String htmlContent) throws MessagingException {

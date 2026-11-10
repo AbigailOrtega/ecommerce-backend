@@ -36,6 +36,8 @@ class OrderConfirmationTemplateTest {
         Context context = new Context();
         context.setVariable("firstName", "Lucía");
         context.setVariable("order", order);
+        context.setVariable("storeName", "Marea");
+        context.setVariable("year", 2026);
         return engine.process("email/order-confirmation", context);
     }
 
@@ -45,6 +47,15 @@ class OrderConfirmationTemplateTest {
         assertThat(render("Casa azul, tocar timbre 2"))
                 .contains("Tus indicaciones de entrega")
                 .contains("Casa azul, tocar timbre 2");
+    }
+
+    @Test
+    @DisplayName("is branded with the store name and year, not the old placeholder")
+    void branding() {
+        assertThat(render(null))
+                .contains("<h1>Marea</h1>")
+                .contains("© <span>2026</span> <span>Marea</span>")
+                .doesNotContain("E-Commerce Store");
     }
 
     @Test

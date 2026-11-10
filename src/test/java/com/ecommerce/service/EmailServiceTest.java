@@ -32,6 +32,7 @@ class EmailServiceTest {
     @Mock JavaMailSender mailSender;
     @Mock TemplateEngine templateEngine;
     @Mock ResendClient resendClient;
+    @Mock StoreInfoService storeInfoService;
     @InjectMocks EmailService emailService;
 
     private User testUser;
@@ -61,6 +62,41 @@ class EmailServiceTest {
     }
 
     // ─── sendWelcomeEmail ─────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("store name and year in every email")
+    class Branding {
+
+        private Context renderedContext() {
+            ArgumentCaptor<Context> ctx = ArgumentCaptor.forClass(Context.class);
+            emailService.sendWelcomeEmail(testUser);
+            verify(templateEngine).process(eq("email/welcome"), ctx.capture());
+            return ctx.getValue();
+        }
+
+        @Test
+        @DisplayName("uses the name from the admin's store info, and the current year")
+        void fromStoreInfo() {
+            when(storeInfoService.getOrCreate()).thenReturn(com.ecommerce.entity.StoreInfo.builder().name("Marea Textiles").build());
+            Context ctx = renderedContext();
+            assertThat(ctx.getVariable("storeName")).isEqualTo("Marea Textiles");
+            assertThat(ctx.getVariable("year")).isEqualTo(java.time.Year.now().getValue());
+        }
+
+        @Test
+        @DisplayName("falls back to \"Marea\" when the store info has no name")
+        void blankName() {
+            when(storeInfoService.getOrCreate()).thenReturn(com.ecommerce.entity.StoreInfo.builder().name("  ").build());
+            assertThat(renderedContext().getVariable("storeName")).isEqualTo("Marea");
+        }
+
+        @Test
+        @DisplayName("falls back to \"Marea\" when the store info cannot be read (the email still goes out)")
+        void storeInfoFails() {
+            when(storeInfoService.getOrCreate()).thenThrow(new IllegalStateException("db down"));
+            assertThat(renderedContext().getVariable("storeName")).isEqualTo("Marea");
+        }
+    }
 
     @Nested
     @DisplayName("sendWelcomeEmail")

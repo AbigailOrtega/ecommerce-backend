@@ -26,7 +26,7 @@
 <body>
 <div class="wrapper">
     <div class="header">
-        <h1>E-Commerce Store</h1>
+        <h1 th:text="${storeName}">Marea</h1>
         <p>Acción requerida: guía pendiente</p>
     </div>
     <div class="body">
@@ -54,7 +54,7 @@
     </div>
     <div class="footer">
         <p>Este es un aviso automático del sistema. No reenvíes este correo a clientes.</p>
-        <p style="margin-top: 8px;">© 2025 E-Commerce Store. Todos los derechos reservados.</p>
+        <p style="margin-top: 8px;">© <span th:text="${year}">2026</span> <span th:text="${storeName}">Marea</span>. Todos los derechos reservados.</p>
     </div>
 </div>
 </body>
