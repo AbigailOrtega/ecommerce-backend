@@ -61,6 +61,10 @@ app:
   # created, and sent a link to set its password). Ignored once an admin exists.
   admin:
     bootstrap-email: ${ADMIN_EMAIL:}
+  # Mexico's postal code catalog, downloaded from Correos de México when the table is empty and
+  # on the 1st of each month (PostalCodeCatalogService). Off in tests: no network there.
+  postal-codes:
+    auto-download: ${POSTAL_CODES_AUTO_DOWNLOAD:true}
 
   # Stripe Configuration
   stripe:
@@ -208,6 +212,8 @@ spring:
     port: 25
 
 app:
+  postal-codes:
+    auto-download: false   # no network in e2e runs; TestDataInitializer seeds a few codes
   jwt:
     # plain http on localhost
     refresh-cookie-secure: false

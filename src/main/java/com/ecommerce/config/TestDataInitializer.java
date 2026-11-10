@@ -3,6 +3,7 @@ package com.ecommerce.config;
 import com.ecommerce.entity.*;
 import com.ecommerce.repository.CategoryRepository;
 import com.ecommerce.repository.OrderRepository;
+import com.ecommerce.repository.PostalCodeRepository;
 import com.ecommerce.repository.ProductRepository;
 import com.ecommerce.repository.ShippingConfigRepository;
 import com.ecommerce.repository.UserRepository;
@@ -15,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Seeds test data when the "e2e" Spring profile is active.
@@ -45,6 +47,7 @@ public class TestDataInitializer implements ApplicationRunner {
     private final CategoryRepository       categoryRepository;
     private final OrderRepository          orderRepository;
     private final ShippingConfigRepository shippingConfigRepository;
+    private final PostalCodeRepository     postalCodeRepository;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -65,6 +68,7 @@ public class TestDataInitializer implements ApplicationRunner {
         log.info("[e2e] Test orders seeded");
 
         seedShippingConfig();
+        seedPostalCodes();
         log.info("[e2e] Shipping config seeded");
     }
 
@@ -118,6 +122,23 @@ public class TestDataInitializer implements ApplicationRunner {
                 .orElse(ShippingConfig.builder().id(1L).build());
         cfg.setPickupEnabled(true);
         shippingConfigRepository.save(cfg);
+    }
+
+    /** A few real codes from the SEPOMEX catalog (the e2e profile never downloads it). */
+    private void seedPostalCodes() {
+        if (postalCodeRepository.count() > 0) return;
+        postalCodeRepository.saveAll(List.of(
+                postal("06700", "Roma Norte", "Colonia", "Cuauhtémoc", "Ciudad de México", "Ciudad de México"),
+                postal("06760", "Roma Sur", "Colonia", "Cuauhtémoc", "Ciudad de México", "Ciudad de México"),
+                postal("64000", "Monterrey Centro", "Colonia", "Monterrey", "Nuevo León", "Monterrey"),
+                postal("44100", "Guadalajara Centro", "Colonia", "Guadalajara", "Jalisco", "Guadalajara"),
+                postal("44100", "Zona Centro", "Colonia", "Guadalajara", "Jalisco", "Guadalajara"),
+                postal("56530", "San Mateo Huitzilzingo", "Pueblo", "Chalco", "México", null)));
+    }
+
+    private static PostalCode postal(String code, String settlement, String type, String municipality, String state, String city) {
+        return PostalCode.builder().code(code).settlement(settlement).settlementType(type)
+                .municipality(municipality).state(state).city(city).build();
     }
 
     private void seedOrders() {

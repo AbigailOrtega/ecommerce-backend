@@ -6,6 +6,9 @@ spring:
     password: test
 
 app:
+  postal-codes:
+    # no network in tests; TestDataInitializer seeds a few codes
+    auto-download: false
   orders:
     abandoned:
       # e2e orders are never an hour old; keep runs deterministic anyway
