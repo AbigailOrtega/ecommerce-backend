@@ -163,6 +163,73 @@ class SkydropxServiceTest {
     // ─── invalidateTokenCache ─────────────────────────────────────────────────
 
     @Nested
+    @DisplayName("recipientAddress (what the carrier gets for address_to)")
+    class RecipientAddress {
+
+        private Order guestOrder(String notes) {
+            return Order.builder()
+                    .orderNumber("ORD-GUEST01")
+                    .guestFirstName("Lucía").guestLastName("Méndez")
+                    .guestEmail("lucia@example.com").guestPhone("5511223344")
+                    .shippingAddress("Calle Falsa 123").shippingCity("CDMX").shippingState("CDMX")
+                    .shippingZipCode("06600").shippingCountry("México")
+                    .notes(notes)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("a guest's own name, phone and email — not placeholders and the store's phone")
+        void guestContact() {
+            Map<String, Object> to = skydropxService.recipientAddress(guestOrder(null), "5551234567");
+
+            assertThat(to.get("name")).isEqualTo("Lucía Méndez");
+            assertThat(to.get("phone")).isEqualTo("5511223344");
+            assertThat(to.get("email")).isEqualTo("lucia@example.com");
+            assertThat(to.get("street1")).isEqualTo("Calle Falsa 123");
+        }
+
+        @Test
+        @DisplayName("a customer account's name, phone and email")
+        void accountContact() {
+            Map<String, Object> to = skydropxService.recipientAddress(sampleOrder, "5551234567");
+
+            assertThat(to.get("name")).isEqualTo("Juan Perez");
+            assertThat(to.get("phone")).isEqualTo("5559876543");
+            assertThat(to.get("email")).isEqualTo("juan@example.com");
+        }
+
+        @Test
+        @DisplayName("falls back to the store's phone only when the buyer left none")
+        void phoneFallback() {
+            Order order = guestOrder(null);
+            order.setGuestPhone(" ");
+            assertThat(skydropxService.recipientAddress(order, "5551234567").get("phone")).isEqualTo("5551234567");
+        }
+
+        @Test
+        @DisplayName("the buyer's delivery instructions go in the reference the courier reads")
+        void notesAsReference() {
+            Map<String, Object> to = skydropxService.recipientAddress(guestOrder("Casa azul,\n tocar timbre 2"), "5551234567");
+            assertThat(to.get("reference")).isEqualTo("Casa azul, tocar timbre 2");
+        }
+
+        @Test
+        @DisplayName("long instructions are cut to the carrier limit")
+        void longNotesTruncated() {
+            String reference = SkydropxService.deliveryReference(
+                    guestOrder("Dejar con el portero del edificio B, segundo piso, si no hay nadie llamar antes"));
+            assertThat(reference).hasSize(SkydropxService.REFERENCE_MAX_LENGTH).endsWith("…")
+                    .startsWith("Dejar con el portero");
+        }
+
+        @Test
+        @DisplayName("without instructions the reference is the order number")
+        void orderNumberWithoutNotes() {
+            assertThat(SkydropxService.deliveryReference(guestOrder("  "))).isEqualTo("Pedido #ORD-GUEST01");
+        }
+    }
+
+    @Nested
     @DisplayName("invalidateTokenCache")
     class InvalidateTokenCache {
 

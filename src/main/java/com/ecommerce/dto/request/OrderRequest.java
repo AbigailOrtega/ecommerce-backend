@@ -2,6 +2,7 @@ package com.ecommerce.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
@@ -13,7 +14,7 @@ public record OrderRequest(
     String shippingCountry,
     @NotBlank String paymentMethod,
     String paymentId,
-    String notes,
+    @Size(max = 255, message = "Las indicaciones admiten hasta 255 caracteres") String notes,
     String couponCode,
     @NotBlank String shippingType,   // "NATIONAL" or "PICKUP"
     Long pickupLocationId,           // required when PICKUP

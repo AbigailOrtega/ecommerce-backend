@@ -158,6 +158,12 @@
                 <p th:text="${order.shippingCountry}">País</p>
             </div>
         </th:block>
+        <th:block th:if="${order.notes != null and !#strings.isEmpty(#strings.trim(order.notes))}">
+            <p class="section-title">Tus indicaciones de entrega</p>
+            <div class="address-box">
+                <p th:text="${order.notes}">Indicaciones</p>
+            </div>
+        </th:block>
     </div>
     <div class="footer">
         <p>¿Tienes alguna pregunta? Contáctanos respondiendo este correo.</p>

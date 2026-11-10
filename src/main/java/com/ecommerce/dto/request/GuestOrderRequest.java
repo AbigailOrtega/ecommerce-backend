@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotEmpty;
 
 import java.time.LocalDate;
@@ -22,7 +23,7 @@ public record GuestOrderRequest(
     String shippingCountry,
     @NotBlank String paymentMethod,
     String paymentId,
-    String notes,
+    @Size(max = 255, message = "Las indicaciones admiten hasta 255 caracteres") String notes,
     String couponCode,
     @NotBlank String shippingType,
     Long pickupLocationId,

@@ -4,6 +4,7 @@ import com.ecommerce.dto.response.SkydropxQuotationResponse;
 import com.ecommerce.dto.response.SkydropxRateDto;
 import com.ecommerce.dto.response.SkydropxShipmentResponse;
 import com.ecommerce.entity.Order;
+import com.ecommerce.entity.User;
 import com.ecommerce.entity.ShippingConfig;
 import com.ecommerce.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
@@ -206,24 +207,7 @@ public class SkydropxService {
         addrFrom.put("email", cfg.getSkydropxSenderEmail() != null ? cfg.getSkydropxSenderEmail() : "");
         addrFrom.put("reference", "Origen");
 
-        String recipientName = (order.getUser() != null)
-                ? order.getUser().getFirstName() + " " + order.getUser().getLastName()
-                : "Destinatario";
-        String recipientPhone = (order.getUser() != null
-                && order.getUser().getPhone() != null
-                && !order.getUser().getPhone().isBlank())
-                ? order.getUser().getPhone() : senderPhone;
-
-        Map<String, Object> addrTo = new HashMap<>();
-        addrTo.put("name", minLength(recipientName, "Destinatario", 3));
-        addrTo.put("street1", order.getShippingAddress() != null ? order.getShippingAddress() : "");
-        addrTo.put("postal_code", order.getShippingZipCode() != null ? order.getShippingZipCode() : "");
-        addrTo.put("city", order.getShippingCity() != null ? order.getShippingCity() : "");
-        addrTo.put("state", order.getShippingState() != null ? order.getShippingState() : "");
-        addrTo.put("country", normalizeCountryCode(order.getShippingCountry()));
-        addrTo.put("phone", recipientPhone);
-        addrTo.put("email", order.getUser() != null ? order.getUser().getEmail() : "");
-        addrTo.put("reference", "Pedido #" + order.getOrderNumber());
+        Map<String, Object> addrTo = recipientAddress(order, senderPhone);
 
         // Re-quote to get a fresh rate_id tied to the current quotation (package_number must match)
         Map<String, Object> freshQuotation = createFreshQuotationRaw(cfg, order);
@@ -274,6 +258,51 @@ public class SkydropxService {
             log.error("Skydropx shipment error [{}]: {}", e.getStatusCode(), e.getResponseBodyAsString());
             throw new BadRequestException("Error al crear envío en Skydropx: " + extractMessage(e));
         }
+    }
+
+    /**
+     * Carriers print address references in a few dozen characters; Skydropx documents no limit, so
+     * stay within what FedEx/UPS-style labels take.
+     */
+    static final int REFERENCE_MAX_LENGTH = 35;
+
+    /**
+     * The recipient as the carrier sees it: the buyer's name, phone and email (a guest's, or the
+     * account's), and as reference the delivery instructions the buyer wrote, else the order number.
+     */
+    Map<String, Object> recipientAddress(Order order, String fallbackPhone) {
+        User user = order.getUser();
+        String name = user != null
+                ? user.getFirstName() + " " + user.getLastName()
+                : joinNonBlank(order.getGuestFirstName(), order.getGuestLastName());
+        String phone = firstNonBlank(user != null ? user.getPhone() : order.getGuestPhone(), fallbackPhone);
+        String email = user != null ? user.getEmail() : order.getGuestEmail();
+
+        Map<String, Object> addrTo = new HashMap<>();
+        addrTo.put("name", minLength(name, "Destinatario", 3));
+        addrTo.put("street1", order.getShippingAddress() != null ? order.getShippingAddress() : "");
+        addrTo.put("postal_code", order.getShippingZipCode() != null ? order.getShippingZipCode() : "");
+        addrTo.put("city", order.getShippingCity() != null ? order.getShippingCity() : "");
+        addrTo.put("state", order.getShippingState() != null ? order.getShippingState() : "");
+        addrTo.put("country", normalizeCountryCode(order.getShippingCountry()));
+        addrTo.put("phone", phone);
+        addrTo.put("email", email != null ? email : "");
+        addrTo.put("reference", deliveryReference(order));
+        return addrTo;
+    }
+
+    static String deliveryReference(Order order) {
+        String notes = order.getNotes() == null ? "" : order.getNotes().replaceAll("\\s+", " ").trim();
+        if (notes.isEmpty()) return "Pedido #" + order.getOrderNumber();
+        return notes.length() <= REFERENCE_MAX_LENGTH ? notes : notes.substring(0, REFERENCE_MAX_LENGTH - 1) + "…";
+    }
+
+    private static String joinNonBlank(String a, String b) {
+        return ((a == null ? "" : a.trim()) + " " + (b == null ? "" : b.trim())).trim();
+    }
+
+    private static String firstNonBlank(String value, String fallback) {
+        return value != null && !value.isBlank() ? value : fallback;
     }
 
     private static final java.util.Set<String> WORKFLOW_IN_PROGRESS =

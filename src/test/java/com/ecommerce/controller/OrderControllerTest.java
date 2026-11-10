@@ -130,6 +130,20 @@ class OrderControllerTest {
         }
 
         @Test
+        @DisplayName("returns 400 when the delivery instructions exceed 255 characters (the column size)")
+        void createOrder_400_notesTooLong() throws Exception {
+            String body = "{\"paymentMethod\":\"COD\",\"shippingType\":\"PICKUP\",\"notes\":\"" + "x".repeat(256) + "\"}";
+
+            mockMvc.perform(post("/api/orders")
+                    .principal(mockAuth())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.data.notes").value("Las indicaciones admiten hasta 255 caracteres"));
+            verify(orderService, never()).createOrder(anyString(), any());
+        }
+
+        @Test
         @DisplayName("returns 400 when shippingType is blank")
         void createOrder_400_missingShippingType() throws Exception {
             String body = "{\"paymentMethod\":\"COD\"}";
