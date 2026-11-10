@@ -207,25 +207,62 @@ class SkydropxServiceTest {
         }
 
         @Test
-        @DisplayName("the buyer's delivery instructions go in the reference the courier reads")
-        void notesAsReference() {
+        @DisplayName("the buyer's instructions go in further_information (printed on the label); the order number in reference")
+        void notesAsFurtherInformation() {
             Map<String, Object> to = skydropxService.recipientAddress(guestOrder("Casa azul,\n tocar timbre 2"), "5551234567");
-            assertThat(to.get("reference")).isEqualTo("Casa azul, tocar timbre 2");
+            assertThat(to.get("further_information")).isEqualTo("Casa azul, tocar timbre 2");
+            assertThat(to.get("reference")).isEqualTo("Pedido #ORD-GUEST01");
         }
 
         @Test
-        @DisplayName("long instructions are cut to the carrier limit")
+        @DisplayName("without instructions there is no further_information")
+        void noNotes() {
+            assertThat(skydropxService.recipientAddress(guestOrder("  "), "5551234567")).doesNotContainKey("further_information");
+        }
+
+        @Test
+        @DisplayName("long instructions are cut to the label's 70 characters")
         void longNotesTruncated() {
-            String reference = SkydropxService.deliveryReference(
-                    guestOrder("Dejar con el portero del edificio B, segundo piso, si no hay nadie llamar antes"));
-            assertThat(reference).hasSize(SkydropxService.REFERENCE_MAX_LENGTH).endsWith("…")
-                    .startsWith("Dejar con el portero");
+            String info = SkydropxService.deliveryInstructions(guestOrder("Dejar con el portero del edificio B, segundo piso; "
+                    + "si no hay nadie, llamar antes de regresar al centro de distribución"));
+            assertThat(info).hasSize(SkydropxService.FURTHER_INFORMATION_MAX_LENGTH).endsWith("…").startsWith("Dejar con el portero");
         }
 
         @Test
-        @DisplayName("without instructions the reference is the order number")
-        void orderNumberWithoutNotes() {
-            assertThat(SkydropxService.deliveryReference(guestOrder("  "))).isEqualTo("Pedido #ORD-GUEST01");
+        @DisplayName("name, company and street stay within Skydropx's limits (30, 60, 45)")
+        void fieldLimits() {
+            Order order = guestOrder(null);
+            order.setGuestFirstName("María Guadalupe del Carmen");
+            order.setGuestLastName("Hernández Villaseñor");
+            order.setShippingAddress("Avenida Insurgentes Sur 1602, edificio C, departamento 1204");
+
+            Map<String, Object> to = skydropxService.recipientAddress(order, "5551234567");
+
+            assertThat((String) to.get("name")).hasSize(SkydropxService.NAME_MAX_LENGTH).startsWith("María Guadalupe");
+            assertThat(to.get("company")).isEqualTo(to.get("name"));
+            assertThat((String) to.get("street1")).hasSize(SkydropxService.STREET_MAX_LENGTH).startsWith("Avenida Insurgentes Sur 1602");
+        }
+    }
+
+    @Nested
+    @DisplayName("buildAddressTo (quotation destination)")
+    class QuotationAddress {
+
+        @Test
+        @DisplayName("state, city/municipality and colonia in area_level1/2/3")
+        void areaLevels() {
+            Map<String, Object> to = skydropxService.buildAddressTo("06700", "Ciudad de México", "Cuauhtémoc", "Roma Norte", "México");
+            assertThat(to).containsEntry("postal_code", "06700").containsEntry("country_code", "MX")
+                    .containsEntry("area_level1", "Ciudad de México")
+                    .containsEntry("area_level2", "Cuauhtémoc")
+                    .containsEntry("area_level3", "Roma Norte");
+        }
+
+        @Test
+        @DisplayName("orders from before the colonia was asked: the city stands in, as before")
+        void noColonia() {
+            assertThat(skydropxService.buildAddressTo("06700", "Ciudad de México", "Cuauhtémoc", null, "MX"))
+                    .containsEntry("area_level3", "Cuauhtémoc");
         }
     }
 
@@ -440,7 +477,7 @@ class SkydropxServiceTest {
             stubCompletedQuotation("Q-ADDR-01", List.of(successRate("R5", "Estafeta", 89.0, 3)));
 
             SkydropxQuotationResponse response = skydropxService.createQuotationForAddress(
-                    "Calle Falsa 123", "Guadalajara", "Jalisco", "44100", "MX");
+                    "Calle Falsa 123", "Guadalajara", "Jalisco", "44100", "Zona Centro", "MX");
 
             assertThat(response.quotationId()).isEqualTo("Q-ADDR-01");
             assertThat(response.rates()).hasSize(1);
@@ -459,7 +496,7 @@ class SkydropxServiceTest {
             stubCompletedQuotation("Q-EMPTY", List.of(failedRate));
 
             SkydropxQuotationResponse response = skydropxService.createQuotationForAddress(
-                    "Av. Juárez 5", "Monterrey", "Nuevo León", "64000", "MX");
+                    "Av. Juárez 5", "Monterrey", "Nuevo León", "64000", null, "MX");
 
             assertThat(response.rates()).isEmpty();
         }

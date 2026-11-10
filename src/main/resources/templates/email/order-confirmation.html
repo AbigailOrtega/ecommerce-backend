@@ -154,6 +154,7 @@
             <p class="section-title">Dirección de envío</p>
             <div class="address-box">
                 <p th:text="${order.shippingAddress}">Dirección</p>
+                <p th:if="${order.shippingNeighborhood != null}" th:text="'Col. ' + ${order.shippingNeighborhood}">Colonia</p>
                 <p th:text="${order.shippingCity + ', ' + order.shippingState + ' ' + order.shippingZipCode}">Ciudad, Estado CP</p>
                 <p th:text="${order.shippingCountry}">País</p>
             </div>

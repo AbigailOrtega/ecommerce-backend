@@ -67,7 +67,7 @@ public class ShippingController {
         if (skydropxService.hasCredentials()) {
             var quotation = skydropxService.createQuotationForAddress(
                     body.get("address"), body.get("city"), body.get("state"),
-                    body.get("zipCode"), body.get("country"));
+                    body.get("zipCode"), body.get("neighborhood"), body.get("country"));
             return ResponseEntity.ok(ApiResponse.success(
                     new ShippingRatesResponse(true, 0, null, quotation.quotationId(), quotation.rates())));
         }

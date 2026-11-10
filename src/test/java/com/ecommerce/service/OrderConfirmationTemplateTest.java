@@ -29,7 +29,7 @@ class OrderConfirmationTemplateTest {
                 .totalAmount(new BigDecimal("350.91")).shippingCost(new BigDecimal("99.00"))
                 .shippingType("NATIONAL").shippingMethodName("Envío Nacional")
                 .shippingAddress("Calle Falsa 123").shippingCity("CDMX").shippingState("CDMX")
-                .shippingZipCode("06600").shippingCountry("México")
+                .shippingZipCode("06600").shippingNeighborhood("Roma Norte").shippingCountry("México")
                 .items(List.of())
                 .notes(notes)
                 .build();
@@ -56,6 +56,12 @@ class OrderConfirmationTemplateTest {
                 .contains("<h1>Marea</h1>")
                 .contains("© <span>2026</span> <span>Marea</span>")
                 .doesNotContain("E-Commerce Store");
+    }
+
+    @Test
+    @DisplayName("shows the colonia under the street")
+    void colonia() {
+        assertThat(render(null)).contains("Calle Falsa 123").contains("Col. Roma Norte");
     }
 
     @Test

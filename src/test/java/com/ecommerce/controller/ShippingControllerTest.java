@@ -183,7 +183,7 @@ class ShippingControllerTest {
         @DisplayName("returns 200 with Skydropx rates when credentials are configured")
         void calculateNational_200_skydropxRates() throws Exception {
             when(skydropxService.hasCredentials()).thenReturn(true);
-            when(skydropxService.createQuotationForAddress(anyString(), anyString(), anyString(), anyString(), anyString()))
+            when(skydropxService.createQuotationForAddress(anyString(), anyString(), anyString(), anyString(), any(), anyString()))
                     .thenReturn(stubQuotation());
 
             mockMvc.perform(post("/api/shipping/calculate-national")

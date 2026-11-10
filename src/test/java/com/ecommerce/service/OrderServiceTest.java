@@ -91,7 +91,7 @@ class OrderServiceTest {
     }
 
     private OrderRequest sampleRequest() {
-        return new OrderRequest("Calle 1", "CDMX", "CMX", "06600", "MX",
+        return new OrderRequest("Calle 1", "CDMX", "CMX", "06600", "Roma Norte", "MX",
                 "CARD", null, null, null, "NATIONAL", null, null, null, null);
     }
 

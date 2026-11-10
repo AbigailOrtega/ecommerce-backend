@@ -127,18 +127,18 @@ public class SkydropxService {
         body.put("address_from", buildOriginAddress(cfg));
         body.put("address_to", buildAddressTo(
                 order.getShippingZipCode(), order.getShippingState(),
-                order.getShippingCity(), order.getShippingCountry()));
+                order.getShippingCity(), order.getShippingNeighborhood(), order.getShippingCountry()));
         body.put("parcel", buildDefaultParcel(cfg));
         return postQuotation(body);
     }
 
     public SkydropxQuotationResponse createQuotationForAddress(
-            String street, String city, String state, String zipCode, String country) {
+            String street, String city, String state, String zipCode, String neighborhood, String country) {
         ShippingConfig cfg = shippingConfigService.getOrCreate();
         validateOriginConfig(cfg);
         Map<String, Object> body = new HashMap<>();
         body.put("address_from", buildOriginAddress(cfg));
-        body.put("address_to", buildAddressTo(zipCode, state, city, country));
+        body.put("address_to", buildAddressTo(zipCode, state, city, neighborhood, country));
         body.put("parcel", buildDefaultParcel(cfg));
         return postQuotation(body);
     }
@@ -260,15 +260,19 @@ public class SkydropxService {
         }
     }
 
-    /**
-     * Carriers print address references in a few dozen characters; Skydropx documents no limit, so
-     * stay within what FedEx/UPS-style labels take.
-     */
-    static final int REFERENCE_MAX_LENGTH = 35;
+    // Limits of shipment.address_to in Skydropx's API reference (pro.skydropx.com/es-MX/api-docs.json)
+    static final int STREET_MAX_LENGTH = 45;
+    static final int NAME_MAX_LENGTH = 30;
+    static final int COMPANY_MAX_LENGTH = 60;
+    static final int REFERENCE_MAX_LENGTH = 40;
+    /** "Información adicional para la entrega", printed on the label. */
+    static final int FURTHER_INFORMATION_MAX_LENGTH = 70;
 
     /**
      * The recipient as the carrier sees it: the buyer's name, phone and email (a guest's, or the
-     * account's), and as reference the delivery instructions the buyer wrote, else the order number.
+     * account's), street and number, the order number as reference, and the buyer's delivery
+     * instructions as further_information (printed on the label). City, state, postal code and
+     * colonia come from the quotation; they are sent here too, as before.
      */
     Map<String, Object> recipientAddress(Order order, String fallbackPhone) {
         User user = order.getUser();
@@ -279,22 +283,32 @@ public class SkydropxService {
         String email = user != null ? user.getEmail() : order.getGuestEmail();
 
         Map<String, Object> addrTo = new HashMap<>();
-        addrTo.put("name", minLength(name, "Destinatario", 3));
-        addrTo.put("street1", order.getShippingAddress() != null ? order.getShippingAddress() : "");
+        String recipient = cut(minLength(name, "Destinatario", 3), NAME_MAX_LENGTH);
+        addrTo.put("name", recipient);
+        addrTo.put("company", cut(recipient, COMPANY_MAX_LENGTH));   // required; buyers are people
+        addrTo.put("street1", cut(order.getShippingAddress() != null ? order.getShippingAddress() : "", STREET_MAX_LENGTH));
         addrTo.put("postal_code", order.getShippingZipCode() != null ? order.getShippingZipCode() : "");
         addrTo.put("city", order.getShippingCity() != null ? order.getShippingCity() : "");
         addrTo.put("state", order.getShippingState() != null ? order.getShippingState() : "");
         addrTo.put("country", normalizeCountryCode(order.getShippingCountry()));
         addrTo.put("phone", phone);
         addrTo.put("email", email != null ? email : "");
-        addrTo.put("reference", deliveryReference(order));
+        addrTo.put("reference", cut("Pedido #" + order.getOrderNumber(), REFERENCE_MAX_LENGTH));
+        String instructions = deliveryInstructions(order);
+        if (instructions != null) addrTo.put("further_information", instructions);
         return addrTo;
     }
 
-    static String deliveryReference(Order order) {
+    /** What the buyer wrote for the delivery, on one line and within the label's 70 characters. */
+    static String deliveryInstructions(Order order) {
         String notes = order.getNotes() == null ? "" : order.getNotes().replaceAll("\\s+", " ").trim();
-        if (notes.isEmpty()) return "Pedido #" + order.getOrderNumber();
-        return notes.length() <= REFERENCE_MAX_LENGTH ? notes : notes.substring(0, REFERENCE_MAX_LENGTH - 1) + "…";
+        return notes.isEmpty() ? null : cut(notes, FURTHER_INFORMATION_MAX_LENGTH);
+    }
+
+    /** Cuts to max characters, marking the cut with "…". */
+    static String cut(String value, int max) {
+        String v = value == null ? "" : value.trim();
+        return v.length() <= max ? v : v.substring(0, max - 1) + "…";
     }
 
     private static String joinNonBlank(String a, String b) {
@@ -402,7 +416,7 @@ public class SkydropxService {
         qBody.put("address_from", buildOriginAddress(cfg));
         qBody.put("address_to", buildAddressTo(
                 order.getShippingZipCode(), order.getShippingState(),
-                order.getShippingCity(), order.getShippingCountry()));
+                order.getShippingCity(), order.getShippingNeighborhood(), order.getShippingCountry()));
         qBody.put("parcel", buildDefaultParcel(cfg));
         try {
             Map<String, Object> initial = restTemplate.exchange(
@@ -555,14 +569,19 @@ public class SkydropxService {
         return addr;
     }
 
-    private Map<String, Object> buildAddressTo(String zipCode, String state, String city, String country) {
+    /**
+     * Quotation destination. Per Skydropx's API reference: area_level1 = state, area_level2 = city
+     * or municipality, area_level3 = colonia (the city stands in for orders placed before the
+     * colonia was asked for).
+     */
+    Map<String, Object> buildAddressTo(String zipCode, String state, String city, String neighborhood, String country) {
         String c = city != null ? city : "";
         Map<String, Object> addr = new HashMap<>();
         addr.put("country_code", normalizeCountryCode(country));
         addr.put("postal_code", zipCode != null ? zipCode : "");
         addr.put("area_level1", state != null ? state : c);
         addr.put("area_level2", c);
-        addr.put("area_level3", c);
+        addr.put("area_level3", neighborhood != null && !neighborhood.isBlank() ? neighborhood.trim() : c);
         return addr;
     }
 

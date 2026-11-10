@@ -7,10 +7,11 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
 public record OrderRequest(
-    String shippingAddress,
+    @Size(max = 45, message = "La calle y número admiten hasta 45 caracteres") String shippingAddress,
     String shippingCity,
     String shippingState,
     String shippingZipCode,
+    @Size(max = 150) String shippingNeighborhood,
     String shippingCountry,
     @NotBlank String paymentMethod,
     String paymentId,

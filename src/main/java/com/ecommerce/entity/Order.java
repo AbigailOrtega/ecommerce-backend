@@ -68,6 +68,10 @@ public class Order {
     @Column(nullable = false)
     private String shippingZipCode;
 
+    /** The colonia (national shipping); null for pickup and for orders from before it was asked. */
+    @Column(length = 150)
+    private String shippingNeighborhood;
+
     @Column(nullable = false)
     private String shippingCountry;
 

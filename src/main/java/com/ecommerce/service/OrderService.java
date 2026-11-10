@@ -146,7 +146,8 @@ public class OrderService {
                 // Re-quote to get a fresh price for the selected rate
                 var quotation = skydropxService.createQuotationForAddress(
                         request.shippingAddress(), request.shippingCity(),
-                        request.shippingState(), request.shippingZipCode(), request.shippingCountry());
+                        request.shippingState(), request.shippingZipCode(), request.shippingNeighborhood(),
+                        request.shippingCountry());
                 SkydropxRateDto rate = quotation.rates().stream()
                         .filter(r -> r.id().equals(request.skydropxRateId()))
                         .findFirst()
@@ -183,6 +184,7 @@ public class OrderService {
             order.setShippingCity(request.shippingCity());
             order.setShippingState(request.shippingState() != null ? request.shippingState() : "");
             order.setShippingZipCode(request.shippingZipCode() != null ? request.shippingZipCode() : "");
+            order.setShippingNeighborhood(blankToNull(request.shippingNeighborhood()));
             order.setShippingCountry(request.shippingCountry());
             totalAmount = totalAmount.add(cost);
 
@@ -318,7 +320,8 @@ public class OrderService {
             if (skydropxService.hasCredentials() && request.skydropxRateId() != null && !request.skydropxRateId().isBlank()) {
                 var quotation = skydropxService.createQuotationForAddress(
                         request.shippingAddress(), request.shippingCity(),
-                        request.shippingState(), request.shippingZipCode(), request.shippingCountry());
+                        request.shippingState(), request.shippingZipCode(), request.shippingNeighborhood(),
+                        request.shippingCountry());
                 SkydropxRateDto rate = quotation.rates().stream()
                         .filter(r -> r.id().equals(request.skydropxRateId()))
                         .findFirst()
@@ -355,6 +358,7 @@ public class OrderService {
             order.setShippingCity(request.shippingCity());
             order.setShippingState(request.shippingState() != null ? request.shippingState() : "");
             order.setShippingZipCode(request.shippingZipCode() != null ? request.shippingZipCode() : "");
+            order.setShippingNeighborhood(blankToNull(request.shippingNeighborhood()));
             order.setShippingCountry(request.shippingCountry());
             totalAmount = totalAmount.add(cost);
 
@@ -597,6 +601,7 @@ public class OrderService {
                 .shippingCity(response.getShippingCity())
                 .shippingState(response.getShippingState())
                 .shippingZipCode(response.getShippingZipCode())
+                .shippingNeighborhood(response.getShippingNeighborhood())
                 .shippingCountry(response.getShippingCountry())
                 .notes(response.getNotes())
                 .createdAt(response.getCreatedAt())
@@ -706,6 +711,7 @@ public class OrderService {
                 .shippingCity(order.getShippingCity())
                 .shippingState(order.getShippingState())
                 .shippingZipCode(order.getShippingZipCode())
+                .shippingNeighborhood(order.getShippingNeighborhood())
                 .shippingCountry(order.getShippingCountry())
                 .notes(order.getNotes())
                 .createdAt(order.getCreatedAt())
@@ -727,5 +733,9 @@ public class OrderService {
                 .guestPhone(order.getGuestPhone())
                 .pickupCancelled(order.isPickupCancelled())
                 .build();
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 }

@@ -33,6 +33,7 @@ public class OrderResponse {
     private String shippingCity;
     private String shippingState;
     private String shippingZipCode;
+    private String shippingNeighborhood;
     private String shippingCountry;
     private String notes;
     private LocalDateTime createdAt;

@@ -171,6 +171,7 @@
                 <div class="info-cell">
                     <p class="info-label">Dirección</p>
                     <p class="info-value" th:text="${order.shippingAddress}">-</p>
+                    <p class="info-value" th:if="${order.shippingNeighborhood != null}" th:text="'Col. ' + ${order.shippingNeighborhood}">-</p>
                 </div>
                 <div class="info-cell">
                     <p class="info-label">Ciudad</p>

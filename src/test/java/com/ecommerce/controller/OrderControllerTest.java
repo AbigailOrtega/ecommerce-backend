@@ -85,7 +85,7 @@ class OrderControllerTest {
 
     private OrderRequest validOrderRequest() {
         return new OrderRequest(
-                "Calle Falsa 123", "Ciudad de México", "CDMX", "06600", "MX",
+                "Calle Falsa 123", "Ciudad de México", "CDMX", "06600", "Roma Norte", "MX",
                 "COD", null, null, null,
                 "NATIONAL", null, null, null, null
         );
@@ -141,6 +141,19 @@ class OrderControllerTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.data.notes").value("Las indicaciones admiten hasta 255 caracteres"));
             verify(orderService, never()).createOrder(anyString(), any());
+        }
+
+        @Test
+        @DisplayName("returns 400 when street and number exceed Skydropx's 45 characters")
+        void createOrder_400_streetTooLong() throws Exception {
+            String body = "{\"paymentMethod\":\"COD\",\"shippingType\":\"NATIONAL\",\"shippingAddress\":\"" + "x".repeat(46) + "\"}";
+
+            mockMvc.perform(post("/api/orders")
+                    .principal(mockAuth())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.data.shippingAddress").value("La calle y número admiten hasta 45 caracteres"));
         }
 
         @Test
