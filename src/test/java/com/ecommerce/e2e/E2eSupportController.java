@@ -59,12 +59,12 @@ public class E2eSupportController {
         return ResponseEntity.ok(ApiResponse.success(Map.of("token", user.getResetToken())));
     }
 
-    /** The next PayPal capture fails, as when the buyer's funding source is declined. */
-    @PostMapping("/paypal/decline-next-capture")
+    /** This buyer's next PayPal capture fails, as when their funding source is declined. */
+    @PostMapping("/paypal/decline-capture")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> declineNextPayPalCapture() {
+    public ResponseEntity<ApiResponse<Void>> declinePayPalCapture(@RequestParam String email) {
         fakePayments.orElseThrow(() -> new IllegalStateException("fake-payments profile is not active"))
-                .declineNextPayPalCapture();
+                .declinePayPalCaptureFor(email);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

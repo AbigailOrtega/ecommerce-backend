@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Stands in for Stripe and PayPal in the Playwright suite (profile "fake-payments", which only
@@ -34,12 +33,18 @@ public class FakePaymentService extends PaymentService {
 
     private final Map<String, Long> stripeIntents = new ConcurrentHashMap<>();   // id → cents
     private final Map<String, PayPalOrderSnapshot> paypalOrders = new ConcurrentHashMap<>();
-    private final AtomicBoolean declineNextPayPalCapture = new AtomicBoolean();
+    /**
+     * Buyers (by email) whose next PayPal capture is declined. Per buyer, not "the next capture":
+     * tests run in parallel, and a global switch was taken by whichever test captured first.
+     */
+    private final java.util.Set<String> declineCaptureFor = ConcurrentHashMap.newKeySet();
+    private final OrderRepository orders;
     private final Map<String, Long> paypalCaptures = new ConcurrentHashMap<>();  // id → cents
 
     public FakePaymentService(OrderRepository orderRepository, StockService stockService, CartService cartService,
                               PayPalClient paypalClient, ApplicationEventPublisher events) {
         super(orderRepository, stockService, cartService, paypalClient, events);
+        this.orders = orderRepository;
         log.warn("[e2e] FakePaymentService active: Stripe and PayPal are simulated");
     }
 
@@ -80,7 +85,11 @@ public class FakePaymentService extends PaymentService {
     protected PayPalOrderSnapshot capturePayPal(String paypalOrderId) throws IOException {
         PayPalOrderSnapshot order = paypalOrders.get(paypalOrderId);
         if (order == null || !"APPROVED".equals(order.status())) throw new IOException("ORDER_NOT_APPROVED");
-        if (declineNextPayPalCapture.getAndSet(false)) throw new IOException("INSTRUMENT_DECLINED");
+        String buyer = orders.findByPaymentId(paypalOrderId)
+                .map(o -> o.getGuestEmail() != null ? o.getGuestEmail() : o.getUser().getEmail())
+                .map(e -> e.toLowerCase())
+                .orElse(null);
+        if (buyer != null && declineCaptureFor.remove(buyer)) throw new IOException("INSTRUMENT_DECLINED");
         String captureId = "CAP-E2E-" + UUID.randomUUID();
         PayPalOrderSnapshot captured = new PayPalOrderSnapshot(paypalOrderId, "COMPLETED", "MXN", order.amount(), captureId, "COMPLETED");
         paypalOrders.put(paypalOrderId, captured);
@@ -88,9 +97,9 @@ public class FakePaymentService extends PaymentService {
         return captured;
     }
 
-    /** Makes PayPal decline the next capture, as when the buyer's funding source fails. */
-    public void declineNextPayPalCapture() {
-        declineNextPayPalCapture.set(true);
+    /** Makes PayPal decline this buyer's next capture, as when their funding source fails. */
+    public void declinePayPalCaptureFor(String email) {
+        declineCaptureFor.add(email.toLowerCase());
     }
 
     @Override
