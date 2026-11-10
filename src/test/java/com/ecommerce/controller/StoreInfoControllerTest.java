@@ -108,6 +108,31 @@ class StoreInfoControllerTest {
         }
 
         @Test
+        @DisplayName("accepts a palette name or a custom #rrggbb color")
+        void update_themeKeys() throws Exception {
+            when(storeInfoService.update(any())).thenReturn(stubResponse(false));
+            for (String key : new String[]{"azul", "azulOscuro", "custom:#1e7a7f", "custom:#FFD740"}) {
+                mockMvc.perform(put("/api/admin/store-info")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"themeKey\":\"" + key + "\"}"))
+                        .andExpect(status().isOk());
+            }
+        }
+
+        @Test
+        @DisplayName("refuses anything else as theme: it would end up in the page's CSS")
+        void update_400_badThemeKey() throws Exception {
+            for (String key : new String[]{"custom:#12345", "custom:red", "custom:#1e7a7f;}body{display:none",
+                    "azul;}*{color:red", "custom:#1e7a7f\\n"}) {
+                mockMvc.perform(put("/api/admin/store-info")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"themeKey\":\"" + key + "\"}"))
+                        .andExpect(status().isBadRequest());
+            }
+            verify(storeInfoService, never()).update(any());
+        }
+
+        @Test
         @DisplayName("calls service.update with request body")
         void update_callsService() throws Exception {
             when(storeInfoService.update(any())).thenReturn(stubResponse(false));

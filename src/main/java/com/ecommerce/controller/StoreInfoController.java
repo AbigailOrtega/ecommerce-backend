@@ -1,6 +1,7 @@
 package com.ecommerce.controller;
 
 import com.ecommerce.dto.request.StoreInfoRequest;
+import jakarta.validation.Valid;
 import com.ecommerce.dto.response.ApiResponse;
 import com.ecommerce.dto.response.StoreInfoResponse;
 import com.ecommerce.entity.StoreImage;
@@ -31,7 +32,7 @@ public class StoreInfoController {
 
     @PutMapping("/api/admin/store-info")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<StoreInfoResponse>> update(@RequestBody StoreInfoRequest request) {
+    public ResponseEntity<ApiResponse<StoreInfoResponse>> update(@Valid @RequestBody StoreInfoRequest request) {
         return ResponseEntity.ok(ApiResponse.success(storeInfoService.update(request)));
     }
 
