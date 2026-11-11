@@ -185,6 +185,36 @@ public class ProductService {
         return productRepository.findAll(pageable).map(this::mapToResponse);
     }
 
+    /**
+     * The admin's product list, filtered: {@code q} matches the name or the SKU (any part, any
+     * case), {@code minPrice}/{@code maxPrice} bound the price (inclusive), {@code active} picks
+     * active or inactive ones. Null filters are not applied.
+     */
+    public Page<ProductResponse> getAllProductsAdmin(String q, BigDecimal minPrice, BigDecimal maxPrice,
+                                                     Boolean active, Pageable pageable) {
+        String text = q == null ? "" : q.trim().toLowerCase();
+        if (text.isEmpty() && minPrice == null && maxPrice == null && active == null) {
+            return getAllProductsAdmin(pageable);
+        }
+        if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
+            throw new BadRequestException("El precio mínimo es mayor que el máximo");
+        }
+        org.springframework.data.jpa.domain.Specification<Product> spec = (root, query, cb) -> {
+            List<jakarta.persistence.criteria.Predicate> where = new ArrayList<>();
+            if (!text.isEmpty()) {
+                String like = "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+                where.add(cb.or(
+                        cb.like(cb.lower(root.get("name")), like, '\\'),
+                        cb.like(cb.lower(cb.coalesce(root.get("sku"), "")), like, '\\')));
+            }
+            if (minPrice != null) where.add(cb.greaterThanOrEqualTo(root.get("price"), minPrice));
+            if (maxPrice != null) where.add(cb.lessThanOrEqualTo(root.get("price"), maxPrice));
+            if (active != null) where.add(cb.equal(root.get("active"), active));
+            return cb.and(where.toArray(jakarta.persistence.criteria.Predicate[]::new));
+        };
+        return productRepository.findAll(spec, pageable).map(this::mapToResponse);
+    }
+
     private void applyColors(Product product, ProductRequest request) {
         if (request.colors() == null) return;
 

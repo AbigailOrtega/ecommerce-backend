@@ -243,10 +243,14 @@ public class AdminController {
     }
 
     @GetMapping("/products")
-    @Operation(summary = "Get all products including inactive (paginated)")
+    @Operation(summary = "Products including inactive (paginated, newest first); q = name or SKU, price range, active")
     public ResponseEntity<ApiResponse<Page<ProductResponse>>> getAllProducts(
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(productService.getAllProductsAdmin(pageable)));
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) java.math.BigDecimal minPrice,
+            @RequestParam(required = false) java.math.BigDecimal maxPrice,
+            @RequestParam(required = false) Boolean active,
+            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(productService.getAllProductsAdmin(q, minPrice, maxPrice, active, pageable)));
     }
 
     @GetMapping("/users")
