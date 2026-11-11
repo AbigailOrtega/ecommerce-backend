@@ -159,7 +159,7 @@ public class CartService {
     public CartItemResponse mapToResponse(CartItem cartItem) {
         Product product = cartItem.getProduct();
         List<CategoryResponse> categoryResponses = product.getCategories().stream()
-                .map(cat -> new CategoryResponse(cat.getId(), cat.getName(), cat.getDescription(), cat.getImageUrl(), cat.getSlug()))
+                .map(cat -> new CategoryResponse(cat.getId(), cat.getName(), cat.getDescription(), cat.getImageUrl(), cat.getSlug(), cat.isVisible()))
                 .toList();
 
         List<com.ecommerce.dto.response.ProductColorResponse> colorResponses = product.getColors().stream()

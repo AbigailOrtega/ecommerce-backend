@@ -19,8 +19,22 @@ public class CategoryService {
     private final CategoryRepository categoryRepository;
     private final ImageCleanupService imageCleanupService;
 
+    /** The store's categories: the visible ones. */
     public List<CategoryResponse> getAllCategories() {
+        return categoryRepository.findAll().stream().filter(Category::isVisible).map(this::mapToResponse).toList();
+    }
+
+    /** Every category, hidden ones included (the admin's list). */
+    public List<CategoryResponse> getAllCategoriesForAdmin() {
         return categoryRepository.findAll().stream().map(this::mapToResponse).toList();
+    }
+
+    @Transactional
+    public CategoryResponse setVisible(Long id, boolean visible) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Category", "id", id));
+        category.setVisible(visible);
+        return mapToResponse(categoryRepository.save(category));
     }
 
     public CategoryResponse getCategoryById(Long id) {
@@ -67,7 +81,8 @@ public class CategoryService {
                 category.getName(),
                 category.getDescription(),
                 category.getImageUrl(),
-                category.getSlug()
+                category.getSlug(),
+                category.isVisible()
         );
     }
 }

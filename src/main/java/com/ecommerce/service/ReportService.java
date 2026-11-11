@@ -31,6 +31,7 @@ public class ReportService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final ProductRepository productRepository;
+    private final com.ecommerce.repository.CategoryRepository categoryRepository;
 
     private static final List<OrderStatus> EXCLUDED = List.of(OrderStatus.CANCELLED, OrderStatus.REFUNDED);
     /** Product rankings count sales: also leave out orders that were never paid. */
@@ -99,6 +100,60 @@ public class ReportService {
         long totalOrders = data.stream().mapToLong(SalesDataPoint::orderCount).sum();
 
         return new SalesReportResponse(periodLabel, data, totalRevenue, totalOrders);
+    }
+
+    // ── By category ───────────────────────────────────────────────────────────
+
+    /**
+     * Units, orders and money per category for the sales paid between {@code from} and {@code to}
+     * (both included, cancelled and refunded orders left out), most units first. Every category
+     * appears, with zeros if it sold nothing; "Sin categoría" only if such products sold.
+     */
+    @Transactional(readOnly = true)
+    public List<com.ecommerce.dto.response.CategorySalesItem> getCategorySales(LocalDate from, LocalDate to) {
+        if (from == null || to == null) throw new BadRequestException("Indica las fechas del periodo");
+        if (to.isBefore(from)) throw new BadRequestException("La fecha final es anterior a la inicial");
+        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) >= MAX_SALES_RANGE_DAYS) {
+            throw new BadRequestException("El periodo puede ser de hasta 10 años");
+        }
+        List<Order> orders = orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(
+                from.atStartOfDay(), to.plusDays(1).atStartOfDay().minusNanos(1000));
+
+        Map<Long, long[]> counts = new java.util.HashMap<>();             // categoryId (null = none) → {units}
+        Map<Long, BigDecimal> money = new java.util.HashMap<>();
+        Map<Long, java.util.Set<Long>> orderIds = new java.util.HashMap<>();
+        for (Order o : orders) {
+            if (EXCLUDED.contains(o.getStatus())) continue;
+            for (com.ecommerce.entity.OrderItem item : o.getItems()) {
+                List<Long> cats = item.getProduct() == null || item.getProduct().getCategories().isEmpty()
+                        ? java.util.Collections.singletonList(null)
+                        : item.getProduct().getCategories().stream().map(com.ecommerce.entity.Category::getId).distinct().toList();
+                BigDecimal subtotal = item.getSubtotal() == null ? BigDecimal.ZERO : item.getSubtotal();
+                for (Long cat : cats) {
+                    counts.computeIfAbsent(cat, k -> new long[1])[0] += item.getQuantity() == null ? 0 : item.getQuantity();
+                    money.merge(cat, subtotal, BigDecimal::add);
+                    orderIds.computeIfAbsent(cat, k -> new java.util.HashSet<>()).add(o.getId());
+                }
+            }
+        }
+
+        List<com.ecommerce.dto.response.CategorySalesItem> rows = new ArrayList<>();
+        for (com.ecommerce.entity.Category c : categoryRepository.findAll()) {
+            rows.add(categoryRow(c.getId(), c.getName(), c.isVisible(), counts, money, orderIds));
+        }
+        if (counts.containsKey(null)) rows.add(categoryRow(null, "Sin categoría", true, counts, money, orderIds));
+        return rows.stream()
+                .sorted(Comparator.comparingLong(com.ecommerce.dto.response.CategorySalesItem::unitsSold).reversed()
+                        .thenComparing(com.ecommerce.dto.response.CategorySalesItem::name, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+    }
+
+    private static com.ecommerce.dto.response.CategorySalesItem categoryRow(Long id, String name, boolean visible,
+            Map<Long, long[]> counts, Map<Long, BigDecimal> money, Map<Long, java.util.Set<Long>> orderIds) {
+        return new com.ecommerce.dto.response.CategorySalesItem(id, name, visible,
+                counts.containsKey(id) ? counts.get(id)[0] : 0,
+                orderIds.containsKey(id) ? orderIds.get(id).size() : 0,
+                money.getOrDefault(id, BigDecimal.ZERO).setScale(2, java.math.RoundingMode.HALF_UP));
     }
 
     // ── Accounting ────────────────────────────────────────────────────────────

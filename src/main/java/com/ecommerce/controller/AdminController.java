@@ -73,6 +73,7 @@ public class AdminController {
     private final EmailService emailService;
     private final OrderService orderService;
     private final ProductService productService;
+    private final com.ecommerce.service.CategoryService categoryService;
     private final PromotionService promotionService;
     private final PromoBannerService promoBannerService;
     private final CouponService couponService;
@@ -105,6 +106,20 @@ public class AdminController {
             @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate from,
             @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate to) {
         return ResponseEntity.ok(ApiResponse.success(reportService.getAccountingReport(from, to)));
+    }
+
+    @GetMapping("/reports/categories")
+    @Operation(summary = "Units, orders and money per category for the sales paid from..to (both days included)")
+    public ResponseEntity<ApiResponse<java.util.List<com.ecommerce.dto.response.CategorySalesItem>>> getCategorySales(
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate from,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate to) {
+        return ResponseEntity.ok(ApiResponse.success(reportService.getCategorySales(from, to)));
+    }
+
+    @GetMapping("/categories")
+    @Operation(summary = "Every category, hidden ones included")
+    public ResponseEntity<ApiResponse<java.util.List<com.ecommerce.dto.response.CategoryResponse>>> getAllCategories() {
+        return ResponseEntity.ok(ApiResponse.success(categoryService.getAllCategoriesForAdmin()));
     }
 
     @GetMapping("/reports/product-costs")

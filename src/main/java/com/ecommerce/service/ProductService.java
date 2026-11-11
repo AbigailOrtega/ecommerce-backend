@@ -296,7 +296,7 @@ public class ProductService {
 
     private ProductResponse mapToResponse(Product product) {
         List<CategoryResponse> categoryResponses = product.getCategories().stream()
-                .map(cat -> new CategoryResponse(cat.getId(), cat.getName(), cat.getDescription(), cat.getImageUrl(), cat.getSlug()))
+                .map(cat -> new CategoryResponse(cat.getId(), cat.getName(), cat.getDescription(), cat.getImageUrl(), cat.getSlug(), cat.isVisible()))
                 .toList();
 
         List<ProductColorResponse> colorResponses = product.getColors().stream()

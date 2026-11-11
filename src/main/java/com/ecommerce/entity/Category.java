@@ -31,6 +31,11 @@ public class Category {
     @Column(unique = true)
     private String slug;
 
+    /** false hides it from the store (menu, filters, product labels); the admin still uses it */
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean visible = true;
+
     @ManyToMany(mappedBy = "categories", fetch = FetchType.LAZY)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude

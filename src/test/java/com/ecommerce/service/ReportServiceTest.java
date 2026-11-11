@@ -37,6 +37,7 @@ class ReportServiceTest {
     @Mock private OrderRepository orderRepository;
     @Mock private OrderItemRepository orderItemRepository;
     @Mock private ProductRepository productRepository;
+    @Mock com.ecommerce.repository.CategoryRepository categoryRepository;
 
     @InjectMocks private ReportService reportService;
 

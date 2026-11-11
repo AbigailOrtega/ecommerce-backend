@@ -50,6 +50,16 @@ public class CategoryController {
         return ResponseEntity.ok(ApiResponse.success("Category updated", response));
     }
 
+    @PatchMapping("/{id}/visibility")
+    @Operation(summary = "Show or hide a category in the store (Admin)")
+    public ResponseEntity<ApiResponse<CategoryResponse>> setVisibility(
+            @PathVariable Long id, @RequestBody Map<String, Boolean> request) {
+        Boolean visible = request.get("visible");
+        if (visible == null) throw new com.ecommerce.exception.BadRequestException("Indica si la categoría es visible");
+        CategoryResponse response = categoryService.setVisible(id, visible);
+        return ResponseEntity.ok(ApiResponse.success(visible ? "La categoría se muestra en la tienda" : "La categoría se ocultó de la tienda", response));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete a category (Admin)")
     public ResponseEntity<ApiResponse<Void>> deleteCategory(@PathVariable Long id) {

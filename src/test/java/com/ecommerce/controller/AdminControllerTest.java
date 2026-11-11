@@ -115,6 +115,7 @@ class AdminControllerTest {
     @MockitoBean EmailService emailService;
     @MockitoBean OrderService orderService;
     @MockitoBean ProductService productService;
+    @MockitoBean com.ecommerce.service.CategoryService categoryService;
     @MockitoBean PromotionService promotionService;
     @MockitoBean PromoBannerService promoBannerService;
     @MockitoBean CouponService couponService;
