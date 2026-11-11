@@ -888,6 +888,19 @@ class AdminControllerTest {
         }
 
         @Test
+        @DisplayName("from/to: returns the report for those days")
+        void getSalesReport_200_customRange() throws Exception {
+            SalesReportResponse report = new SalesReportResponse(
+                    "Del 03/10/2026 al 20/10/2026", List.of(), java.math.BigDecimal.ZERO, 0L);
+            when(reportService.getSalesReport(java.time.LocalDate.of(2026, 10, 3), java.time.LocalDate.of(2026, 10, 20)))
+                    .thenReturn(report);
+
+            mockMvc.perform(get("/api/admin/reports/sales").param("from", "2026-10-03").param("to", "2026-10-20"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.period").value("Del 03/10/2026 al 20/10/2026"));
+        }
+
+        @Test
         @DisplayName("returns 200 with weekly report")
         void getSalesReport_200_week() throws Exception {
             SalesReportResponse report = new SalesReportResponse(

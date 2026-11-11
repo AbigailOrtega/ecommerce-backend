@@ -142,6 +142,42 @@ class ReportServiceTest {
             assertThat(result.totalRevenue()).isEqualByComparingTo(BigDecimal.ZERO);
             assertThat(result.totalOrders()).isZero();
         }
+
+        @Test
+        @DisplayName("custom dates: queries from the first day's start to the last day's end, labelled with both days")
+        void customRange_queriesWholeDays() {
+            when(orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(any(), any())).thenReturn(List.of());
+
+            SalesReportResponse result = reportService.getSalesReport(LocalDate.of(2026, 10, 3), LocalDate.of(2026, 10, 20));
+
+            org.mockito.ArgumentCaptor<LocalDateTime> start = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+            org.mockito.ArgumentCaptor<LocalDateTime> end = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+            org.mockito.Mockito.verify(orderRepository).findByPaidAtBetweenOrderByPaidAtAsc(start.capture(), end.capture());
+            assertThat(start.getValue()).isEqualTo(LocalDateTime.of(2026, 10, 3, 0, 0));
+            assertThat(end.getValue()).isAfter(LocalDateTime.of(2026, 10, 20, 23, 59, 59))
+                    .isBefore(LocalDateTime.of(2026, 10, 21, 0, 0));
+            assertThat(result.period()).isEqualTo("Del 03/10/2026 al 20/10/2026");
+        }
+
+        @Test
+        @DisplayName("custom dates: a single day is labelled with that day")
+        void customRange_singleDay() {
+            when(orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(any(), any())).thenReturn(List.of());
+
+            assertThat(reportService.getSalesReport(LocalDate.of(2026, 11, 5), LocalDate.of(2026, 11, 5)).period())
+                    .isEqualTo("05/11/2026");
+        }
+
+        @Test
+        @DisplayName("custom dates: rejects an end before the start, and missing dates")
+        void customRange_invalid() {
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                    () -> reportService.getSalesReport(LocalDate.of(2026, 11, 5), LocalDate.of(2026, 11, 1)))
+                    .isInstanceOf(com.ecommerce.exception.BadRequestException.class);
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                    () -> reportService.getSalesReport(LocalDate.of(2026, 11, 5), null))
+                    .isInstanceOf(com.ecommerce.exception.BadRequestException.class);
+        }
     }
 
     // ─── getAccountingReport ──────────────────────────────────────────────────

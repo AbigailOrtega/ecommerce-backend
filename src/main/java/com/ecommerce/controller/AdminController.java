@@ -88,9 +88,14 @@ public class AdminController {
     // ── Reports ───────────────────────────────────────────────────────────────
 
     @GetMapping("/reports/sales")
-    @Operation(summary = "Sales report by period (week, month, year)")
+    @Operation(summary = "Sales report: by period (week, month, year) or for the days from..to (both included)")
     public ResponseEntity<ApiResponse<SalesReportResponse>> getSalesReport(
-            @RequestParam(defaultValue = "month") String period) {
+            @RequestParam(defaultValue = "month") String period,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate from,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate to) {
+        if (from != null || to != null) {
+            return ResponseEntity.ok(ApiResponse.success(reportService.getSalesReport(from, to)));
+        }
         return ResponseEntity.ok(ApiResponse.success(reportService.getSalesReport(period)));
     }
 

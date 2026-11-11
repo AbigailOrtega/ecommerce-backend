@@ -58,8 +58,27 @@ public class ReportService {
             }
         }
 
+        return salesBetween(start, now, periodLabel);
+    }
+
+    static final int MAX_SALES_RANGE_DAYS = 3660;
+    private static final java.time.format.DateTimeFormatter DAY_LABEL = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    /** Sales paid between {@code from} and {@code to}, both days included. */
+    public SalesReportResponse getSalesReport(LocalDate from, LocalDate to) {
+        if (from == null || to == null) throw new BadRequestException("Indica las fechas del periodo");
+        if (to.isBefore(from)) throw new BadRequestException("La fecha final es anterior a la inicial");
+        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) >= MAX_SALES_RANGE_DAYS) {
+            throw new BadRequestException("El periodo puede ser de hasta 10 años");
+        }
+        String label = from.equals(to) ? from.format(DAY_LABEL)
+                : "Del " + from.format(DAY_LABEL) + " al " + to.format(DAY_LABEL);
+        return salesBetween(from.atStartOfDay(), to.plusDays(1).atStartOfDay().minusNanos(1000), label);
+    }
+
+    private SalesReportResponse salesBetween(LocalDateTime start, LocalDateTime end, String periodLabel) {
         // sales are counted on the day the money came in: an order waiting for payment is not a sale
-        List<Order> orders = orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(start, now);
+        List<Order> orders = orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(start, end);
 
         Map<String, List<Order>> byDate = orders.stream()
                 .filter(o -> !EXCLUDED.contains(o.getStatus()))
