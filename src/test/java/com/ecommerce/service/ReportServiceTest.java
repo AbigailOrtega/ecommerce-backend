@@ -320,6 +320,17 @@ class ReportServiceTest {
         }
 
         @Test
+        @DisplayName("each row carries the product's slug, for the link to its store page")
+        void carriesSlug() {
+            productA.setSlug("camiseta");
+            List<Object[]> rows = List.<Object[]>of(new Object[]{1L, "Camiseta", 3L, BigDecimal.TEN});
+            when(orderItemRepository.findProductSalesRanked(any())).thenReturn(rows);
+            when(productRepository.findById(1L)).thenReturn(Optional.of(productA));
+
+            assertThat(reportService.getTopSellingProducts(20).get(0).slug()).isEqualTo("camiseta");
+        }
+
+        @Test
         @DisplayName("respects limit parameter — truncates to requested count")
         void respectsLimit() {
             List<Object[]> rows = List.<Object[]>of(
@@ -432,6 +443,15 @@ class ReportServiceTest {
             List<InventoryItem> result = reportService.getInventoryReport();
 
             assertThat(result).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("each row carries the product's slug, for the link to its store page")
+        void carriesSlug() {
+            productA.setSlug("camiseta");
+            when(productRepository.findAll()).thenReturn(List.of(productA));
+
+            assertThat(reportService.getInventoryReport().get(0).slug()).isEqualTo("camiseta");
         }
 
         @Test

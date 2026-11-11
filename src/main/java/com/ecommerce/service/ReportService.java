@@ -263,8 +263,8 @@ public class ReportService {
             String name = (String) row[1];
             long units = ((Number) row[2]).longValue();
             BigDecimal revenue = (BigDecimal) row[3];
-            int stock = stockOf(pid);
-            salesMap.put(pid, new ProductSalesItem(pid, name, units, revenue, stock));
+            Product p = productRepository.findById(pid).orElse(null);
+            salesMap.put(pid, new ProductSalesItem(pid, name, units, revenue, p == null ? 0 : effectiveStock(p), p == null ? null : p.getSlug()));
         }
 
         List<ProductSalesItem> result = new ArrayList<>(salesMap.values());
@@ -273,7 +273,7 @@ public class ReportService {
         productRepository.findAll().stream()
                 .filter(p -> !salesMap.containsKey(p.getId()))
                 .forEach(p -> result.add(
-                        new ProductSalesItem(p.getId(), p.getName(), 0, BigDecimal.ZERO, p.getStockQuantity())));
+                        new ProductSalesItem(p.getId(), p.getName(), 0, BigDecimal.ZERO, p.getStockQuantity(), p.getSlug())));
 
         return result.stream()
                 .sorted(Comparator.comparingLong(ProductSalesItem::unitsSold))
@@ -286,7 +286,7 @@ public class ReportService {
     public List<InventoryItem> getInventoryReport() {
         return productRepository.findAll().stream()
                 .map(p -> new InventoryItem(p.getId(), p.getName(), p.getSku(),
-                        effectiveStock(p), p.getPrice(), p.isActive(), outOfStockVariants(p)))
+                        effectiveStock(p), p.getPrice(), p.isActive(), outOfStockVariants(p), p.getSlug()))
                 .sorted(Comparator.comparing(InventoryItem::name))
                 .toList();
     }
@@ -301,7 +301,7 @@ public class ReportService {
                     return p.getStockQuantity() == 0;
                 })
                 .map(p -> new InventoryItem(p.getId(), p.getName(), p.getSku(),
-                        effectiveStock(p), p.getPrice(), p.isActive(), outOfStockVariants(p)))
+                        effectiveStock(p), p.getPrice(), p.isActive(), outOfStockVariants(p), p.getSlug()))
                 .sorted(Comparator.comparing(InventoryItem::name))
                 .toList();
     }
@@ -316,14 +316,9 @@ public class ReportService {
                     String name = (String) row[1];
                     long units = ((Number) row[2]).longValue();
                     BigDecimal revenue = (BigDecimal) row[3];
-                    return new ProductSalesItem(pid, name, units, revenue, stockOf(pid));
+                    Product p = productRepository.findById(pid).orElse(null);
+                    return new ProductSalesItem(pid, name, units, revenue, p == null ? 0 : effectiveStock(p), p == null ? null : p.getSlug());
                 }).toList();
-    }
-
-    private int stockOf(Long productId) {
-        return productRepository.findById(productId)
-                .map(this::effectiveStock)
-                .orElse(0);
     }
 
     private int effectiveStock(Product p) {

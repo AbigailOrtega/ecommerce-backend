@@ -10,5 +10,11 @@ public record InventoryItem(
         int stock,
         BigDecimal price,
         boolean active,
-        List<String> outOfStockVariants
-) {}
+        List<String> outOfStockVariants,
+        String slug   // for the link to the product's store page
+) {
+    public InventoryItem(Long productId, String name, String sku, int stock, BigDecimal price, boolean active,
+                         List<String> outOfStockVariants) {
+        this(productId, name, sku, stock, price, active, outOfStockVariants, null);
+    }
+}
