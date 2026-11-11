@@ -191,7 +191,9 @@ spring:
       on-profile: e2e
 
   datasource:
-    url: jdbc:h2:mem:ecommerce_e2e;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    # one database per Spring context: with create-drop, a test context closing (@DirtiesContext)
+    # used to drop the tables under every other cached context sharing the same in-memory name
+    url: jdbc:h2:mem:ecommerce_e2e_${random.uuid};DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
     username: sa
     password:
