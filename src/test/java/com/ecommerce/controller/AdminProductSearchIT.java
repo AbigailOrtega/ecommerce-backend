@@ -53,9 +53,10 @@ class AdminProductSearchIT {
     }
 
     @SuppressWarnings("rawtypes")
-    private void product(String name, String sku, String price, boolean active) {
+    private void product(String name, String sku, String price, boolean active, Long... categoryIds) {
         ResponseEntity<Map> res = rest.exchange(url("/api/products"), HttpMethod.POST, new HttpEntity<>(Map.of(
-                "name", name, "sku", sku, "price", new BigDecimal(price), "stockQuantity", 3, "active", active), json()), Map.class);
+                "name", name, "sku", sku, "price", new BigDecimal(price), "stockQuantity", 3, "active", active,
+                "categoryIds", List.of(categoryIds)), json()), Map.class);
         assertThat(res.getStatusCode()).as(String.valueOf(res.getBody())).isIn(HttpStatus.OK, HttpStatus.CREATED);
     }
 
@@ -80,6 +81,29 @@ class AdminProductSearchIT {
         assertThat(names("q=" + tag + "&active=false")).containsExactly("Sweater " + tag);
         assertThat(names("q=" + tag + "&active=true&maxPrice=150")).containsExactly("Vestido " + tag);
         assertThat(names("q=" + tag + "%25")).isEmpty();                                  // % is a character, not a wildcard
+    }
+
+    @SuppressWarnings("rawtypes")
+    private Long category(String name) {
+        ResponseEntity<Map> res = rest.exchange(url("/api/categories"), HttpMethod.POST,
+                new HttpEntity<>(Map.of("name", name), json()), Map.class);
+        assertThat(res.getStatusCode()).as(String.valueOf(res.getBody())).isIn(HttpStatus.OK, HttpStatus.CREATED);
+        return ((Number) ((Map) res.getBody().get("data")).get("id")).longValue();
+    }
+
+    @Test
+    @DisplayName("filters by category; a product in two categories appears once")
+    void byCategory() {
+        Long faldas = category("Faldas " + tag);
+        Long ofertas = category("Ofertas " + tag);
+        product("Falda " + tag, "FA-" + tag, "199", true, faldas, ofertas);
+        product("Vestido " + tag, "VE-" + tag, "139", true, ofertas);
+        product("Blusa " + tag, "BL-" + tag, "99", true);
+
+        assertThat(names("categoryId=" + faldas)).containsExactly("Falda " + tag);
+        assertThat(names("categoryId=" + ofertas)).containsExactly("Falda " + tag, "Vestido " + tag);
+        assertThat(names("categoryId=" + ofertas + "&maxPrice=150")).containsExactly("Vestido " + tag);
+        assertThat(names("q=" + tag)).hasSize(3);
     }
 
     @Test

@@ -188,12 +188,17 @@ public class ProductService {
     /**
      * The admin's product list, filtered: {@code q} matches the name or the SKU (any part, any
      * case), {@code minPrice}/{@code maxPrice} bound the price (inclusive), {@code active} picks
-     * active or inactive ones. Null filters are not applied.
+     * active or inactive ones, {@code categoryId} those in that category. Null filters are not applied.
      */
     public Page<ProductResponse> getAllProductsAdmin(String q, BigDecimal minPrice, BigDecimal maxPrice,
                                                      Boolean active, Pageable pageable) {
+        return getAllProductsAdmin(q, minPrice, maxPrice, active, null, pageable);
+    }
+
+    public Page<ProductResponse> getAllProductsAdmin(String q, BigDecimal minPrice, BigDecimal maxPrice,
+                                                     Boolean active, Long categoryId, Pageable pageable) {
         String text = q == null ? "" : q.trim().toLowerCase();
-        if (text.isEmpty() && minPrice == null && maxPrice == null && active == null) {
+        if (text.isEmpty() && minPrice == null && maxPrice == null && active == null && categoryId == null) {
             return getAllProductsAdmin(pageable);
         }
         if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
@@ -210,6 +215,13 @@ public class ProductService {
             if (minPrice != null) where.add(cb.greaterThanOrEqualTo(root.get("price"), minPrice));
             if (maxPrice != null) where.add(cb.lessThanOrEqualTo(root.get("price"), maxPrice));
             if (active != null) where.add(cb.equal(root.get("active"), active));
+            if (categoryId != null) {
+                // a subquery, not a join: a product in several categories must not repeat or skew the count
+                var sub = query.subquery(Long.class);
+                var p = sub.from(Product.class);
+                sub.select(p.get("id")).where(cb.equal(p.join("categories").get("id"), categoryId));
+                where.add(root.get("id").in(sub));
+            }
             return cb.and(where.toArray(jakarta.persistence.criteria.Predicate[]::new));
         };
         return productRepository.findAll(spec, pageable).map(this::mapToResponse);
