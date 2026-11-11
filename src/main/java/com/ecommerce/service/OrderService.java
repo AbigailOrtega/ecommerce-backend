@@ -32,6 +32,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -104,6 +105,7 @@ public class OrderService {
                     .product(product)
                     .productName(product.getName())
                     .productPrice(effectivePrice)
+                    .unitCost(product.getCostPrice())
                     .quantity(cartItem.getQuantity())
                     .subtotal(subtotal)
                     .selectedSize(selectedSize)
@@ -279,6 +281,7 @@ public class OrderService {
                     .product(product)
                     .productName(product.getName())
                     .productPrice(effectivePrice)
+                    .unitCost(product.getCostPrice())
                     .quantity(itemReq.quantity())
                     .subtotal(subtotal)
                     .selectedSize(selectedSize)
@@ -442,6 +445,11 @@ public class OrderService {
         return mapToResponse(order, true);
     }
 
+    /** Statuses that only a paid order reaches. */
+    private static final java.util.Set<OrderStatus> PAID_STATUSES = java.util.EnumSet.of(
+            OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.SHIPMENT_PENDING, OrderStatus.SHIPPED,
+            OrderStatus.DELIVERY_ATTEMPT, OrderStatus.DELIVERY_EXCEPTION, OrderStatus.DELIVERED);
+
     @Transactional
     public OrderResponse updateOrderStatus(Long id, UpdateOrderStatusRequest request) {
         Order order = orderRepository.findById(id)
@@ -449,6 +457,9 @@ public class OrderService {
 
         OrderStatus previousStatus = order.getStatus();
         order.setStatus(request.status());
+        // for the accounts: moving an order forward means it was paid (e.g. cash at pickup)
+        if (PAID_STATUSES.contains(request.status())) order.markPaidAt(LocalDateTime.now());
+        if (request.status() == OrderStatus.REFUNDED) order.markRefundedAt(LocalDateTime.now());
 
         if (request.status() == OrderStatus.CANCELLED) {
             stockService.restore(order, previousStatus);

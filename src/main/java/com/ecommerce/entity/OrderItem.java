@@ -43,6 +43,10 @@ public class OrderItem {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal subtotal;
 
+    /** What one unit cost the store when it was sold (the product's cost then); null if unknown. */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal unitCost;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "selected_size_id", foreignKey = @ForeignKey(foreignKeyDefinition = "FOREIGN KEY (selected_size_id) REFERENCES product_sizes(id) ON DELETE SET NULL"))
     private ProductSize selectedSize;

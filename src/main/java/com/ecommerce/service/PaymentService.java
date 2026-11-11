@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.math.RoundingMode;
 import java.util.*;
 
@@ -261,6 +262,7 @@ public class PaymentService {
         // a CANCELLED order already released its stock; restore() knows and skips it
         stockService.restore(order, order.getStatus());
         order.setStatus(OrderStatus.REFUNDED);
+        order.markRefundedAt(LocalDateTime.now());
         orderRepository.save(order);
         log.info("Order {} refunded via webhook, stock restored", order.getOrderNumber());
     }
@@ -418,6 +420,55 @@ public class PaymentService {
         return AbandonedOutcome.CANCELLED;
     }
 
+    // ── Commissions (for the accounts) ───────────────────────────────────────
+
+    /**
+     * Reads the commission Stripe or PayPal charged for an order's payment and stores it; when the
+     * provider has no answer yet (or cannot be asked) counts the attempt, so the job retries later
+     * and gives up after a few (e.g. a payment made with test keys, unknown to the live account).
+     */
+    @Transactional
+    public void recordPaymentFee(Long orderId) {
+        Order order = orderRepository.findById(orderId).orElse(null);
+        if (order == null || order.getPaymentFee() != null) return;
+        Optional<BigDecimal> fee;
+        try {
+            fee = lookupPaymentFee(order.getPaymentMethod(), order.getPaymentId());
+        } catch (Exception e) {
+            log.warn("Commission of order {} not available: {}", order.getOrderNumber(), e.getMessage());
+            fee = Optional.empty();
+        }
+        if (fee.isPresent()) {
+            order.setPaymentFee(fee.get().setScale(2, RoundingMode.HALF_UP));
+        } else {
+            order.setPaymentFeeAttempts(order.getPaymentFeeAttempts() + 1);
+        }
+        orderRepository.save(order);
+    }
+
+    /** The commission of one payment, in pesos; empty when the provider does not have it (yet). */
+    protected Optional<BigDecimal> lookupPaymentFee(String paymentMethod, String paymentId) throws Exception {
+        if (paymentId == null || paymentMethod == null) return Optional.empty();
+        if ("stripe".equalsIgnoreCase(paymentMethod)) {
+            if (!isStripeConfigured()) return Optional.empty();
+            PaymentIntent intent = PaymentIntent.retrieve(paymentId, com.stripe.param.PaymentIntentRetrieveParams.builder()
+                    .addExpand("latest_charge.balance_transaction").build(), null);
+            var charge = intent.getLatestChargeObject();
+            var balance = charge != null ? charge.getBalanceTransactionObject() : null;
+            if (balance == null || balance.getFee() == null) return Optional.empty();
+            if (!"mxn".equalsIgnoreCase(balance.getCurrency())) {
+                log.warn("Stripe payment {} settled in {}, not MXN: commission not recorded", paymentId, balance.getCurrency());
+                return Optional.empty();
+            }
+            return Optional.of(BigDecimal.valueOf(balance.getFee()).movePointLeft(2));
+        }
+        if ("paypal".equalsIgnoreCase(paymentMethod)) {
+            if (!isPayPalConfigured()) return Optional.empty();
+            return paypalClient.getCaptureFee(paymentId);
+        }
+        return Optional.empty();
+    }
+
     public record StripeIntentSnapshot(String status, long amountReceived, String currency) {}
 
     protected StripeIntentSnapshot findStripeIntent(String paymentIntentId) throws StripeException {
@@ -433,6 +484,7 @@ public class PaymentService {
     /** PENDING → CONFIRMED once the payment is in; the shopper is emailed after the transaction commits. */
     private void markPaid(Order order) {
         order.setStatus(OrderStatus.CONFIRMED);
+        order.markPaidAt(LocalDateTime.now());
         orderRepository.save(order);
         events.publishEvent(new OrderPaidEvent(order.getId()));
     }
@@ -473,6 +525,7 @@ public class PaymentService {
             if (order.getStatus() == OrderStatus.REFUNDED) return;
             stockService.restore(order, order.getStatus());
             order.setStatus(OrderStatus.REFUNDED);
+            order.markRefundedAt(LocalDateTime.now());
             orderRepository.save(order);
             log.info("Order {} refunded via PayPal webhook captureId={}", order.getOrderNumber(), captureId);
         }, () -> log.warn("PayPal webhook CAPTURE.REFUNDED — no order found for captureId={}", captureId));

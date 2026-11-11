@@ -182,6 +182,7 @@ public class TestDataInitializer implements ApplicationRunner {
                     .user(customer)
                     .totalAmount(BigDecimal.valueOf(89.99))
                     .status(OrderStatus.CONFIRMED)
+                    .paidAt(java.time.LocalDateTime.now().minusDays(1))
                     .paymentMethod("STRIPE")
                     .shippingAddress("Sucursal Centro")
                     .shippingCity("Ciudad de México")

@@ -38,6 +38,10 @@ public class Product {
     @Column(precision = 10, scale = 2)
     private BigDecimal compareAtPrice;
 
+    /** What the store paid for it (optional, admin only: never in public responses). */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal costPrice;
+
     @Column(unique = true)
     private String sku;
 

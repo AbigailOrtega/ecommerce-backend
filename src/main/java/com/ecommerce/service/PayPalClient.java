@@ -148,6 +148,16 @@ public class PayPalClient {
         }));
     }
 
+    /** PayPal's commission on a capture (seller_receivable_breakdown.paypal_fee); empty if not there. */
+    public Optional<BigDecimal> getCaptureFee(String captureId) throws PayPalApiException {
+        return call("get capture fee " + captureId, () -> notFoundAsEmpty(() -> http.get()
+                .uri("/v2/payments/captures/{id}", captureId)
+                .headers(h -> h.setBearerAuth(token()))
+                .retrieve()
+                .body(JsonNode.class))
+                .map(capture -> decimal(capture.path("seller_receivable_breakdown").path("paypal_fee"), "value")));
+    }
+
     private synchronized String token() {
         Instant now = clock.instant();
         if (accessToken == null || !now.isBefore(tokenExpiresAt.minus(TOKEN_MARGIN))) {

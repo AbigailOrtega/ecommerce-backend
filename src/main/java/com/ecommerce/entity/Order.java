@@ -111,6 +111,29 @@ public class Order {
         return manageToken;
     }
 
+    // ── Accounting ───────────────────────────────────────────────────────────
+    /** When the money came in (payment confirmed, or the admin marked it paid). Null: never paid. */
+    private LocalDateTime paidAt;
+    private LocalDateTime refundedAt;
+    /** Commission charged by Stripe / PayPal; null until read from the provider. */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal paymentFee;
+    /** Lookups of the commission that came back empty; the job gives up after a few. */
+    @Column(nullable = false)
+    private int paymentFeeAttempts;
+    /** What Skydropx charged for the label. */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal shippingLabelCost;
+
+    /** Records the payment once (a later status change does not move the date). */
+    public void markPaidAt(LocalDateTime when) {
+        if (paidAt == null) paidAt = when;
+    }
+
+    public void markRefundedAt(LocalDateTime when) {
+        if (refundedAt == null) refundedAt = when;
+    }
+
     // ── Skydropx ─────────────────────────────────────────────────────────────
     private String skydropxRateId;         // rate chosen by customer at checkout
     private String skydropxShipmentId;

@@ -94,6 +94,30 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success(reportService.getSalesReport(period)));
     }
 
+    @GetMapping("/reports/accounting")
+    @Operation(summary = "Accounts for a date range: sales by payment day, refunds, commissions, label and garment costs, and the ledger")
+    public ResponseEntity<ApiResponse<com.ecommerce.dto.response.AccountingReportResponse>> getAccountingReport(
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate from,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate to) {
+        return ResponseEntity.ok(ApiResponse.success(reportService.getAccountingReport(from, to)));
+    }
+
+    @GetMapping("/reports/product-costs")
+    @Operation(summary = "Products with price and cost (cost is admin-only)")
+    public ResponseEntity<ApiResponse<java.util.List<com.ecommerce.dto.response.ProductCostItem>>> getProductCosts() {
+        return ResponseEntity.ok(ApiResponse.success(reportService.getProductCosts()));
+    }
+
+    @PutMapping("/reports/product-costs/{id}")
+    @Operation(summary = "Set what a product cost the store; past sales without a cost take it")
+    public ResponseEntity<ApiResponse<Integer>> setProductCost(
+            @PathVariable Long id, @Valid @RequestBody com.ecommerce.dto.request.ProductCostRequest request) {
+        int filled = reportService.setProductCost(id, request.costPrice());
+        return ResponseEntity.ok(ApiResponse.success(filled > 0
+                ? "Costo guardado; también se aplicó a " + filled + (filled == 1 ? " venta anterior" : " ventas anteriores")
+                : "Costo guardado", filled));
+    }
+
     @GetMapping("/reports/products/top-selling")
     @Operation(summary = "Top selling products")
     public ResponseEntity<ApiResponse<List<ProductSalesItem>>> getTopSellingProducts(
@@ -644,6 +668,7 @@ public class AdminController {
         order.setCarrierName(null);
         order.setLabelUrl(null);
         order.setShipmentStatus("cancelled");
+        order.setShippingLabelCost(null);   // a cancelled label is not charged
         orderRepository.save(order);
         return ResponseEntity.ok(ApiResponse.success("Guía cancelada", orderService.getOrderById(id)));
     }

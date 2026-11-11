@@ -1,9 +1,11 @@
 package com.ecommerce.service;
 
+import com.ecommerce.dto.response.AccountingReportResponse;
 import com.ecommerce.dto.response.InventoryItem;
 import com.ecommerce.dto.response.ProductSalesItem;
 import com.ecommerce.dto.response.SalesReportResponse;
 import com.ecommerce.entity.Order;
+import com.ecommerce.entity.OrderItem;
 import com.ecommerce.entity.OrderStatus;
 import com.ecommerce.entity.Product;
 import com.ecommerce.repository.OrderItemRepository;
@@ -19,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -59,7 +62,7 @@ class ReportServiceTest {
         @Test
         @DisplayName("returns 'Última semana' label for period=week")
         void week_returnsCorrectPeriodLabel() {
-            when(orderRepository.findByCreatedAtBetween(any(), any())).thenReturn(List.of());
+            when(orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(any(), any())).thenReturn(List.of());
 
             SalesReportResponse result = reportService.getSalesReport("week");
 
@@ -69,7 +72,7 @@ class ReportServiceTest {
         @Test
         @DisplayName("returns 'Este año' label for period=year")
         void year_returnsCorrectPeriodLabel() {
-            when(orderRepository.findByCreatedAtBetween(any(), any())).thenReturn(List.of());
+            when(orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(any(), any())).thenReturn(List.of());
 
             SalesReportResponse result = reportService.getSalesReport("year");
 
@@ -79,7 +82,7 @@ class ReportServiceTest {
         @Test
         @DisplayName("defaults to 'Este mes' for unknown period")
         void unknown_defaultsToMonth() {
-            when(orderRepository.findByCreatedAtBetween(any(), any())).thenReturn(List.of());
+            when(orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(any(), any())).thenReturn(List.of());
 
             SalesReportResponse result = reportService.getSalesReport("unknown");
 
@@ -91,7 +94,7 @@ class ReportServiceTest {
         void excludesCancelledOrders() {
             Order active = buildOrder(1L, OrderStatus.CONFIRMED, BigDecimal.valueOf(100));
             Order cancelled = buildOrder(2L, OrderStatus.CANCELLED, BigDecimal.valueOf(50));
-            when(orderRepository.findByCreatedAtBetween(any(), any()))
+            when(orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(any(), any()))
                     .thenReturn(List.of(active, cancelled));
 
             SalesReportResponse result = reportService.getSalesReport("month");
@@ -104,7 +107,7 @@ class ReportServiceTest {
         @DisplayName("excludes REFUNDED orders from revenue")
         void excludesRefundedOrders() {
             Order refunded = buildOrder(1L, OrderStatus.REFUNDED, BigDecimal.valueOf(80));
-            when(orderRepository.findByCreatedAtBetween(any(), any()))
+            when(orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(any(), any()))
                     .thenReturn(List.of(refunded));
 
             SalesReportResponse result = reportService.getSalesReport("month");
@@ -118,7 +121,7 @@ class ReportServiceTest {
         void aggregatesSameDayOrders() {
             Order o1 = buildOrder(1L, OrderStatus.CONFIRMED, BigDecimal.valueOf(30));
             Order o2 = buildOrder(2L, OrderStatus.CONFIRMED, BigDecimal.valueOf(20));
-            when(orderRepository.findByCreatedAtBetween(any(), any()))
+            when(orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(any(), any()))
                     .thenReturn(List.of(o1, o2));
 
             SalesReportResponse result = reportService.getSalesReport("month");
@@ -131,13 +134,128 @@ class ReportServiceTest {
         @Test
         @DisplayName("returns zero totals and empty data when no orders")
         void emptyOrders_returnsZeroTotals() {
-            when(orderRepository.findByCreatedAtBetween(any(), any())).thenReturn(List.of());
+            when(orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(any(), any())).thenReturn(List.of());
 
             SalesReportResponse result = reportService.getSalesReport("month");
 
             assertThat(result.data()).isEmpty();
             assertThat(result.totalRevenue()).isEqualByComparingTo(BigDecimal.ZERO);
             assertThat(result.totalOrders()).isZero();
+        }
+    }
+
+    // ─── getAccountingReport ──────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getAccountingReport")
+    class Accounting {
+
+        private final LocalDate from = LocalDate.of(2026, 10, 1);
+        private final LocalDate to = LocalDate.of(2026, 10, 31);
+
+        private Order paidOrder(String number, String method, String items, String discount, String shipping,
+                                String fee, String label, Integer qty, String unitCost) {
+            BigDecimal itemTotal = new BigDecimal(items);
+            Order o = Order.builder().orderNumber(number).status(OrderStatus.DELIVERED).paymentMethod(method)
+                    .paymentId("pay-" + number).guestFirstName("Ana").guestLastName("Ruiz").guestEmail("ana@example.com")
+                    .discountAmount(new BigDecimal(discount)).shippingCost(new BigDecimal(shipping))
+                    .totalAmount(itemTotal.subtract(new BigDecimal(discount)).add(new BigDecimal(shipping)))
+                    .paymentFee(fee == null ? null : new BigDecimal(fee))
+                    .shippingLabelCost(label == null ? null : new BigDecimal(label))
+                    .shippingType(label == null ? "PICKUP" : "NATIONAL")
+                    .paidAt(LocalDateTime.of(2026, 10, 5, 12, 0))
+                    .shippingAddress("x").shippingCity("x").shippingState("x").shippingZipCode("x").shippingCountry("MX")
+                    .build();
+            o.addItem(OrderItem.builder().productName("Vestido").productPrice(itemTotal.divide(BigDecimal.valueOf(qty)))
+                    .quantity(qty).subtotal(itemTotal).unitCost(unitCost == null ? null : new BigDecimal(unitCost)).build());
+            return o;
+        }
+
+        @Test
+        @DisplayName("breaks the money down, subtracts refunds and costs, and lists every movement")
+        void breakdown() {
+            // card: 2 dresses of 500, coupon 100, shipping 150 → 1050; commission 40.80, label 120, cost 200 each
+            Order card = paidOrder("ORD-A", "stripe", "1000", "100", "150", "40.80", "120", 2, "200");
+            // PayPal pickup: 300, commission not known yet, no cost recorded
+            Order paypal = paidOrder("ORD-B", "paypal", "300", "0", "0", null, null, 1, null);
+            // paid in September, refunded on Oct 20: the refund belongs to October, the sale does not
+            Order refunded = paidOrder("ORD-C", "stripe", "400", "0", "0", "17.40", null, 1, "150");
+            refunded.setPaidAt(LocalDateTime.of(2026, 9, 28, 10, 0));
+            refunded.setStatus(OrderStatus.REFUNDED);
+            refunded.setRefundedAt(LocalDateTime.of(2026, 10, 20, 9, 0));
+            when(orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(any(), any())).thenReturn(List.of(card, paypal));
+            when(orderRepository.findByRefundedAtBetweenOrderByRefundedAtAsc(any(), any())).thenReturn(List.of(refunded));
+
+            AccountingReportResponse r = reportService.getAccountingReport(from, to);
+            AccountingReportResponse.Summary s = r.summary();
+
+            assertThat(s.paidOrders()).isEqualTo(2);
+            assertThat(s.productSales()).isEqualByComparingTo("1300");
+            assertThat(s.discounts()).isEqualByComparingTo("100");
+            assertThat(s.shippingCharged()).isEqualByComparingTo("150");
+            assertThat(s.totalCollected()).isEqualByComparingTo("1350");
+            assertThat(s.refundedOrders()).isEqualTo(1);
+            assertThat(s.refunds()).isEqualByComparingTo("400");
+            assertThat(s.netSales()).isEqualByComparingTo("950");
+            assertThat(s.paymentFees()).isEqualByComparingTo("40.80");
+            assertThat(s.ordersMissingFee()).isEqualTo(1);
+            assertThat(s.labelCosts()).isEqualByComparingTo("120");
+            assertThat(s.shipmentsMissingCost()).isZero();
+            // 2 × 200 sold, 150 came back with the refund
+            assertThat(s.costOfGoods()).isEqualByComparingTo("250");
+            assertThat(s.unitsMissingCost()).isEqualTo(1);
+            // 950 - 40.80 - 120 - 250
+            assertThat(s.grossProfit()).isEqualByComparingTo("539.20");
+
+            assertThat(r.byPaymentMethod()).extracting(AccountingReportResponse.PaymentMethodTotal::method).containsExactly("paypal", "stripe");
+            assertThat(r.byPaymentMethod().get(1).collected()).isEqualByComparingTo("1050");
+            assertThat(r.daily()).hasSize(1);
+            assertThat(r.daily().get(0).revenue()).isEqualByComparingTo("1350");
+
+            assertThat(r.ledger()).extracting(AccountingReportResponse.LedgerRow::movement).containsExactly("VENTA", "VENTA", "REEMBOLSO");
+            AccountingReportResponse.LedgerRow refund = r.ledger().get(2);
+            assertThat(refund.orderNumber()).isEqualTo("ORD-C");
+            assertThat(refund.total()).isEqualByComparingTo("-400");
+            assertThat(refund.customer()).isEqualTo("Ana Ruiz");
+        }
+
+        @Test
+        @DisplayName("a paid order cancelled without a refund is flagged; a national order without label cost too")
+        void warnings() {
+            Order cancelled = paidOrder("ORD-D", "stripe", "200", "0", "0", "10.20", null, 1, "50");
+            cancelled.setStatus(OrderStatus.CANCELLED);
+            Order national = paidOrder("ORD-E", "transfer", "200", "0", "100", null, "1", 1, "50");
+            national.setShippingLabelCost(null);
+            when(orderRepository.findByPaidAtBetweenOrderByPaidAtAsc(any(), any())).thenReturn(List.of(cancelled, national));
+            when(orderRepository.findByRefundedAtBetweenOrderByRefundedAtAsc(any(), any())).thenReturn(List.of());
+
+            AccountingReportResponse.Summary s = reportService.getAccountingReport(from, to).summary();
+
+            assertThat(s.paidThenCancelled()).isEqualTo(1);
+            assertThat(s.shipmentsMissingCost()).isEqualTo(1);
+            assertThat(s.ordersMissingFee()).as("a transfer has no commission to look up").isZero();
+        }
+
+        @Test
+        @DisplayName("rejects a range that is backwards or too long")
+        void invalidRange() {
+            assertThatThrownBy(() -> reportService.getAccountingReport(to, from)).hasMessageContaining("anterior");
+            assertThatThrownBy(() -> reportService.getAccountingReport(from, from.plusDays(400))).hasMessageContaining("400");
+            assertThatThrownBy(() -> reportService.getAccountingReport(null, to)).hasMessageContaining("fechas");
+        }
+
+        @Test
+        @DisplayName("setting a product's cost fills past sales that had none")
+        void setCost() {
+            when(productRepository.findById(1L)).thenReturn(Optional.of(productA));
+            when(orderItemRepository.fillMissingUnitCost(1L, new BigDecimal("12.50"))).thenReturn(3);
+
+            assertThat(reportService.setProductCost(1L, new BigDecimal("12.5"))).isEqualTo(3);
+            assertThat(productA.getCostPrice()).isEqualByComparingTo("12.50");
+            verify(productRepository).save(productA);
+
+            assertThat(reportService.setProductCost(1L, null)).isZero();
+            assertThat(productA.getCostPrice()).isNull();
         }
     }
 
@@ -384,6 +502,7 @@ class ReportServiceTest {
                 .status(status)
                 .totalAmount(total)
                 .createdAt(LocalDateTime.now())
+                .paidAt(LocalDateTime.now())
                 .shippingAddress("Calle 1").shippingCity("CDMX")
                 .shippingState("CMX").shippingZipCode("06600").shippingCountry("MX")
                 .build();

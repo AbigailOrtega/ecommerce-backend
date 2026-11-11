@@ -19,4 +19,9 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
            "GROUP BY oi.product.id " +
            "ORDER BY SUM(oi.quantity) DESC")
     List<Object[]> findProductSalesRanked(@Param("excluded") List<OrderStatus> excluded);
+
+    /** Past sales of the product with no cost recorded take the given cost; returns how many. */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE OrderItem oi SET oi.unitCost = :cost WHERE oi.product.id = :productId AND oi.unitCost IS NULL")
+    int fillMissingUnitCost(@Param("productId") Long productId, @Param("cost") java.math.BigDecimal cost);
 }

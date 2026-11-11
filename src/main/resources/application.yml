@@ -214,6 +214,11 @@ spring:
 app:
   postal-codes:
     auto-download: false   # no network in e2e runs; TestDataInitializer seeds a few codes
+  payments:
+    fees:
+      # the accounting tests read commissions a few seconds after paying
+      initial-delay: PT2S
+      interval: PT3S
   jwt:
     # plain http on localhost
     refresh-cookie-secure: false

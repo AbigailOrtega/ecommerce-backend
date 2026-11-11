@@ -229,6 +229,12 @@ public class SkydropxService {
                         .orElseThrow(() -> new BadRequestException(
                                 "No hay tarifas disponibles para este destino.")));
 
+        // what this label costs the store, for the accounts (the admin then saves the order)
+        rates.stream().filter(r -> finalRateId.equals(String.valueOf(r.get("id")))).findFirst()
+                .map(r -> toDouble(r.getOrDefault("total", r.get("amount"))))
+                .filter(price -> price > 0)
+                .ifPresent(price -> order.setShippingLabelCost(java.math.BigDecimal.valueOf(price).setScale(2, java.math.RoundingMode.HALF_UP)));
+
         // Build packages with valid consignment_note and package_type from Skydropx catalog
         Map<String, Object> pkg = new HashMap<>(buildDefaultParcel(cfg));
         pkg.put("package_number", 1);

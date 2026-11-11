@@ -64,10 +64,23 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT COUNT(o) FROM Order o WHERE o.status = :status")
     long countByStatus(@Param("status") OrderStatus status);
 
-    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.status NOT IN ('CANCELLED', 'REFUNDED')")
+    /** Money from orders that were paid and not cancelled or refunded (a pending order is not revenue). */
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.paidAt IS NOT NULL AND o.status NOT IN ('CANCELLED', 'REFUNDED')")
     BigDecimal sumTotalRevenue();
 
     List<Order> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    /** Paid with Stripe or PayPal and the commission still unknown (most recent first). */
+    @Query("SELECT o.id FROM Order o WHERE o.paidAt IS NOT NULL AND o.paymentFee IS NULL "
+         + "AND o.paymentFeeAttempts < :maxAttempts AND o.paymentId IS NOT NULL "
+         + "AND LOWER(o.paymentMethod) IN ('stripe', 'paypal') ORDER BY o.paidAt DESC")
+    List<Long> findIdsAwaitingPaymentFee(@Param("maxAttempts") int maxAttempts, Pageable pageable);
+
+    /** Paid in the period (whatever happened later), oldest first. */
+    List<Order> findByPaidAtBetweenOrderByPaidAtAsc(LocalDateTime start, LocalDateTime end);
+
+    /** Refunded in the period, oldest first. */
+    List<Order> findByRefundedAtBetweenOrderByRefundedAtAsc(LocalDateTime start, LocalDateTime end);
 
     List<Order> findByGuestEmailAndUserIsNullOrderByCreatedAtDesc(String guestEmail);
 

@@ -48,6 +48,19 @@ public class FakePaymentService extends PaymentService {
         log.warn("[e2e] FakePaymentService active: Stripe and PayPal are simulated");
     }
 
+    /** Like the real ones, roughly: Stripe 3.6% + $3, PayPal 3.95% + $4 (plus nothing for VAT). */
+    @Override
+    protected java.util.Optional<BigDecimal> lookupPaymentFee(String paymentMethod, String paymentId) {
+        if (paymentId == null || paymentMethod == null) return java.util.Optional.empty();
+        // only payments this fake made are known to it, as with the real providers
+        if (!stripeIntents.containsKey(paymentId) && !paypalCaptures.containsKey(paymentId)) return java.util.Optional.empty();
+        return orders.findByPaymentId(paymentId).map(o -> switch (paymentMethod.toLowerCase()) {
+            case "stripe" -> o.getTotalAmount().multiply(new BigDecimal("0.036")).add(new BigDecimal("3"));
+            case "paypal" -> o.getTotalAmount().multiply(new BigDecimal("0.0395")).add(new BigDecimal("4"));
+            default -> null;
+        }).map(f -> f.setScale(2, java.math.RoundingMode.HALF_UP));
+    }
+
     @Override public boolean isStripeConfigured() { return true; }
     @Override public boolean isPayPalConfigured() { return true; }
     @Override public String getPayPalClientId() { return "e2e-fake-paypal"; }
