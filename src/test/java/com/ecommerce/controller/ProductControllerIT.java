@@ -422,7 +422,7 @@ class ProductControllerIT {
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody().get("success")).isEqualTo(true);
-            assertThat(response.getBody().get("message")).isEqualTo("Product deleted");
+            assertThat(response.getBody().get("message")).isEqualTo("Producto eliminado");
         }
 
         @Test

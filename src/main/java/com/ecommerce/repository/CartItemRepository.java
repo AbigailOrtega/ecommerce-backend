@@ -17,6 +17,10 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
     Optional<CartItem> findByUserIdAndProductIdAndSelectedSizeId(Long userId, Long productId, Long selectedSizeId);
     void deleteByUserId(Long userId);
 
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM CartItem c WHERE c.product.id = :productId")
+    void deleteByProductId(@org.springframework.data.repository.query.Param("productId") Long productId);
+
     @Modifying
     @Query("UPDATE CartItem c SET c.selectedSize = null WHERE c.selectedSize.id IN " +
            "(SELECT s.id FROM ProductSize s WHERE s.color.product.id = :productId)")

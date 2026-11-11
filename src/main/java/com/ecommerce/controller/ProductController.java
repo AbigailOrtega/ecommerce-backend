@@ -90,7 +90,9 @@ public class ProductController {
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete a product (Admin)")
     public ResponseEntity<ApiResponse<Void>> deleteProduct(@PathVariable Long id) {
-        productService.deleteProduct(id);
-        return ResponseEntity.ok(ApiResponse.success("Product deleted", null));
+        boolean deleted = productService.deleteProduct(id);
+        return ResponseEntity.ok(ApiResponse.success(deleted
+                ? "Producto eliminado"
+                : "No se puede borrar: este producto tiene órdenes asociadas. Se desactivó para que ya no aparezca en la tienda; sus ventas se conservan", null));
     }
 }

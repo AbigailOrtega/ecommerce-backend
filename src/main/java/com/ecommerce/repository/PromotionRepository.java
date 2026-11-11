@@ -9,6 +9,12 @@ import java.util.Optional;
 
 public interface PromotionRepository extends JpaRepository<Promotion, Long> {
 
+    /** Takes a product out of every promotion (the join table has no cascade). */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM promotion_products WHERE product_id = :productId", nativeQuery = true)
+    void removeProductFromAll(@org.springframework.data.repository.query.Param("productId") Long productId);
+
+
     @Query("""
         SELECT p FROM Promotion p JOIN p.products prod
         WHERE prod.id = :productId

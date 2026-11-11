@@ -12,6 +12,9 @@ import java.util.List;
 @Repository
 public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 
+    boolean existsByProductId(Long productId);
+
+
     @Query("SELECT oi.product.id, MIN(oi.productName), SUM(oi.quantity), SUM(oi.subtotal) " +
            "FROM OrderItem oi JOIN oi.order o " +
            "WHERE oi.product IS NOT NULL " +

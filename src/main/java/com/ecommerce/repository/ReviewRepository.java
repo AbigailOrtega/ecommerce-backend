@@ -17,6 +17,10 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     boolean existsByProductIdAndUserId(Long productId, Long userId);
 
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM Review r WHERE r.product.id = :productId")
+    void deleteByProductId(@org.springframework.data.repository.query.Param("productId") Long productId);
+
     List<Review> findAllByApprovedFalseOrderByCreatedAtDesc();
 
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.product.id = :productId AND r.approved = true")

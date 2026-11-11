@@ -431,14 +431,24 @@ class ProductControllerTest {
         @Test
         @DisplayName("returns 200 with success message when product is deleted")
         void delete_200() throws Exception {
-            doNothing().when(productService).deleteProduct(1L);
+            when(productService.deleteProduct(1L)).thenReturn(true);
 
             mockMvc.perform(delete("/api/products/1"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
-                    .andExpect(jsonPath("$.message").value("Product deleted"));
+                    .andExpect(jsonPath("$.message").value("Producto eliminado"));
 
             verify(productService).deleteProduct(1L);
+        }
+
+        @Test
+        @DisplayName("returns 200 saying it was deactivated when the product has orders")
+        void delete_200_deactivated() throws Exception {
+            when(productService.deleteProduct(1L)).thenReturn(false);
+
+            mockMvc.perform(delete("/api/products/1"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("tiene órdenes asociadas")));
         }
 
         @Test

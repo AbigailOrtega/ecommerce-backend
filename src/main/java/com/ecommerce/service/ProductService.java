@@ -13,6 +13,9 @@ import com.ecommerce.repository.CartItemRepository;
 import com.ecommerce.repository.CategoryRepository;
 import com.ecommerce.repository.ProductRepository;
 import com.ecommerce.repository.PromotionRepository;
+import com.ecommerce.repository.OrderItemRepository;
+import com.ecommerce.repository.ProductVariantRepository;
+import com.ecommerce.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,6 +38,9 @@ public class ProductService {
     private final PromotionRepository promotionRepository;
     private final CartItemRepository cartItemRepository;
     private final ImageCleanupService imageCleanupService;
+    private final OrderItemRepository orderItemRepository;
+    private final ReviewRepository reviewRepository;
+    private final ProductVariantRepository productVariantRepository;
 
     public Page<ProductResponse> getAllProducts(Pageable pageable) {
         return productRepository.findByActiveTrue(pageable).map(this::mapToResponse);
@@ -140,12 +146,31 @@ public class ProductService {
         return response;
     }
 
+    /**
+     * Deletes a product that was never ordered, with what only pointed to it (cart lines, reviews,
+     * promotion entries). One that appears in orders is deactivated instead: the orders, reports and
+     * accounting keep it, and it leaves the store.
+     *
+     * @return true if deleted, false if deactivated
+     */
     @Transactional
-    public void deleteProduct(Long id) {
+    public boolean deleteProduct(Long id) {
         Product product = findProductById(id);
+        if (orderItemRepository.existsByProductId(id)) {
+            product.setActive(false);
+            product.setFeatured(false);
+            productRepository.save(product);
+            cartItemRepository.deleteByProductId(id);
+            return false;
+        }
         List<String> images = imageUrlsOf(product);
+        cartItemRepository.deleteByProductId(id);
+        reviewRepository.deleteByProductId(id);
+        promotionRepository.removeProductFromAll(id);
+        productVariantRepository.deleteByProductId(id);
         productRepository.delete(product);
         imageCleanupService.deleteUnused(images);
+        return true;
     }
 
     private static List<String> imageUrlsOf(Product product) {

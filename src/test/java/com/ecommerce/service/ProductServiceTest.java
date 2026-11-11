@@ -41,6 +41,9 @@ class ProductServiceTest {
     @Mock private com.ecommerce.repository.CartItemRepository cartItemRepository;
 
     @Mock ImageCleanupService imageCleanupService;
+    @Mock private com.ecommerce.repository.OrderItemRepository orderItemRepository;
+    @Mock private com.ecommerce.repository.ReviewRepository reviewRepository;
+    @Mock private com.ecommerce.repository.ProductVariantRepository productVariantRepository;
 
 
     @InjectMocks private ProductService productService;
@@ -708,9 +711,32 @@ class ProductServiceTest {
         void deleteProduct_success() {
             when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
 
-            productService.deleteProduct(1L);
+            assertThat(productService.deleteProduct(1L)).isTrue();
 
             verify(productRepository).delete(sampleProduct);
+            // what only pointed to it goes first, or the database refuses the delete
+            verify(cartItemRepository).deleteByProductId(1L);
+            verify(reviewRepository).deleteByProductId(1L);
+            verify(promotionRepository).removeProductFromAll(1L);
+            verify(productVariantRepository).deleteByProductId(1L);
+        }
+
+        @Test
+        @DisplayName("a product with orders is deactivated, not deleted, and its images stay")
+        void deleteProduct_withOrders_deactivates() {
+            sampleProduct.setActive(true);
+            sampleProduct.setFeatured(true);
+            when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+            when(orderItemRepository.existsByProductId(1L)).thenReturn(true);
+
+            assertThat(productService.deleteProduct(1L)).isFalse();
+
+            assertThat(sampleProduct.isActive()).isFalse();
+            assertThat(sampleProduct.isFeatured()).isFalse();
+            verify(productRepository).save(sampleProduct);
+            verify(productRepository, never()).delete(any(Product.class));
+            verify(reviewRepository, never()).deleteByProductId(any());
+            verify(imageCleanupService, never()).deleteUnused(any());
         }
 
         @Test
