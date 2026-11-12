@@ -233,4 +233,18 @@ class PlatformStoresIT {
         assertThat(platformLogin("super@test.com", "Super123!", "localhost").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(platformLogin("super@test.com", "mal-password", PLATFORM_HOST).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
+
+    @Test
+    @DisplayName("the platform's domain is no store, not even #1: a store's API does not exist there")
+    @SuppressWarnings("rawtypes")
+    void platformHostIsNoStore() {
+        HttpHeaders h = platform(null);
+        for (String path : List.of("/api/store-info", "/api/products")) {
+            assertThat(rest.exchange(url(path), HttpMethod.GET, new HttpEntity<>(h), Map.class).getStatusCode())
+                    .as(path).isEqualTo(HttpStatus.NOT_FOUND);
+        }
+        assertThat(rest.exchange(url("/api/auth/login"), HttpMethod.POST,
+                new HttpEntity<>(Map.of("email", "admin@test.com", "password", "Admin123!"), h), Map.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
 }

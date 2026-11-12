@@ -27,16 +27,31 @@ public class TenantFilter extends OncePerRequestFilter {
     public static final String FORWARDED_HOST = "X-Forwarded-Host";
 
     private final TenantResolver resolver;
+    /** The platform's own domain: no store answers there, only the platform's API. */
+    private final String platformHost;
 
     public TenantFilter(TenantResolver resolver) {
+        this(resolver, "");
+    }
+
+    public TenantFilter(TenantResolver resolver, String platformHost) {
         this.resolver = resolver;
+        this.platformHost = platformHost == null ? "" : platformHost.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain chain) throws ServletException, IOException {
-        TenantResolver.Resolution resolution = resolver.resolve(requestHost(request));
+        String host = requestHost(request);
+        if (!platformHost.isEmpty() && platformHost.equals(host) && !request.getRequestURI().startsWith("/api/platform/")) {
+            // the platform's domain is no store (not even #1): a store's API does not exist there
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"success\":false,\"message\":\"No hay tienda en este dominio\"}");
+            return;
+        }
+        TenantResolver.Resolution resolution = resolver.resolve(host);
         if (!resolution.ok()) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             response.setContentType("application/json;charset=UTF-8");

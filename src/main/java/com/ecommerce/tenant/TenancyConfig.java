@@ -11,8 +11,9 @@ public class TenancyConfig {
 
     /** Runs before Spring Security's filter chain, so login and token checks know the store. */
     @Bean
-    public FilterRegistrationBean<TenantFilter> tenantFilter(TenantResolver resolver) {
-        FilterRegistrationBean<TenantFilter> registration = new FilterRegistrationBean<>(new TenantFilter(resolver));
+    public FilterRegistrationBean<TenantFilter> tenantFilter(TenantResolver resolver,
+                                                             @org.springframework.beans.factory.annotation.Value("${app.platform.host:}") String platformHost) {
+        FilterRegistrationBean<TenantFilter> registration = new FilterRegistrationBean<>(new TenantFilter(resolver, platformHost));
         registration.setOrder(SecurityFilterProperties.DEFAULT_FILTER_ORDER - 10);
         registration.addUrlPatterns("/*");
         return registration;
