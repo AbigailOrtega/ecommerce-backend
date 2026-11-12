@@ -37,6 +37,7 @@ class StoreCredentialsIT {
     @Autowired org.springframework.security.crypto.password.PasswordEncoder encoder;
     @Autowired com.ecommerce.repository.UserRepository users;
     @MockitoBean ProviderChecks checks;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean com.ecommerce.service.EmailService emails;
     @LocalServerPort int port;
 
     private final String tag = "k" + System.nanoTime();
@@ -75,6 +76,12 @@ class StoreCredentialsIT {
 
     @SuppressWarnings("rawtypes")
     private ResponseEntity<Map> call(HttpMethod method, String path, Object body, String token, String storeHost) {
+        // changes need the admin's password: the owner's, unless the test says otherwise
+        if (method == HttpMethod.PUT && body instanceof Map<?, ?> m && !m.containsKey("currentPassword")) {
+            Map<Object, Object> withPassword = new java.util.HashMap<>(m);
+            withPassword.put("currentPassword", "Duena123!");
+            body = withPassword;
+        }
         HttpHeaders h = new HttpHeaders();
         h.set("X-Store-Host", storeHost);
         h.setContentType(MediaType.APPLICATION_JSON);
@@ -123,7 +130,7 @@ class StoreCredentialsIT {
         assertThat(((Map) data(res).get("stripe")).get("secretKeyEnd")).isEqualTo("…1234");
 
         // off
-        res = call(HttpMethod.DELETE, "/api/admin/payment-settings/stripe", null, adminToken, host);
+        res = call(HttpMethod.POST, "/api/admin/payment-settings/stripe/disable", Map.of("currentPassword", "Duena123!"), adminToken, host);
         assertThat(((Map) data(res).get("stripe")).get("active")).isEqualTo(false);
     }
 
@@ -180,5 +187,36 @@ class StoreCredentialsIT {
         // Marea's admin token is for store #1: on this store it is no session at all
         String marea = login("localhost", "admin@test.com", "Admin123!");
         assertThat(call(HttpMethod.GET, "/api/admin/payment-settings", null, marea, host).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    @DisplayName("every change needs the admin's password again, and every admin of the store is e-mailed")
+    @SuppressWarnings("rawtypes")
+    void passwordAndNotice() {
+        long storeId = tenants.findAll().stream().filter(t -> tag.equals(t.getSlug())).findFirst().orElseThrow().getId();
+        TenantContext.runAs(storeId, () -> users.save(com.ecommerce.entity.User.builder()
+                .email("socio@" + host).firstName("Socio").lastName("Luna").password(encoder.encode("Socio123!"))
+                .role(com.ecommerce.entity.Role.ADMIN).unsubscribeToken(java.util.UUID.randomUUID().toString()).build()));
+
+        // without it, or with a wrong one: nothing changes, nobody is told
+        for (String pw : new String[]{"", "otra-clave"}) {
+            ResponseEntity<Map> res = call(HttpMethod.PUT, "/api/admin/payment-settings/stripe",
+                    Map.of("publicKey", "pk_test_luna", "secretKey", "sk_test_luna_1234", "currentPassword", pw), adminToken, host);
+            assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(res.getBody().get("message").toString()).contains("contraseña");
+        }
+        assertThat(call(HttpMethod.POST, "/api/admin/payment-settings/paypal/disable", Map.of("currentPassword", "nop"), adminToken, host)
+                .getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(((Map) data(call(HttpMethod.GET, "/api/admin/payment-settings", null, adminToken, host)).get("stripe")).get("active")).isEqualTo(false);
+        verify(emails, never()).sendPaymentKeysChangedEmail(any(), any(), any());
+
+        // with it: saved, and both admins are told who did it
+        ResponseEntity<Map> ok = call(HttpMethod.PUT, "/api/admin/payment-settings/stripe",
+                Map.of("publicKey", "pk_test_luna", "secretKey", "sk_test_luna_1234"), adminToken, host);
+        assertThat(ok.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(emails, timeout(5000)).sendPaymentKeysChangedEmail(
+                argThat(list -> list != null && list.size() == 2
+                        && list.containsAll(java.util.List.of("duena@" + host, "socio@" + host))),
+                eq("duena@" + host), contains("Stripe"));
     }
 }

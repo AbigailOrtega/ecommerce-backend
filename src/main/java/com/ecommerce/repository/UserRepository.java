@@ -22,6 +22,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     long countByMarketingOptInTrue();
     long countByRole(Role role);
 
+    java.util.List<User> findAllByRole(Role role);
+
     @Query("SELECT u FROM User u WHERE LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%')) "
             + "OR LOWER(u.firstName) LIKE LOWER(CONCAT('%', :q, '%')) "
             + "OR LOWER(u.lastName) LIKE LOWER(CONCAT('%', :q, '%'))")

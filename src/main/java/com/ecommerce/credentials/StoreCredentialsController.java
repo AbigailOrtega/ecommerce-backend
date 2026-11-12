@@ -33,8 +33,9 @@ public class StoreCredentialsController {
         return ResponseEntity.ok(ApiResponse.success("Skydropx guardado", service.saveSkydropx(request)));
     }
 
-    @DeleteMapping("/{provider}")
-    public ResponseEntity<ApiResponse<StoreCredentialsService.View>> remove(@PathVariable String provider) {
-        return ResponseEntity.ok(ApiResponse.success("Desactivado", service.remove(provider)));
+    @PostMapping("/{provider}/disable")
+    public ResponseEntity<ApiResponse<StoreCredentialsService.View>> remove(@PathVariable String provider,
+                                                                           @RequestBody StoreCredentialsService.DisableRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Desactivado", service.remove(provider, request.currentPassword())));
     }
 }

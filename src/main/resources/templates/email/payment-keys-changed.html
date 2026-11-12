@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cambio en tus cuentas de pago</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f4f4f4; color: #333; }
+        .wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header { background-color: #1a1a2e; padding: 36px 40px; text-align: center; }
+        .header h1 { color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+        .header p { color: #a0a0b0; font-size: 13px; margin-top: 4px; }
+        .body { padding: 40px; }
+        .icon-box { text-align: center; margin-bottom: 28px; }
+        .icon-circle { display: inline-block; width: 70px; height: 70px; background: #f0f4ff; border-radius: 50%; line-height: 70px; font-size: 32px; }
+        .greeting { font-size: 20px; font-weight: 600; color: #1a1a2e; margin-bottom: 12px; }
+        .text { font-size: 15px; line-height: 1.7; color: #555; margin-bottom: 20px; }
+        .btn-wrapper { text-align: center; margin: 32px 0; }
+        .btn { display: inline-block; padding: 14px 40px; background-color: #4361ee; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 15px; font-weight: 600; }
+        .warning-box { background: #fff8e1; border-left: 4px solid #ffc107; border-radius: 4px; padding: 14px 18px; margin: 24px 0; }
+        .warning-box p { font-size: 13px; color: #795548; line-height: 1.6; }
+        .link-fallback { word-break: break-all; font-size: 12px; color: #4361ee; background: #f0f4ff; padding: 10px 14px; border-radius: 4px; margin-top: 16px; }
+        .divider { border: none; border-top: 1px solid #eeeeee; margin: 28px 0; }
+        .footer { background-color: #f8f8f8; padding: 24px 40px; text-align: center; border-top: 1px solid #eeeeee; }
+        .footer p { font-size: 12px; color: #999; line-height: 1.6; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="header">
+        <h1 th:text="${storeName}">Marea</h1>
+        <p>Aviso de seguridad</p>
+    </div>
+    <div class="body">
+        <div class="icon-box">
+            <span class="icon-circle">&#128274;</span>
+        </div>
+        <p class="greeting">Cambiaron las cuentas de pago de tu tienda</p>
+        <p class="text">
+            <strong th:text="${who}">alguien@tienda.com</strong>
+            <span th:text="${action}">cambió las claves de Stripe</span>
+            el <span th:text="${when}">12/11/2026 16:00</span>.
+        </p>
+        <div class="warning-box">
+            <p>&#9888; Si no fuiste tú ni alguien de tu equipo, entra al panel, revisa
+               <strong>Configuración → Pagos y envíos</strong> y cambia tu contraseña: los cobros de la
+               tienda llegan a las cuentas que estén ahí.</p>
+        </div>
+        <div class="btn-wrapper">
+            <a th:href="${settingsLink}" class="btn">Revisar Pagos y envíos</a>
+        </div>
+    </div>
+    <div class="footer">
+        <p>Te llega porque eres admin de la tienda. Por seguridad, las claves nunca se envían por correo.</p>
+        <p style="margin-top:8px;">© <span th:text="${year}">2026</span> <span th:text="${storeName}">Marea</span>.</p>
+    </div>
+</div>
+</body>
+</html>

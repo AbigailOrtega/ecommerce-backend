@@ -155,6 +155,25 @@ public class EmailService {
         }
     }
 
+    /** To every admin of the store: its payment or shipping accounts were changed (and by whom). */
+    @Async
+    public void sendPaymentKeysChangedEmail(java.util.List<String> admins, String who, String action) {
+        for (String to : admins) {
+            try {
+                Context context = new Context();
+                context.setVariable("who", who);
+                context.setVariable("action", action);
+                context.setVariable("when", java.time.LocalDateTime.now(java.time.ZoneId.of("America/Mexico_City"))
+                        .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+                context.setVariable("settingsLink", storeUrl() + "/admin/payments");
+                sendEmail(to, "Cambiaron las cuentas de pago de " + storeName(), render("email/payment-keys-changed", context));
+                log.info("Payment keys change notice sent to {}", to);
+            } catch (Exception e) {
+                log.error("Failed to send payment keys change notice to {}", to, e);
+            }
+        }
+    }
+
     @Async
     public void sendPasswordResetEmail(String email, String firstName, String resetToken) {
         try {
