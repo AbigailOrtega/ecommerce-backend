@@ -55,6 +55,25 @@ public class AdminAccountService {
         return user;
     }
 
+    /**
+     * Invites {@code email} as admin, or, when it already is one (e.g. the platform owner resending
+     * a lost or expired invitation), sends a fresh link to set its password.
+     */
+    @Transactional
+    public User inviteOrResend(String email, String firstName, String lastName) {
+        String normalized = normalize(email);
+        Optional<User> admin = userRepository.findFirstByEmailIgnoreCase(normalized).filter(u -> u.getRole() == Role.ADMIN);
+        if (admin.isEmpty()) return makeAdmin(normalized, firstName, lastName);
+        User user = admin.get();
+        String token = UUID.randomUUID().toString();
+        user.setResetToken(token);
+        user.setResetTokenExpiry(LocalDateTime.now().plusHours(INVITATION_HOURS));
+        userRepository.save(user);
+        emailService.sendAdminInvitationEmail(user.getEmail(), user.getFirstName(), token);
+        log.info("Admin invitation re-sent to {}", normalized);
+        return user;
+    }
+
     /** Takes admin access away. Effective on the user's next request (roles are read per request). */
     @Transactional
     public User revoke(Long userId, String revokedBy) {

@@ -76,6 +76,25 @@ public class PlatformService {
         return summary(tenant, domainRepository.findAll());
     }
 
+    /** Sends the store's admin invitation (again, with a fresh 48-hour link, if the account exists). */
+    public void inviteAdmin(Long id, String email, String firstName, String lastName) {
+        Tenant tenant = tenantRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Store", "id", id));
+        inStore(tenant.getId(), () -> adminAccountService.inviteOrResend(email, firstName, lastName));
+    }
+
+    /** Another host name for the store (it must also be added to the Vercel project). */
+    public StoreSummary addDomain(Long id, String rawDomain) {
+        Tenant tenant = tenantRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Store", "id", id));
+        String domain = normalizeDomain(rawDomain);
+        if (domain.isEmpty() || !domain.contains(".")) throw new BadRequestException("Dominio inválido");
+        if (domainRepository.findByDomain(domain).isPresent()) {
+            throw new BadRequestException("El dominio " + domain + " ya es de una tienda");
+        }
+        domainRepository.save(TenantDomain.builder().domain(domain).tenant(tenant).build());
+        tenantResolver.evictAll();
+        return summary(tenant, domainRepository.findAll());
+    }
+
     public StoreSummary setStatus(Long id, Tenant.Status status) {
         if (id == TenantContext.DEFAULT_TENANT && status == Tenant.Status.SUSPENDED) {
             throw new BadRequestException("La tienda #1 no se puede suspender");

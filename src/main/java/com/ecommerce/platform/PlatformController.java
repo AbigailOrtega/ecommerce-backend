@@ -50,6 +50,26 @@ public class PlatformController {
         return ResponseEntity.ok(ApiResponse.success(platformService.setStatus(id, status)));
     }
 
+    public record InviteRequest(@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Email String email,
+                                String firstName, String lastName) {}
+
+    public record DomainRequest(@jakarta.validation.constraints.NotBlank String domain) {}
+
+    @PostMapping("/{id}/invite")
+    public ResponseEntity<ApiResponse<Void>> invite(@RequestHeader(value = "X-Platform-Key", required = false) String key,
+                                                    @PathVariable Long id, @Valid @RequestBody InviteRequest request) {
+        authorize(key);
+        platformService.inviteAdmin(id, request.email(), request.firstName(), request.lastName());
+        return ResponseEntity.ok(ApiResponse.success("Invitación enviada a " + request.email(), null));
+    }
+
+    @PostMapping("/{id}/domains")
+    public ResponseEntity<ApiResponse<StoreSummary>> addDomain(@RequestHeader(value = "X-Platform-Key", required = false) String key,
+                                                               @PathVariable Long id, @Valid @RequestBody DomainRequest request) {
+        authorize(key);
+        return ResponseEntity.ok(ApiResponse.success(platformService.addDomain(id, request.domain())));
+    }
+
     private void authorize(String key) {
         if (apiKey == null || apiKey.length() < 32) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         if (key == null || !MessageDigest.isEqual(key.getBytes(StandardCharsets.UTF_8), apiKey.getBytes(StandardCharsets.UTF_8))) {

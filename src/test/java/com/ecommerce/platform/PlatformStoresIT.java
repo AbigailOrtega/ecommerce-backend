@@ -90,6 +90,35 @@ class PlatformStoresIT {
     }
 
     @Test
+    @DisplayName("resending the invitation gives the store's admin a fresh link; a domain can be added")
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void resendAndDomain() {
+        String domain = tag + "-r.test";
+        Map<String, Object> body = new java.util.HashMap<>(store(domain));
+        body.put("slug", tag + "-r");
+        ResponseEntity<Map> res = create(KEY, body);
+        long storeId = ((Number) ((Map) res.getBody().get("data")).get("id")).longValue();
+        String email = "duena@" + domain;
+        String first = TenantContext.callAs(storeId, () -> userRepository.findByEmail(email)).orElseThrow().getResetToken();
+
+        HttpHeaders h = new HttpHeaders();
+        h.setContentType(MediaType.APPLICATION_JSON);
+        h.set("X-Platform-Key", KEY);
+        assertThat(rest.exchange(url("/api/platform/stores/" + storeId + "/invite"), HttpMethod.POST,
+                new HttpEntity<>(Map.of("email", email), h), Map.class).getStatusCode()).isEqualTo(HttpStatus.OK);
+        String second = TenantContext.callAs(storeId, () -> userRepository.findByEmail(email)).orElseThrow().getResetToken();
+        assertThat(second).isNotBlank().isNotEqualTo(first);
+
+        ResponseEntity<Map> withDomain = rest.exchange(url("/api/platform/stores/" + storeId + "/domains"), HttpMethod.POST,
+                new HttpEntity<>(Map.of("domain", "https://www.otra-" + domain), h), Map.class);
+        assertThat((List<String>) ((Map) withDomain.getBody().get("data")).get("domains")).contains("otra-" + domain);
+        HttpHeaders visitor = new HttpHeaders();
+        visitor.set("X-Store-Host", "otra-" + domain);
+        ResponseEntity<Map> info = rest.exchange(url("/api/store-info"), HttpMethod.GET, new HttpEntity<>(visitor), Map.class);
+        assertThat(((Map) info.getBody().get("data")).get("name")).isEqualTo("Papelería Luna");
+    }
+
+    @Test
     @DisplayName("without the platform key nothing is created")
     void needsKey() {
         assertThat(create(null, store(tag + "-x.test")).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
