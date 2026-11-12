@@ -28,8 +28,16 @@ public class SkydropxWebhookController {
     private final OrderRepository orderRepository;
     private final ObjectMapper objectMapper;
 
-    @Value("${app.skydropx.webhook-secret:}")
+    /** Fixed secret (tests); otherwise the current store's (the webhook arrives on its domain). */
     private String webhookSecret;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.ecommerce.credentials.StoreKeys storeKeys;
+
+    private String webhookSecret() {
+        if (webhookSecret != null) return webhookSecret;
+        return storeKeys != null ? storeKeys.skydropx().webhookSecret() : null;
+    }
 
     @PostMapping("/skydropx")
     public ResponseEntity<String> handleSkydropxWebhook(
@@ -39,8 +47,9 @@ public class SkydropxWebhookController {
         log.info("Skydropx webhook received");
 
         // Verify HMAC-SHA512 signature; without a configured secret every request is rejected
+        String webhookSecret = webhookSecret();
         if (webhookSecret == null || webhookSecret.isBlank()) {
-            log.error("Skydropx webhook rejected — SKYDROPX_WEBHOOK_SECRET is not configured");
+            log.error("Skydropx webhook rejected — this store has no Skydropx webhook secret");
             return ResponseEntity.status(401).body("Unauthorized");
         }
         if (authHeader == null || !authHeader.startsWith("HMAC ")) {
@@ -106,7 +115,7 @@ public class SkydropxWebhookController {
     private boolean verifyHmac(String payload, String receivedSignature) {
         try {
             Mac mac = Mac.getInstance("HmacSHA512");
-            mac.init(new SecretKeySpec(webhookSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA512"));
+            mac.init(new SecretKeySpec(webhookSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA512"));
             byte[] computed = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
             byte[] received = HexFormat.of().parseHex(receivedSignature.toLowerCase());
             // Constant-time comparison so the signature can't be guessed byte by byte

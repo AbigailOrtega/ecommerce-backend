@@ -1,7 +1,6 @@
 package com.ecommerce.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
@@ -26,19 +25,29 @@ import java.util.zip.CRC32;
 @Component
 public class PayPalWebhookVerifier {
 
-    @Value("${app.paypal.webhook-id:}")
+    /** The current store's webhook id (each store's PayPal account has its own webhook). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.ecommerce.credentials.StoreKeys storeKeys;
+
+    /** Fixed id (tests); otherwise the store's. */
     private String webhookId;
+
+    private String webhookId() {
+        if (webhookId != null) return webhookId;
+        return storeKeys != null ? storeKeys.paypal().webhookId() : null;
+    }
 
     private final Map<String, PublicKey> keyCache = new ConcurrentHashMap<>();
 
     public boolean isConfigured() {
-        return webhookId != null && !webhookId.isBlank();
+        String id = webhookId();
+        return id != null && !id.isBlank();
     }
 
     public boolean verify(String rawBody, String transmissionId, String transmissionTime,
                           String certUrl, String authAlgo, String transmissionSig) {
         if (!isConfigured()) {
-            log.error("PayPal webhook rejected — PAYPAL_WEBHOOK_ID is not configured");
+            log.error("PayPal webhook rejected — this store has no PayPal webhook id");
             return false;
         }
         if (rawBody == null || transmissionId == null || transmissionTime == null
@@ -57,7 +66,7 @@ public class PayPalWebhookVerifier {
 
         CRC32 crc = new CRC32();
         crc.update(rawBody.getBytes(StandardCharsets.UTF_8));
-        String signedData = transmissionId + "|" + transmissionTime + "|" + webhookId + "|" + crc.getValue();
+        String signedData = transmissionId + "|" + transmissionTime + "|" + webhookId() + "|" + crc.getValue();
 
         try {
             PublicKey key = keyCache.computeIfAbsent(certUrl, this::loadPublicKey);

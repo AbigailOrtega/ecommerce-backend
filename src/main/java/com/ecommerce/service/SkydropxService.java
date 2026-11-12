@@ -29,27 +29,32 @@ public class SkydropxService {
     private static final String PROD_URL    = "https://pro.skydropx.com";
     private static final String SANDBOX_URL = "https://sb-pro.skydropx.com";
 
-    @Value("${app.skydropx.client-id:}")
+    /** Fixed account (tests); otherwise the current store's own Skydropx account. */
     private String clientId;
-
-    @Value("${app.skydropx.client-secret:}")
     private String clientSecret;
+    private Boolean sandbox;
 
-    @Value("${app.skydropx.sandbox:true}")
-    private boolean sandbox;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.ecommerce.credentials.StoreKeys storeKeys;
+
+    private com.ecommerce.credentials.StoreKeys.Skydropx account() {
+        if (clientId != null || storeKeys == null) {
+            return new com.ecommerce.credentials.StoreKeys.Skydropx(clientId, clientSecret, sandbox == null || sandbox, null);
+        }
+        return storeKeys.skydropx();
+    }
 
     private final ShippingConfigService shippingConfigService;
     private final RestTemplate restTemplate = new RestTemplate();
 
     public boolean hasCredentials() {
-        return clientId != null && !clientId.isBlank()
-                && clientSecret != null && !clientSecret.isBlank();
+        return account().ok();
     }
 
     // ── Token cache ───────────────────────────────────────────────────────────
-    private String cachedToken;
-    private Instant tokenExpiresAt;
-    private String cachedBaseUrl;
+    private record Token(String value, Instant expiresAt) {}
+    /** OAuth tokens per account (client id + sandbox/production). */
+    private final Map<String, Token> tokens = new java.util.concurrent.ConcurrentHashMap<>();
 
     // ── Consignment-note catalog cache (fetched once per base URL) ────────────
     private String cachedPackagingCode;       // for package_type
@@ -57,31 +62,43 @@ public class SkydropxService {
     private String cachedCatalogBaseUrl;
 
     public synchronized void invalidateTokenCache() {
-        cachedToken = null;
-        cachedBaseUrl = null;
+        tokens.clear();
         cachedPackagingCode = null;
         cachedConsignmentNoteCode = null;
         cachedCatalogBaseUrl = null;
     }
 
     private String baseUrl() {
-        return sandbox ? SANDBOX_URL : PROD_URL;
+        return account().sandbox() ? SANDBOX_URL : PROD_URL;
     }
 
     private synchronized String getToken() {
-        String currentBaseUrl = baseUrl();
-        // Invalidate cache when switching between sandbox/production
-        if (!currentBaseUrl.equals(cachedBaseUrl)) {
-            cachedToken = null;
-            cachedBaseUrl = currentBaseUrl;
+        var acct = account();
+        if (!acct.ok()) {
+            throw new BadRequestException("Esta tienda aún no tiene Skydropx configurado (Admin → Pagos y envíos).");
         }
-        if (cachedToken != null && Instant.now().isBefore(tokenExpiresAt)) {
-            return cachedToken;
+        String key = acct.clientId() + "|" + acct.sandbox();
+        Token cached = tokens.get(key);
+        if (cached != null && Instant.now().isBefore(cached.expiresAt())) {
+            return cached.value();
         }
+        String token = fetchToken(acct);
+        return token;
+    }
 
-        if (!hasCredentials()) {
-            throw new BadRequestException("Skydropx no está configurado. Define SKYDROPX_CLIENT_ID y SKYDROPX_CLIENT_SECRET en las variables de entorno o en application.yml.");
+    /** Checks an account's keys by asking Skydropx for a token (the admin's "save" in Pagos). */
+    public boolean credentialsWork(String id, String secret, boolean sandboxMode) {
+        try {
+            return fetchToken(new com.ecommerce.credentials.StoreKeys.Skydropx(id, secret, sandboxMode, null)) != null;
+        } catch (RuntimeException e) {
+            return false;
         }
+    }
+
+    private String fetchToken(com.ecommerce.credentials.StoreKeys.Skydropx acct) {
+        String clientId = acct.clientId();
+        String clientSecret = acct.clientSecret();
+        String base = acct.sandbox() ? SANDBOX_URL : PROD_URL;
 
         // OAuth2 client_credentials — form-encoded (not JSON)
         HttpHeaders tokenHeaders = new HttpHeaders();
@@ -95,16 +112,16 @@ public class SkydropxService {
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.postForObject(
-                    baseUrl() + "/api/v1/oauth/token",
+                    base + "/api/v1/oauth/token",
                     new HttpEntity<>(tokenBody, tokenHeaders),
                     Map.class);
             if (response == null || response.get("access_token") == null) {
                 throw new BadRequestException("Respuesta inválida de Skydropx al autenticar.");
             }
-            cachedToken = (String) response.get("access_token");
+            String token = (String) response.get("access_token");
             Number expiresIn = (Number) response.getOrDefault("expires_in", 7200);
-            tokenExpiresAt = Instant.now().plusSeconds(expiresIn.longValue() - 60);
-            return cachedToken;
+            tokens.put(clientId + "|" + acct.sandbox(), new Token(token, Instant.now().plusSeconds(expiresIn.longValue() - 60)));
+            return token;
         } catch (HttpClientErrorException e) {
             log.error("Skydropx auth error [{}]: {}", e.getStatusCode(), e.getResponseBodyAsString());
             throw new BadRequestException("Error al autenticar con Skydropx: " + e.getStatusCode());

@@ -1,10 +1,10 @@
 package com.ecommerce.service;
 
+import com.ecommerce.credentials.StoreKeys;
 import com.ecommerce.service.PaymentService.PayPalOrderSnapshot;
 import tools.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * PayPal Orders v2 / Payments v2 over plain HTTPS. Replaces the deprecated checkout-sdk.
@@ -43,12 +45,13 @@ public class PayPalClient {
     private static final Duration TOKEN_MARGIN = Duration.ofMinutes(5);
 
     private final RestClient http;
-    private final String clientId;
-    private final String clientSecret;
+    /** The current store's PayPal account (each store charges with its own). */
+    private final Supplier<StoreKeys.PayPal> account;
     private final Clock clock;
 
-    private String accessToken;
-    private Instant tokenExpiresAt = Instant.EPOCH;
+    private record Token(String value, Instant expiresAt) {}
+    /** OAuth tokens per account (client id + mode). */
+    private final Map<String, Token> tokens = new ConcurrentHashMap<>();
 
     /** Thrown when PayPal cannot be reached or refuses the call (e.g. INSTRUMENT_DECLINED on capture). */
     public static class PayPalApiException extends IOException {
@@ -60,22 +63,32 @@ public class PayPalClient {
     public record CaptureSnapshot(String id, String status, String currency, BigDecimal amount) {}
 
     @Autowired
-    public PayPalClient(RestClient.Builder builder,
-                        @Value("${app.paypal.client-id:}") String clientId,
-                        @Value("${app.paypal.client-secret:}") String clientSecret,
-                        @Value("${app.paypal.mode:sandbox}") String mode) {
-        this(builder
-                .baseUrl("live".equalsIgnoreCase(mode) ? LIVE_URL : SANDBOX_URL)
-                .requestFactory(timeouts())
-                .build(), clientId, clientSecret, Clock.systemUTC());
-        if (isConfigured()) log.info("PayPal client configured in {} mode", mode);
+    public PayPalClient(RestClient.Builder builder, StoreKeys storeKeys) {
+        this(builder.requestFactory(timeouts()).build(), storeKeys::paypal, Clock.systemUTC());
     }
 
+    /** With one fixed sandbox account (tests). */
     PayPalClient(RestClient http, String clientId, String clientSecret, Clock clock) {
+        this(http, () -> new StoreKeys.PayPal(clientId, clientSecret, false, null), clock);
+    }
+
+    PayPalClient(RestClient http, Supplier<StoreKeys.PayPal> account, Clock clock) {
         this.http = http;
-        this.clientId = clientId;
-        this.clientSecret = clientSecret;
+        this.account = account;
         this.clock = clock;
+    }
+
+    /** Checks an account's keys by asking PayPal for a token (the admin's "save" in Pagos). */
+    public boolean credentialsWork(String clientId, String clientSecret, boolean live) {
+        try {
+            return fetchToken(new StoreKeys.PayPal(clientId, clientSecret, live, null)).value() != null;
+        } catch (RestClientException e) {
+            return false;
+        }
+    }
+
+    private String base() {
+        return account.get().live() ? LIVE_URL : SANDBOX_URL;
     }
 
     private static SimpleClientHttpRequestFactory timeouts() {
@@ -86,7 +99,7 @@ public class PayPalClient {
     }
 
     public boolean isConfigured() {
-        return clientId != null && !clientId.isBlank() && clientSecret != null && !clientSecret.isBlank();
+        return account.get().ok();
     }
 
     public PayPalOrderSnapshot createOrder(BigDecimal amount) throws PayPalApiException {
@@ -96,7 +109,7 @@ public class PayPalClient {
                         "currency_code", "MXN",
                         "value", amount.setScale(2, RoundingMode.HALF_UP).toPlainString()))));
         return call("create order", () -> snapshot(http.post()
-                .uri("/v2/checkout/orders")
+                .uri(base() + "/v2/checkout/orders")
                 .headers(h -> {
                     h.setBearerAuth(token());
                     h.set("Prefer", "return=representation");
@@ -111,7 +124,7 @@ public class PayPalClient {
     /** The order, or empty when PayPal has none with this id (e.g. the id is a capture id). */
     public Optional<PayPalOrderSnapshot> getOrder(String orderId) throws PayPalApiException {
         return call("get order " + orderId, () -> notFoundAsEmpty(() -> snapshot(http.get()
-                .uri("/v2/checkout/orders/{id}", orderId)
+                .uri(base() + "/v2/checkout/orders/{id}", orderId)
                 .headers(h -> h.setBearerAuth(token()))
                 .retrieve()
                 .body(JsonNode.class))));
@@ -123,7 +136,7 @@ public class PayPalClient {
      */
     public PayPalOrderSnapshot captureOrder(String orderId) throws PayPalApiException {
         return call("capture order " + orderId, () -> snapshot(http.post()
-                .uri("/v2/checkout/orders/{id}/capture", orderId)
+                .uri(base() + "/v2/checkout/orders/{id}/capture", orderId)
                 .headers(h -> {
                     h.setBearerAuth(token());
                     h.set("Prefer", "return=representation");
@@ -138,7 +151,7 @@ public class PayPalClient {
     public Optional<CaptureSnapshot> getCapture(String captureId) throws PayPalApiException {
         return call("get capture " + captureId, () -> notFoundAsEmpty(() -> {
             JsonNode capture = http.get()
-                    .uri("/v2/payments/captures/{id}", captureId)
+                    .uri(base() + "/v2/payments/captures/{id}", captureId)
                     .headers(h -> h.setBearerAuth(token()))
                     .retrieve()
                     .body(JsonNode.class);
@@ -151,29 +164,59 @@ public class PayPalClient {
     /** PayPal's commission on a capture (seller_receivable_breakdown.paypal_fee); empty if not there. */
     public Optional<BigDecimal> getCaptureFee(String captureId) throws PayPalApiException {
         return call("get capture fee " + captureId, () -> notFoundAsEmpty(() -> http.get()
-                .uri("/v2/payments/captures/{id}", captureId)
+                .uri(base() + "/v2/payments/captures/{id}", captureId)
                 .headers(h -> h.setBearerAuth(token()))
                 .retrieve()
                 .body(JsonNode.class))
                 .map(capture -> decimal(capture.path("seller_receivable_breakdown").path("paypal_fee"), "value")));
     }
 
-    private synchronized String token() {
+    private String token() {
+        StoreKeys.PayPal acct = account.get();
+        String key = acct.clientId() + "|" + acct.live();
         Instant now = clock.instant();
-        if (accessToken == null || !now.isBefore(tokenExpiresAt.minus(TOKEN_MARGIN))) {
-            MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-            form.add("grant_type", "client_credentials");
-            JsonNode res = http.post()
-                    .uri("/v1/oauth2/token")
-                    .headers(h -> h.setBasicAuth(clientId, clientSecret))
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body(form)
-                    .retrieve()
-                    .body(JsonNode.class);
-            accessToken = text(res, "access_token");
-            tokenExpiresAt = now.plusSeconds(res.path("expires_in").asLong(0));
+        Token cached = tokens.get(key);
+        if (cached == null || !now.isBefore(cached.expiresAt().minus(TOKEN_MARGIN))) {
+            cached = fetchToken(acct);
+            tokens.put(key, cached);
         }
-        return accessToken;
+        return cached.value();
+    }
+
+    private Token fetchToken(StoreKeys.PayPal acct) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "client_credentials");
+        JsonNode res = http.post()
+                .uri((acct.live() ? LIVE_URL : SANDBOX_URL) + "/v1/oauth2/token")
+                .headers(h -> h.setBasicAuth(acct.clientId(), acct.clientSecret()))
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(form)
+                .retrieve()
+                .body(JsonNode.class);
+        return new Token(text(res, "access_token"), clock.instant().plusSeconds(res.path("expires_in").asLong(0)));
+    }
+
+    /**
+     * Makes sure the account has a webhook to {@code url} for the events the store handles, and
+     * returns its id (an existing one for that URL is reused).
+     */
+    public String ensureWebhook(StoreKeys.PayPal acct, String url) throws PayPalApiException {
+        String base = acct.live() ? LIVE_URL : SANDBOX_URL;
+        return call("webhook", () -> {
+            String token = fetchToken(acct).value();
+            JsonNode list = http.get().uri(base + "/v1/notifications/webhooks")
+                    .headers(h -> h.setBearerAuth(token)).retrieve().body(JsonNode.class);
+            for (JsonNode hook : list.path("webhooks")) {
+                if (url.equalsIgnoreCase(text(hook, "url"))) return text(hook, "id");
+            }
+            Map<String, Object> body = Map.of("url", url, "event_types", List.of(
+                    Map.of("name", "PAYMENT.CAPTURE.COMPLETED"), Map.of("name", "PAYMENT.CAPTURE.DENIED"),
+                    Map.of("name", "PAYMENT.CAPTURE.DECLINED"), Map.of("name", "PAYMENT.CAPTURE.REFUNDED")));
+            JsonNode created = http.post().uri(base + "/v1/notifications/webhooks")
+                    .headers(h -> h.setBearerAuth(token))
+                    .contentType(MediaType.APPLICATION_JSON).body(body).retrieve().body(JsonNode.class);
+            return text(created, "id");
+        });
     }
 
     private interface Call<T> {

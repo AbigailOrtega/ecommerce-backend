@@ -52,15 +52,21 @@ class PaymentServiceTest {
     @Mock private PayPalClient paypalClient;
     @Mock private org.springframework.context.ApplicationEventPublisher events;
 
+    @Mock private com.ecommerce.credentials.StoreKeys storeKeys;
     @InjectMocks private PaymentService paymentService;
+
+    /** The store's Stripe secret key (null or blank: no Stripe). */
+    private void stripeKey(String secretKey) {
+        lenient().when(storeKeys.stripe()).thenReturn(new com.ecommerce.credentials.StoreKeys.Stripe("pk_test_x", secretKey, "whsec_test_secret"));
+    }
 
     @BeforeEach
     void injectValues() {
+        ReflectionTestUtils.setField(paymentService, "storeKeys", storeKeys);
         ReflectionTestUtils.setField(paymentService, "stockService",
                 new StockService(productRepository, productSizeRepository));
-        ReflectionTestUtils.setField(paymentService, "stripeSecretKey", "sk_test_abc123");
-        ReflectionTestUtils.setField(paymentService, "webhookSecret",   "whsec_test_secret");
-        ReflectionTestUtils.setField(paymentService, "paypalClientId",     "");
+        stripeKey("sk_test_abc123");
+        lenient().when(storeKeys.paypal()).thenReturn(new com.ecommerce.credentials.StoreKeys.PayPal(null, null, false, null));
         // paypalClient is a mock that answers isConfigured() == false unless a test says otherwise
     }
 
@@ -79,14 +85,14 @@ class PaymentServiceTest {
         @Test
         @DisplayName("returns false when secret key is blank")
         void isStripeConfigured_blankKey() {
-            ReflectionTestUtils.setField(paymentService, "stripeSecretKey", "");
+            stripeKey("");
             assertThat(paymentService.isStripeConfigured()).isFalse();
         }
 
         @Test
         @DisplayName("returns false when secret key is null")
         void isStripeConfigured_nullKey() {
-            ReflectionTestUtils.setField(paymentService, "stripeSecretKey", null);
+            stripeKey(null);
             assertThat(paymentService.isStripeConfigured()).isFalse();
         }
     }
@@ -120,7 +126,7 @@ class PaymentServiceTest {
         @Test
         @DisplayName("returns the configured client id string")
         void getPayPalClientId_returnsValue() {
-            ReflectionTestUtils.setField(paymentService, "paypalClientId", "PAYPAL_CLIENT_XYZ");
+            when(storeKeys.paypal()).thenReturn(new com.ecommerce.credentials.StoreKeys.PayPal("PAYPAL_CLIENT_XYZ", "secret", false, null));
             assertThat(paymentService.getPayPalClientId()).isEqualTo("PAYPAL_CLIENT_XYZ");
         }
     }
@@ -134,11 +140,11 @@ class PaymentServiceTest {
         @Test
         @DisplayName("throws BadRequestException when Stripe is not configured")
         void createPaymentIntent_stripeNotConfigured() {
-            ReflectionTestUtils.setField(paymentService, "stripeSecretKey", "");
+            stripeKey("");
 
             assertThatThrownBy(() -> paymentService.createPaymentIntent(BigDecimal.TEN, "usd"))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Stripe no está configurado");
+                    .hasMessageContaining("no acepta pagos con tarjeta");
         }
 
         @Test
@@ -149,7 +155,7 @@ class PaymentServiceTest {
             when(mockIntent.getId()).thenReturn("pi_abc123");
 
             try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class)) {
-                piStatic.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class)))
+                piStatic.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class), any(com.stripe.net.RequestOptions.class)))
                         .thenReturn(mockIntent);
 
                 Map<String, String> result = paymentService.createPaymentIntent(
@@ -167,7 +173,7 @@ class PaymentServiceTest {
             when(stripeEx.getMessage()).thenReturn("card_declined");
 
             try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class)) {
-                piStatic.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class)))
+                piStatic.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class), any(com.stripe.net.RequestOptions.class)))
                         .thenThrow(stripeEx);
 
                 assertThatThrownBy(() -> paymentService.createPaymentIntent(BigDecimal.TEN, "usd"))
@@ -184,7 +190,7 @@ class PaymentServiceTest {
             when(mockIntent.getId()).thenReturn("pi_1");
 
             try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class)) {
-                piStatic.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class)))
+                piStatic.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class), any(com.stripe.net.RequestOptions.class)))
                         .thenAnswer(inv -> {
                             PaymentIntentCreateParams params = inv.getArgument(0);
                             // 25.00 * 100 = 2500
@@ -204,7 +210,7 @@ class PaymentServiceTest {
             when(mockIntent.getId()).thenReturn("pi_x");
 
             try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class)) {
-                piStatic.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class)))
+                piStatic.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class), any(com.stripe.net.RequestOptions.class)))
                         .thenAnswer(inv -> {
                             PaymentIntentCreateParams params = inv.getArgument(0);
                             assertThat(params.getCurrency()).isEqualTo("usd");
@@ -832,11 +838,11 @@ class PaymentServiceTest {
             when(intent.getCurrency()).thenReturn("mxn");
             when(intent.getAmount()).thenReturn(15050L);
             try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class)) {
-                piStatic.when(() -> PaymentIntent.retrieve("pi_ok")).thenReturn(intent);
+                piStatic.when(() -> PaymentIntent.retrieve(eq("pi_ok"), any(com.stripe.net.RequestOptions.class))).thenReturn(intent);
 
                 paymentService.verifyPaymentForOrder("stripe", "pi_ok", new BigDecimal("150.50"));
 
-                verify(intent, never()).update(any(com.stripe.param.PaymentIntentUpdateParams.class));
+                verify(intent, never()).update(any(com.stripe.param.PaymentIntentUpdateParams.class), any(com.stripe.net.RequestOptions.class));
             }
         }
 
@@ -848,12 +854,12 @@ class PaymentServiceTest {
             when(intent.getAmount()).thenReturn(100L);
             when(intent.getStatus()).thenReturn("requires_payment_method");
             try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class)) {
-                piStatic.when(() -> PaymentIntent.retrieve("pi_cheap")).thenReturn(intent);
+                piStatic.when(() -> PaymentIntent.retrieve(eq("pi_cheap"), any(com.stripe.net.RequestOptions.class))).thenReturn(intent);
 
                 paymentService.verifyPaymentForOrder("stripe", "pi_cheap", new BigDecimal("10000.00"));
 
                 verify(intent).update(argThat((com.stripe.param.PaymentIntentUpdateParams p) ->
-                        Long.valueOf(1000000L).equals(p.getAmount())));
+                        Long.valueOf(1000000L).equals(p.getAmount())), any(com.stripe.net.RequestOptions.class));
             }
         }
 
@@ -865,7 +871,7 @@ class PaymentServiceTest {
             when(intent.getAmount()).thenReturn(100L);
             when(intent.getStatus()).thenReturn("succeeded");
             try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class)) {
-                piStatic.when(() -> PaymentIntent.retrieve("pi_paid")).thenReturn(intent);
+                piStatic.when(() -> PaymentIntent.retrieve(eq("pi_paid"), any(com.stripe.net.RequestOptions.class))).thenReturn(intent);
 
                 assertThatThrownBy(() -> paymentService.verifyPaymentForOrder("stripe", "pi_paid", new BigDecimal("10000.00")))
                         .isInstanceOf(BadRequestException.class)
@@ -879,7 +885,7 @@ class PaymentServiceTest {
             PaymentIntent intent = mock(PaymentIntent.class);
             when(intent.getCurrency()).thenReturn("usd");
             try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class)) {
-                piStatic.when(() -> PaymentIntent.retrieve("pi_usd")).thenReturn(intent);
+                piStatic.when(() -> PaymentIntent.retrieve(eq("pi_usd"), any(com.stripe.net.RequestOptions.class))).thenReturn(intent);
 
                 assertThatThrownBy(() -> paymentService.verifyPaymentForOrder("stripe", "pi_usd", new BigDecimal("100.00")))
                         .isInstanceOf(BadRequestException.class);

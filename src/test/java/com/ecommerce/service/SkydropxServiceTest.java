@@ -302,7 +302,7 @@ class SkydropxServiceTest {
 
             assertThatThrownBy(() -> skydropxService.createQuotation(sampleOrder))
                     .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Skydropx no está configurado");
+                    .hasMessageContaining("Skydropx configurado");
         }
 
         @Test

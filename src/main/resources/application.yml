@@ -53,6 +53,8 @@ app:
   # one backend for every store (see com.ecommerce.tenant): hosts no store claims are served as this one
   tenancy:
     default-tenant-id: ${DEFAULT_TENANT_ID:1}
+  # encrypts each store's Stripe/PayPal/Skydropx secrets in the database (openssl rand -base64 32)
+  encryption-key: ${ENCRYPTION_KEY:}
   # the platform's API (/api/platform), for its super admins (table platform_admins, added by hand)
   platform:
     # the only domain that serves it (a store's domain gets a 404); unset = the platform is off

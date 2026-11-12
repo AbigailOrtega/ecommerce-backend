@@ -41,7 +41,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthFilter.class)
     }
 )
-@TestPropertySource(properties = "app.stripe.public-key=pk_test_mock_key")
 @DisplayName("PaymentController")
 class PaymentControllerTest {
 
@@ -62,6 +61,11 @@ class PaymentControllerTest {
     @Nested
     @DisplayName("GET /api/payments/stripe/config")
     class GetStripeConfig {
+
+        @org.junit.jupiter.api.BeforeEach
+        void storeKey() {
+            org.mockito.Mockito.when(paymentService.getStripePublicKey()).thenReturn("pk_test_mock_key");
+        }
 
         @Test
         @DisplayName("returns 200 with the publishable key")

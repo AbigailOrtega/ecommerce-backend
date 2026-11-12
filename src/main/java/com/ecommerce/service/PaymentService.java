@@ -5,7 +5,8 @@ import com.ecommerce.entity.OrderStatus;
 import com.ecommerce.exception.BadRequestException;
 import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.repository.OrderRepository;
-import com.stripe.Stripe;
+import com.ecommerce.credentials.StoreKeys;
+import com.stripe.net.RequestOptions;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
@@ -13,10 +14,9 @@ import com.stripe.model.PaymentIntent;
 import com.stripe.net.Webhook;
 import com.stripe.param.PaymentIntentCreateParams;
 import com.stripe.param.PaymentIntentUpdateParams;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,37 +38,43 @@ public class PaymentService {
     private final PayPalClient paypalClient;
     private final ApplicationEventPublisher events;
 
-    @Value("${app.stripe.secret-key:}")
-    private String stripeSecretKey;
+    /** The current store's own Stripe/PayPal accounts (a field, so subclasses keep their constructor). */
+    @Autowired
+    private StoreKeys storeKeys;
 
-    @Value("${app.stripe.webhook-secret:}")
-    private String webhookSecret;
+    private StoreKeys.Stripe stripeKeys() {
+        return storeKeys != null ? storeKeys.stripe() : new StoreKeys.Stripe(null, null, null);
+    }
 
-    @Value("${app.paypal.client-id:}")
-    private String paypalClientId;
-
-    @PostConstruct
-    public void init() {
-        if (stripeSecretKey != null && !stripeSecretKey.isBlank()) {
-            Stripe.apiKey = stripeSecretKey;
-        }
+    /** Every Stripe call goes with the current store's secret key, never a global one. */
+    protected RequestOptions stripeOptions() {
+        return RequestOptions.builder().setApiKey(stripeKeys().secretKey()).build();
     }
 
     public boolean isPayPalConfigured() {
         return paypalClient != null && paypalClient.isConfigured();
     }
 
+    /** The store's PayPal client id for the checkout's buttons; empty when it has no PayPal. */
     public String getPayPalClientId() {
-        return paypalClientId;
+        String id = storeKeys != null && storeKeys.paypal().ok() ? storeKeys.paypal().clientId() : null;
+        return id != null ? id : "";
     }
 
     public boolean isStripeConfigured() {
-        return stripeSecretKey != null && !stripeSecretKey.isBlank();
+        String key = stripeKeys().secretKey();
+        return key != null && !key.isBlank();
+    }
+
+    /** The store's publishable key for the checkout; empty when it has no Stripe (the card option is hidden). */
+    public String getStripePublicKey() {
+        String key = isStripeConfigured() ? stripeKeys().publicKey() : null;
+        return key != null ? key : "";
     }
 
     public Map<String, String> createPaymentIntent(BigDecimal amount, String currency) {
         if (!isStripeConfigured()) {
-            throw new BadRequestException("Stripe no está configurado. Define STRIPE_SECRET_KEY para aceptar tarjetas.");
+            throw new BadRequestException("Esta tienda aún no acepta pagos con tarjeta.");
         }
 
         try {
@@ -82,7 +88,7 @@ public class PaymentService {
                     )
                     .build();
 
-            PaymentIntent paymentIntent = PaymentIntent.create(params);
+            PaymentIntent paymentIntent = PaymentIntent.create(params, stripeOptions());
 
             Map<String, String> response = new HashMap<>();
             response.put("clientSecret", paymentIntent.getClientSecret());
@@ -95,7 +101,11 @@ public class PaymentService {
     }
 
     public Event constructWebhookEvent(String payload, String sigHeader) throws SignatureVerificationException {
-        return Webhook.constructEvent(payload, sigHeader, webhookSecret);
+        String secret = stripeKeys().webhookSecret();
+        if (secret == null || secret.isBlank()) {
+            throw new SignatureVerificationException("This store has no Stripe webhook secret", sigHeader);
+        }
+        return Webhook.constructEvent(payload, sigHeader, secret);
     }
 
     /**
@@ -148,7 +158,7 @@ public class PaymentService {
         }
         long expectedCents = toCents(orderTotal);
         try {
-            PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
+            PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId, stripeOptions());
             if (!"mxn".equalsIgnoreCase(intent.getCurrency())) {
                 throw new BadRequestException("Moneda de pago inválida");
             }
@@ -159,7 +169,7 @@ public class PaymentService {
             if (UPDATABLE_INTENT_STATUSES.contains(intent.getStatus())) {
                 log.warn("PaymentIntent {} amount {} != order total {}, updating intent",
                         paymentIntentId, intent.getAmount(), expectedCents);
-                intent.update(PaymentIntentUpdateParams.builder().setAmount(expectedCents).build());
+                intent.update(PaymentIntentUpdateParams.builder().setAmount(expectedCents).build(), stripeOptions());
             } else {
                 throw new BadRequestException("El monto del pago no coincide con el total del pedido");
             }
@@ -452,7 +462,7 @@ public class PaymentService {
         if ("stripe".equalsIgnoreCase(paymentMethod)) {
             if (!isStripeConfigured()) return Optional.empty();
             PaymentIntent intent = PaymentIntent.retrieve(paymentId, com.stripe.param.PaymentIntentRetrieveParams.builder()
-                    .addExpand("latest_charge.balance_transaction").build(), null);
+                    .addExpand("latest_charge.balance_transaction").build(), stripeOptions());
             var charge = intent.getLatestChargeObject();
             var balance = charge != null ? charge.getBalanceTransactionObject() : null;
             if (balance == null || balance.getFee() == null) return Optional.empty();
@@ -472,13 +482,14 @@ public class PaymentService {
     public record StripeIntentSnapshot(String status, long amountReceived, String currency) {}
 
     protected StripeIntentSnapshot findStripeIntent(String paymentIntentId) throws StripeException {
-        PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
+        PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId, stripeOptions());
         return new StripeIntentSnapshot(intent.getStatus(),
                 intent.getAmountReceived() != null ? intent.getAmountReceived() : 0L, intent.getCurrency());
     }
 
     protected void cancelStripeIntent(String paymentIntentId) throws StripeException {
-        PaymentIntent.retrieve(paymentIntentId).cancel();
+        PaymentIntent.retrieve(paymentIntentId, stripeOptions())
+                .cancel(com.stripe.param.PaymentIntentCancelParams.builder().build(), stripeOptions());
     }
 
     /** PENDING → CONFIRMED once the payment is in; the shopper is emailed after the transaction commits. */

@@ -72,7 +72,9 @@ class AbandonedOrderResolutionTest {
     @BeforeEach
     void setUp() {
         service = new ProviderStub(orderRepository, new StockService(productRepository, productSizeRepository), cartService);
-        ReflectionTestUtils.setField(service, "stripeSecretKey", "sk_test_abc");
+        com.ecommerce.credentials.StoreKeys keys = mock(com.ecommerce.credentials.StoreKeys.class);
+        lenient().when(keys.stripe()).thenReturn(new com.ecommerce.credentials.StoreKeys.Stripe("pk_test_x", "sk_test_abc", null));
+        ReflectionTestUtils.setField(service, "storeKeys", keys);
     }
 
     private Order pending(String method, String paymentId) {
