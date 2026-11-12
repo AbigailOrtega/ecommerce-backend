@@ -57,7 +57,8 @@ public class TestDataInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         createUserIfAbsent("Test", "User",  "test@test.com",  "Test123!",  Role.CUSTOMER);
         createUserIfAbsent("Test", "Admin", "admin@test.com", "Admin123!", Role.ADMIN);
-        log.info("[e2e] Test users seeded: test@test.com (CUSTOMER), admin@test.com (ADMIN)");
+        createUserIfAbsent("Super", "Admin", "super@test.com", "Super123!", Role.SUPER_ADMIN);
+        log.info("[e2e] Test users seeded: test@test.com (CUSTOMER), admin@test.com (ADMIN), super@test.com (SUPER_ADMIN)");
 
         Category ropa    = createCategoryIfAbsent("Ropa",     "ropa");
         Category calzado = createCategoryIfAbsent("Calzado",  "calzado");

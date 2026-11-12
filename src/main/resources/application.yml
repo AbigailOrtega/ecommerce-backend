@@ -53,9 +53,10 @@ app:
   # one backend for every store (see com.ecommerce.tenant): hosts no store claims are served as this one
   tenancy:
     default-tenant-id: ${DEFAULT_TENANT_ID:1}
-  # the platform owner's API (/api/platform/stores); off unless PLATFORM_API_KEY (32+ characters) is set
+  # the platform's API (/api/platform/stores), for super admins only (role SUPER_ADMIN, set by hand in the database)
   platform:
-    api-key: ${PLATFORM_API_KEY:}
+    # the only domain that serves it (a store's domain gets a 404); unset = the platform is off
+    host: ${PLATFORM_HOST:}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     per-ip-enabled: ${RATE_LIMIT_PER_IP_ENABLED:true}

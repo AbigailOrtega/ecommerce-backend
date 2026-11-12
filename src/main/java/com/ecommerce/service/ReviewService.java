@@ -111,7 +111,7 @@ public class ReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
 
         boolean isOwner = review.getUser().getId().equals(user.getId());
-        boolean isAdmin = user.getRole() == Role.ADMIN;
+        boolean isAdmin = user.getRole().isStoreAdmin();
 
         if (!isOwner && !isAdmin) {
             throw new AccessDeniedException("No puedes eliminar esta reseña.");

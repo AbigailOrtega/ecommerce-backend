@@ -36,12 +36,7 @@ public class TenantFilter extends OncePerRequestFilter {
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain chain) throws ServletException, IOException {
-        String host = request.getHeader(STORE_HOST);
-        if (host == null || host.isBlank()) host = request.getHeader(FORWARDED_HOST);
-        if (host == null || host.isBlank()) host = request.getHeader(HttpHeaders.HOST);
-        if (host == null || host.isBlank()) host = request.getServerName();
-
-        TenantResolver.Resolution resolution = resolver.resolve(host);
+        TenantResolver.Resolution resolution = resolver.resolve(requestHost(request));
         if (!resolution.ok()) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             response.setContentType("application/json;charset=UTF-8");
@@ -57,5 +52,14 @@ public class TenantFilter extends OncePerRequestFilter {
         } finally {
             TenantContext.clear();
         }
+    }
+
+    /** The visitor's domain, normalized ("www.example.com"): X-Store-Host, then X-Forwarded-Host, then Host. */
+    public static String requestHost(HttpServletRequest request) {
+        String host = request.getHeader(STORE_HOST);
+        if (host == null || host.isBlank()) host = request.getHeader(FORWARDED_HOST);
+        if (host == null || host.isBlank()) host = request.getHeader(HttpHeaders.HOST);
+        if (host == null || host.isBlank()) host = request.getServerName();
+        return TenantResolver.normalize(host);
     }
 }

@@ -22,7 +22,9 @@ public class CorsConfig {
             "http://localhost:4200",
             "http://localhost:3000",
             "http://127.0.0.1:4200",
-            "http://127.0.0.1:3000");
+            "http://127.0.0.1:3000",
+            // the platform owner's page in development and e2e (app.platform.host)
+            "http://plataforma.localhost:4200");
 
     private final Environment environment;
 

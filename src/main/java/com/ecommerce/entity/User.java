@@ -83,6 +83,10 @@ public class User extends TenantScoped implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
+        // a super admin is also an admin of its store (#1)
+        if (role == Role.SUPER_ADMIN) {
+            return List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"), new SimpleGrantedAuthority("ROLE_ADMIN"));
+        }
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
 

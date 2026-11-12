@@ -62,7 +62,7 @@ public class TicketService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
         boolean isOwner = ticket.getUser().getId().equals(user.getId());
-        boolean isAdmin = user.getRole() == Role.ADMIN;
+        boolean isAdmin = user.getRole().isStoreAdmin();
         if (!isOwner && !isAdmin) throw new AccessDeniedException("No tienes permiso para hacer esto.");
         return mapToResponse(ticket);
     }

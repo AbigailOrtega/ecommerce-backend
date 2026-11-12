@@ -6,9 +6,10 @@ spring:
     password: test
 
 app:
-  # the platform owner's page (/plataforma) in the e2e suite; never a real key
+  # the platform's page (/plataforma) in the e2e suite; TestDataInitializer seeds super@test.com
   platform:
-    api-key: e2e-platform-key-not-a-secret-0123456789
+    # local stores answer on localhost; the platform page on plataforma.localhost
+    host: plataforma.localhost
   postal-codes:
     # no network in tests; TestDataInitializer seeds a few codes
     auto-download: false
