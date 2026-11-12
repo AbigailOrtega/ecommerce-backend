@@ -1,5 +1,8 @@
 package com.ecommerce.service;
 
+import com.ecommerce.tenant.TenantJobRunner;
+import org.springframework.beans.factory.annotation.Autowired;
+
 import com.ecommerce.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +36,14 @@ public class PaymentFeeJob {
     @Scheduled(initialDelayString = "${app.payments.fees.initial-delay:PT3M}",
                fixedDelayString = "${app.payments.fees.interval:PT15M}")
     public void scheduledRun() {
-        run();
+        TenantJobRunner.forEachActiveTenant(tenantJobRunner, this::run);
+    }
+
+    private TenantJobRunner tenantJobRunner;
+
+    @Autowired(required = false)
+    void setTenantJobRunner(TenantJobRunner tenantJobRunner) {
+        this.tenantJobRunner = tenantJobRunner;
     }
 
     /** @return how many orders were looked up */

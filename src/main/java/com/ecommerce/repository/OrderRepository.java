@@ -27,6 +27,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Page<Order> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     @Query(value = "SELECT o.* FROM orders o LEFT JOIN users u ON u.id = o.user_id WHERE " +
+           "o.tenant_id = :#{T(com.ecommerce.tenant.TenantContext).current()} AND " +
            "(CAST(:status AS varchar) IS NULL OR o.status = CAST(:status AS varchar)) AND " +
            "(CAST(:shippingType AS varchar) IS NULL OR o.shipping_type = CAST(:shippingType AS varchar)) AND " +
            "(CAST(:paymentMethod AS varchar) IS NULL OR LOWER(o.payment_method) = CAST(:paymentMethod AS varchar)) AND " +
@@ -40,6 +41,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "  LOWER(COALESCE(o.guest_email,'')) LIKE '%' || CAST(:search AS varchar) || '%') " +
            "ORDER BY o.created_at DESC",
            countQuery = "SELECT COUNT(o.id) FROM orders o LEFT JOIN users u ON u.id = o.user_id WHERE " +
+           "o.tenant_id = :#{T(com.ecommerce.tenant.TenantContext).current()} AND " +
            "(CAST(:status AS varchar) IS NULL OR o.status = CAST(:status AS varchar)) AND " +
            "(CAST(:shippingType AS varchar) IS NULL OR o.shipping_type = CAST(:shippingType AS varchar)) AND " +
            "(CAST(:paymentMethod AS varchar) IS NULL OR LOWER(o.payment_method) = CAST(:paymentMethod AS varchar)) AND " +

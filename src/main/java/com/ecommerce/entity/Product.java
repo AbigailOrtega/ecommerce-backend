@@ -12,12 +12,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "products")
+@Table(name = "products", uniqueConstraints = {@UniqueConstraint(name = "uk_products_tenant_sku", columnNames = {"tenant_id", "sku"}), @UniqueConstraint(name = "uk_products_tenant_slug", columnNames = {"tenant_id", "slug"})})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Product {
+public class Product extends TenantScoped {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,7 +42,7 @@ public class Product {
     @Column(precision = 10, scale = 2)
     private BigDecimal costPrice;
 
-    @Column(unique = true)
+    @Column
     private String sku;
 
     @Builder.Default
@@ -56,7 +56,7 @@ public class Product {
     @Builder.Default
     private List<String> images = new ArrayList<>();
 
-    @Column(unique = true)
+    @Column
     private String slug;
 
     @Builder.Default

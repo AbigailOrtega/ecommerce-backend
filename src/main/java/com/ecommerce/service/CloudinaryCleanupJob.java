@@ -1,5 +1,7 @@
 package com.ecommerce.service;
 
+import com.ecommerce.tenant.TenantContext;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,7 +54,8 @@ public class CloudinaryCleanupJob {
     @Scheduled(initialDelayString = "${app.cloudinary.cleanup.initial-delay:PT10M}",
                fixedDelayString = "${app.cloudinary.cleanup.interval:P1D}")
     public void scheduledRun() {
-        run();
+        // covers every store at once: the images share one Cloudinary account
+        TenantContext.runAs(TenantContext.ROOT, this::run);
     }
 
     /** @return how many images were deleted. */

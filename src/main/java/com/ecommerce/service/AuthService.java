@@ -102,6 +102,7 @@ public class AuthService {
         Claims claims = Optional.ofNullable(refreshToken)
                 .flatMap(jwtTokenProvider::parseClaims)
                 .filter(jwtTokenProvider::isRefreshOrLegacyToken)
+                .filter(jwtTokenProvider::isForCurrentTenant)
                 .orElseThrow(() -> new BadRequestException("Tu sesión expiró. Inicia sesión de nuevo."));
 
         User user = userRepository.findByEmail(claims.getSubject())

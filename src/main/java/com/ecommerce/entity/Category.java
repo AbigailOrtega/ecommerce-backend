@@ -9,12 +9,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "categories")
+@Table(name = "categories", uniqueConstraints = {@UniqueConstraint(name = "uk_categories_tenant_slug", columnNames = {"tenant_id", "slug"})})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Category {
+public class Category extends TenantScoped {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,7 +28,7 @@ public class Category {
 
     private String imageUrl;
 
-    @Column(unique = true)
+    @Column
     private String slug;
 
     /** false hides it from the store (menu, filters, product labels); the admin still uses it */

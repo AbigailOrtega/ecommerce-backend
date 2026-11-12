@@ -9,10 +9,11 @@ import lombok.*;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class StoreInfo {
+public class StoreInfo extends TenantScoped {
 
     @Id
-    private Long id = 1L;
+    /** Same as the store (tenant) id: one row per store. */
+    private Long id;
 
     private String name;
 

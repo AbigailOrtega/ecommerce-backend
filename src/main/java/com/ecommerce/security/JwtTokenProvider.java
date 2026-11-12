@@ -1,5 +1,6 @@
 package com.ecommerce.security;
 
+import com.ecommerce.tenant.TenantContext;
 import com.ecommerce.entity.User;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
@@ -56,6 +57,7 @@ public class JwtTokenProvider {
                 .claim("role", user.getRole() != null ? user.getRole().name() : "")
                 .claim("type", type)
                 .claim("pwd", passwordFingerprint(user))
+                .claim("tid", user.getTenantId() != null ? user.getTenantId() : TenantContext.current())
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expiration))
                 .signWith(getSigningKey())
@@ -86,6 +88,16 @@ public class JwtTokenProvider {
     public boolean isRefreshOrLegacyToken(Claims claims) {
         String type = claims.get("type", String.class);
         return type == null || TYPE_REFRESH.equals(type);
+    }
+
+    /**
+     * True when the token was issued by the store serving this request. Accounts are per store, so a
+     * session from one store must never open another. Tokens from before multi-tenancy are Marea's.
+     */
+    public boolean isForCurrentTenant(Claims claims) {
+        Object tid = claims.get("tid");
+        long issuedFor = tid instanceof Number n ? n.longValue() : TenantContext.DEFAULT_TENANT;
+        return issuedFor == TenantContext.current();
     }
 
     /** False once the user's password changed after the token was issued (legacy tokens have no fingerprint). */

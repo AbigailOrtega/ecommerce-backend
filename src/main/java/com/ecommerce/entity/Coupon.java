@@ -8,18 +8,18 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "coupons")
+@Table(name = "coupons", uniqueConstraints = {@UniqueConstraint(name = "uk_coupons_tenant_code", columnNames = {"tenant_id", "code"})})
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Coupon {
+public class Coupon extends TenantScoped {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false)
     private String code;
 
     @Column(nullable = false, precision = 5, scale = 2)

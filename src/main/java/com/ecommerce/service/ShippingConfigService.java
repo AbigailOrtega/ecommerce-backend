@@ -1,5 +1,6 @@
 package com.ecommerce.service;
 
+import com.ecommerce.tenant.TenantContext;
 import com.ecommerce.dto.request.ShippingConfigRequest;
 import com.ecommerce.dto.response.ShippingCalculateResponse;
 import com.ecommerce.dto.response.ShippingConfigAdminResponse;
@@ -30,8 +31,8 @@ public class ShippingConfigService {
 
     @Transactional
     public ShippingConfig getOrCreate() {
-        return repository.findById(1L).orElseGet(() -> {
-            ShippingConfig cfg = ShippingConfig.builder().id(1L).build();
+        return repository.findById(TenantContext.current()).orElseGet(() -> {
+            ShippingConfig cfg = ShippingConfig.builder().id(TenantContext.current()).build();
             return repository.save(cfg);
         });
     }

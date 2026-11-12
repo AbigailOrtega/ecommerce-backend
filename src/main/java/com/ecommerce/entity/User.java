@@ -13,12 +13,12 @@ import java.util.Collection;
 import java.util.List;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", uniqueConstraints = {@UniqueConstraint(name = "uk_users_tenant_email", columnNames = {"tenant_id", "email"})})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class User implements UserDetails {
+public class User extends TenantScoped implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -34,7 +34,7 @@ public class User implements UserDetails {
 
     @Email
     @NotBlank
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String email;
 
     @NotBlank

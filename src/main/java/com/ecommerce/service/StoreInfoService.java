@@ -1,5 +1,6 @@
 package com.ecommerce.service;
 
+import com.ecommerce.tenant.TenantContext;
 import com.ecommerce.dto.request.StoreInfoRequest;
 import com.ecommerce.dto.response.StoreInfoResponse;
 import com.ecommerce.entity.StoreImage;
@@ -23,8 +24,8 @@ public class StoreInfoService {
 
     @Transactional
     public StoreInfo getOrCreate() {
-        return storeInfoRepository.findById(1L).orElseGet(() -> {
-            StoreInfo info = StoreInfo.builder().id(1L).build();
+        return storeInfoRepository.findById(TenantContext.current()).orElseGet(() -> {
+            StoreInfo info = StoreInfo.builder().id(TenantContext.current()).build();
             return storeInfoRepository.save(info);
         });
     }

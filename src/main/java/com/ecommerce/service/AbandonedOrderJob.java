@@ -1,5 +1,8 @@
 package com.ecommerce.service;
 
+import com.ecommerce.tenant.TenantJobRunner;
+import org.springframework.beans.factory.annotation.Autowired;
+
 import com.ecommerce.entity.OrderStatus;
 import com.ecommerce.repository.OrderRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -49,7 +52,14 @@ public class AbandonedOrderJob {
     @Scheduled(initialDelayString = "${app.orders.abandoned.initial-delay:PT5M}",
                fixedDelayString = "${app.orders.abandoned.interval:PT10M}")
     public void scheduledRun() {
-        run();
+        TenantJobRunner.forEachActiveTenant(tenantJobRunner, this::run);
+    }
+
+    private TenantJobRunner tenantJobRunner;
+
+    @Autowired(required = false)
+    void setTenantJobRunner(TenantJobRunner tenantJobRunner) {
+        this.tenantJobRunner = tenantJobRunner;
     }
 
     public Map<PaymentService.AbandonedOutcome, Integer> run() {

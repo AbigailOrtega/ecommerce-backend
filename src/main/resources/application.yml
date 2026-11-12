@@ -45,6 +45,8 @@ spring:
       hibernate:
         # loads lazy collections (product colors → sizes, order items…) in batches instead of one query each
         default_batch_fetch_size: 50
+        # one database for every store: rows carry tenant_id and Hibernate filters by the current store
+        tenant_identifier_resolver: com.ecommerce.tenant.TenantIdentifierResolver
 
 # JWT Configuration
 app:

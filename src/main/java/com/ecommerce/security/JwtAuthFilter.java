@@ -40,6 +40,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // anonymous so protected endpoints answer 401 and the frontend refreshes.
             jwtTokenProvider.parseClaims(token)
                     .filter(jwtTokenProvider::isAccessToken)
+                    .filter(jwtTokenProvider::isForCurrentTenant)
                     .ifPresent(claims -> authenticate(claims, request));
         }
 

@@ -11,10 +11,11 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ShippingConfig {
+public class ShippingConfig extends TenantScoped {
 
     @Id
-    private Long id = 1L;
+    /** Same as the store (tenant) id: one row per store. */
+    private Long id;
 
     @Builder.Default
     private boolean nationalEnabled = true;

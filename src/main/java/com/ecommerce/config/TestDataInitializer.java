@@ -1,5 +1,6 @@
 package com.ecommerce.config;
 
+import com.ecommerce.tenant.TenantContext;
 import com.ecommerce.entity.*;
 import com.ecommerce.repository.CategoryRepository;
 import com.ecommerce.repository.OrderRepository;
@@ -118,8 +119,8 @@ public class TestDataInitializer implements ApplicationRunner {
     // ── Orders ────────────────────────────────────────────────────────────────
 
     private void seedShippingConfig() {
-        ShippingConfig cfg = shippingConfigRepository.findById(1L)
-                .orElse(ShippingConfig.builder().id(1L).build());
+        ShippingConfig cfg = shippingConfigRepository.findById(TenantContext.current())
+                .orElse(ShippingConfig.builder().id(TenantContext.current()).build());
         cfg.setPickupEnabled(true);
         shippingConfigRepository.save(cfg);
     }

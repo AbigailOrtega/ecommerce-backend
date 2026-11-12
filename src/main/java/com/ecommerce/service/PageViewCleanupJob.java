@@ -1,5 +1,7 @@
 package com.ecommerce.service;
 
+import com.ecommerce.tenant.TenantContext;
+
 import com.ecommerce.repository.PageViewRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,7 +44,8 @@ public class PageViewCleanupJob {
 
     @Scheduled(cron = "${app.analytics.page-views.cleanup-cron:0 30 3 * * *}")
     public void scheduledRun() {
-        run();
+        // one retention for every store
+        TenantContext.runAs(TenantContext.ROOT, this::run);
     }
 
     @Transactional
