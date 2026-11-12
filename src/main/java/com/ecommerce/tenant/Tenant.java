@@ -28,6 +28,9 @@ public class Tenant {
     @Column(nullable = false)
     private String name;
 
+    /** Where the store lives, e.g. "https://www.papeleria.com", for links in e-mails. Null: app.mail.frontend-url. */
+    private String baseUrl;
+
     @Enumerated(EnumType.STRING)
     @Builder.Default
     @Column(nullable = false, length = 20)

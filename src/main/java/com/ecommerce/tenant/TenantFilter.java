@@ -12,9 +12,10 @@ import java.io.IOException;
 
 /**
  * Picks the store for each request from the host the visitor used. Behind Vercel the request
- * reaches Render addressed to Render, so the visitor's host comes from X-Forwarded-Host.
+ * reaches Render addressed to Render, so the frontend sends the visitor's host in X-Store-Host on
+ * every API call (browser and server-side render); X-Forwarded-Host and Host are the fallbacks.
  *
- * <p>Trusting that header is safe: choosing a store only selects which public catalog is shown,
+ * <p>Trusting these headers is safe: choosing a store only selects which public catalog is shown,
  * the same as visiting that store's domain. Anything private is guarded by the login, and a
  * session token only works on the store that issued it (JwtAuthFilter).
  *
@@ -22,6 +23,7 @@ import java.io.IOException;
  */
 public class TenantFilter extends OncePerRequestFilter {
 
+    public static final String STORE_HOST = "X-Store-Host";
     public static final String FORWARDED_HOST = "X-Forwarded-Host";
 
     private final TenantResolver resolver;
@@ -34,7 +36,8 @@ public class TenantFilter extends OncePerRequestFilter {
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain chain) throws ServletException, IOException {
-        String host = request.getHeader(FORWARDED_HOST);
+        String host = request.getHeader(STORE_HOST);
+        if (host == null || host.isBlank()) host = request.getHeader(FORWARDED_HOST);
         if (host == null || host.isBlank()) host = request.getHeader(HttpHeaders.HOST);
         if (host == null || host.isBlank()) host = request.getServerName();
 
@@ -47,7 +50,7 @@ public class TenantFilter extends OncePerRequestFilter {
         }
 
         // Caches in front (Vercel) must keep one copy per store
-        response.addHeader(HttpHeaders.VARY, FORWARDED_HOST);
+        response.addHeader(HttpHeaders.VARY, STORE_HOST + ", " + FORWARDED_HOST);
         TenantContext.set(resolution.tenantId());
         try {
             chain.doFilter(request, response);

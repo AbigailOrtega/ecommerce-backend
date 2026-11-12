@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Two stores on one backend: each request belongs to the store of the host it came through
- * (X-Forwarded-Host behind Vercel), and nothing of one store can be seen or changed from another.
+ * (X-Store-Host, sent by the frontend), and nothing of one store can be seen or changed from another.
  * Marea is store #1, served for any host no store claims (localhost here).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -62,7 +62,7 @@ class TenantIsolationIT {
     private HttpHeaders headers(String host, String bearer) {
         HttpHeaders h = new HttpHeaders();
         h.setContentType(MediaType.APPLICATION_JSON);
-        if (host != null) h.set("X-Forwarded-Host", host);
+        if (host != null) h.set("X-Store-Host", host);
         if (bearer != null) h.setBearerAuth(bearer);
         return h;
     }
@@ -160,6 +160,17 @@ class TenantIsolationIT {
         assertThat(call(HttpMethod.POST, "/api/auth/login", null, null, new LoginRequest(email, "Cliente123!")).getStatusCode())
                 .isIn(HttpStatus.UNAUTHORIZED, HttpStatus.BAD_REQUEST);
         assertThat(call(HttpMethod.POST, "/api/auth/register", null, null, signup).getStatusCode()).isIn(HttpStatus.OK, HttpStatus.CREATED);
+    }
+
+    @Test
+    @DisplayName("without X-Store-Host the forwarded host still picks the store")
+    void forwardedHost() {
+        HttpHeaders h = new HttpHeaders();
+        h.set("X-Forwarded-Host", "www." + papeleria);
+        String login = "{\"email\":\"admin@test.com\",\"password\":\"Papeleria123!\"}";
+        h.setContentType(MediaType.APPLICATION_JSON);
+        assertThat(rest.exchange(url("/api/auth/login"), HttpMethod.POST, new HttpEntity<>(login, h), Map.class).getStatusCode())
+                .as("www. is the same store").isEqualTo(HttpStatus.OK);
     }
 
     @Test

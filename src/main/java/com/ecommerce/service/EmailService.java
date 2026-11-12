@@ -33,13 +33,34 @@ public class EmailService {
     @Value("${app.mail.frontend-url:http://localhost:4200}")
     private String frontendUrl;
 
+    private com.ecommerce.tenant.TenantRepository tenantRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setTenantRepository(com.ecommerce.tenant.TenantRepository tenantRepository) {
+        this.tenantRepository = tenantRepository;
+    }
+
+    /**
+     * The address of the store the e-mail is for (links, logo, unsubscribe). Stores without their
+     * own base URL (Marea) use app.mail.frontend-url. Runs on the async mail thread, which keeps the
+     * request's store (TenancyConfig's task decorator).
+     */
+    private String storeUrl() {
+        if (tenantRepository == null) return frontendUrl;
+        return tenantRepository.findById(com.ecommerce.tenant.TenantContext.current())
+                .map(com.ecommerce.tenant.Tenant::getBaseUrl)
+                .filter(url -> !url.isBlank())
+                .map(url -> url.replaceAll("/+$", ""))
+                .orElse(frontendUrl);
+    }
+
     @Async
     public void sendWelcomeEmail(User user) {
         try {
             Context context = new Context();
             context.setVariable("firstName", user.getFirstName());
             context.setVariable("email", user.getEmail());
-            context.setVariable("frontendUrl", frontendUrl);
+            context.setVariable("frontendUrl", storeUrl());
 
             String html = render("email/welcome", context);
             sendEmail(user.getEmail(), "¡Bienvenido a nuestra tienda!", html);
@@ -123,8 +144,8 @@ public class EmailService {
             Context context = new Context();
             context.setVariable("firstName", firstName);
             context.setVariable("setPasswordLink", setPasswordToken == null ? null
-                    : frontendUrl + "/reset-password?token=" + setPasswordToken + "&invite=1");
-            context.setVariable("adminLink", frontendUrl + "/admin");
+                    : storeUrl() + "/reset-password?token=" + setPasswordToken + "&invite=1");
+            context.setVariable("adminLink", storeUrl() + "/admin");
 
             String html = render("email/admin-invitation", context);
             sendEmail(email, "Ahora tienes acceso de admin", html);
@@ -139,7 +160,7 @@ public class EmailService {
         try {
             Context context = new Context();
             context.setVariable("firstName", firstName);
-            context.setVariable("resetLink", frontendUrl + "/reset-password?token=" + resetToken);
+            context.setVariable("resetLink", storeUrl() + "/reset-password?token=" + resetToken);
 
             String html = render("email/password-reset", context);
             sendEmail(email, "Restablecer tu contraseña", html);
@@ -160,7 +181,7 @@ public class EmailService {
             context.setVariable("pickupDate", pickupDate);
             context.setVariable("timeSlotLabel", timeSlotLabel);
             context.setVariable("reason", reason);
-            context.setVariable("frontendUrl", frontendUrl);
+            context.setVariable("frontendUrl", storeUrl());
             context.setVariable("pickupManageUrl", pickupManageUrl(orderNumber, manageToken));
 
             String html = render("email/pickup-reschedule", context);
@@ -181,7 +202,7 @@ public class EmailService {
             context.setVariable("locationName", locationName);
             context.setVariable("pickupDate", pickupDate);
             context.setVariable("timeSlotLabel", timeSlotLabel);
-            context.setVariable("frontendUrl", frontendUrl);
+            context.setVariable("frontendUrl", storeUrl());
             context.setVariable("pickupManageUrl", pickupManageUrl(orderNumber, manageToken));
 
             String html = render("email/pickup-rescheduled-confirmation", context);
@@ -199,7 +220,7 @@ public class EmailService {
             context.setVariable("firstName", firstName);
             context.setVariable("orderNumber", orderNumber);
             context.setVariable("shipmentId", shipmentId);
-            context.setVariable("adminUrl", frontendUrl);
+            context.setVariable("adminUrl", storeUrl());
 
             String html = render("email/label-pending", context);
             sendEmail(toEmail, "Acción requerida: guía pendiente — Pedido #" + orderNumber, html);
@@ -215,7 +236,7 @@ public class EmailService {
             Context context = new Context();
             context.setVariable("firstName", user.getFirstName());
             context.setVariable("order", order);
-            context.setVariable("frontendUrl", frontendUrl);
+            context.setVariable("frontendUrl", storeUrl());
 
             String html = render("email/shipment-tracking", context);
             sendEmail(user.getEmail(), "Tu pedido #" + order.getOrderNumber() + " está en camino", html);
@@ -231,7 +252,7 @@ public class EmailService {
             Context context = new Context();
             context.setVariable("firstName", firstName);
             context.setVariable("order", order);
-            context.setVariable("frontendUrl", frontendUrl);
+            context.setVariable("frontendUrl", storeUrl());
 
             String html = render("email/shipment-tracking", context);
             sendEmail(email, "Tu pedido #" + order.getOrderNumber() + " está en camino", html);
@@ -251,8 +272,8 @@ public class EmailService {
                 context.setVariable("firstName", user.getFirstName());
                 context.setVariable("bodyText", bodyText);
                 context.setVariable("hasImage", imageBytes != null && imageBytes.length > 0);
-                context.setVariable("unsubscribeUrl", frontendUrl + "/unsubscribe?token=" + user.getUnsubscribeToken());
-                context.setVariable("frontendUrl", frontendUrl);
+                context.setVariable("unsubscribeUrl", storeUrl() + "/unsubscribe?token=" + user.getUnsubscribeToken());
+                context.setVariable("frontendUrl", storeUrl());
 
                 String html = render("email/marketing", context);
 
@@ -277,7 +298,7 @@ public class EmailService {
         Context context = new Context();
         context.setVariable("firstName", "Test");
         context.setVariable("email", toEmail);
-        context.setVariable("frontendUrl", frontendUrl);
+        context.setVariable("frontendUrl", storeUrl());
 
         String html = render("email/welcome", context);
         sendEmail(toEmail, "Correo de prueba — " + storeName(), html);
@@ -287,7 +308,7 @@ public class EmailService {
     /** The page where the buyer reschedules or cancels a pickup; null without a token. */
     String pickupManageUrl(String orderNumber, String manageToken) {
         if (orderNumber == null || manageToken == null) return null;
-        return frontendUrl + "/recoleccion/" + orderNumber + "?t=" + manageToken;
+        return storeUrl() + "/recoleccion/" + orderNumber + "?t=" + manageToken;
     }
 
     /** Name shown when the store info has none (or cannot be read). */

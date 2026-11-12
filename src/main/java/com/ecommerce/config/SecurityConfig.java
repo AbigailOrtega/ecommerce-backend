@@ -66,6 +66,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/webhooks/paypal").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/marketing/unsubscribe").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/analytics/pageview").permitAll()
+                // the platform owner's API: authorized by PLATFORM_API_KEY in PlatformController, not by a store login
+                .requestMatchers("/api/platform/**").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 // Customers post reviews under /api/products; every other catalog write is admin-only
                 .requestMatchers(HttpMethod.POST, "/api/products/*/reviews").authenticated()
