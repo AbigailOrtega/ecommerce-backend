@@ -29,11 +29,15 @@ public class ShippingConfigService {
         this.skydropxService = skydropxService;
     }
 
-    @Transactional
+    /** The store's row, created on first use; a lost first-use race reads the winner's row (see StoreInfoService). */
     public ShippingConfig getOrCreate() {
-        return repository.findById(TenantContext.current()).orElseGet(() -> {
-            ShippingConfig cfg = ShippingConfig.builder().id(TenantContext.current()).build();
-            return repository.save(cfg);
+        long id = TenantContext.current();
+        return repository.findById(id).orElseGet(() -> {
+            try {
+                return repository.save(ShippingConfig.builder().id(id).build());
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                return repository.findById(id).orElseThrow(() -> e);
+            }
         });
     }
 

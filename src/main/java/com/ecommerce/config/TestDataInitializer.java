@@ -7,6 +7,8 @@ import com.ecommerce.repository.OrderRepository;
 import com.ecommerce.repository.PostalCodeRepository;
 import com.ecommerce.repository.ProductRepository;
 import com.ecommerce.repository.ShippingConfigRepository;
+import com.ecommerce.repository.StoreInfoRepository;
+import com.ecommerce.entity.StoreInfo;
 import com.ecommerce.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +50,7 @@ public class TestDataInitializer implements ApplicationRunner {
     private final CategoryRepository       categoryRepository;
     private final OrderRepository          orderRepository;
     private final ShippingConfigRepository shippingConfigRepository;
+    private final StoreInfoRepository      storeInfoRepository;
     private final PostalCodeRepository     postalCodeRepository;
 
     @Override
@@ -69,6 +72,7 @@ public class TestDataInitializer implements ApplicationRunner {
         log.info("[e2e] Test orders seeded");
 
         seedShippingConfig();
+        seedStoreInfo();
         seedPostalCodes();
         log.info("[e2e] Shipping config seeded");
     }
@@ -123,6 +127,14 @@ public class TestDataInitializer implements ApplicationRunner {
                 .orElse(ShippingConfig.builder().id(TenantContext.current()).build());
         cfg.setPickupEnabled(true);
         shippingConfigRepository.save(cfg);
+    }
+
+    /** The store has a name from the start (page titles read "Página | E2E Test Store"). */
+    private void seedStoreInfo() {
+        StoreInfo info = storeInfoRepository.findById(TenantContext.current())
+                .orElse(StoreInfo.builder().id(TenantContext.current()).build());
+        if (info.getName() == null) info.setName("E2E Test Store");
+        storeInfoRepository.save(info);
     }
 
     /** A few real codes from the SEPOMEX catalog (the e2e profile never downloads it). */

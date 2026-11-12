@@ -22,11 +22,18 @@ public class StoreInfoService {
     private final StoreImageRepository storeImageRepository;
     private final ImageCleanupService imageCleanupService;
 
-    @Transactional
+    /**
+     * The store's row, created on first use. Not one transaction: when two first requests race
+     * (the server-side render and the browser), the loser's insert fails and it reads the winner's row.
+     */
     public StoreInfo getOrCreate() {
-        return storeInfoRepository.findById(TenantContext.current()).orElseGet(() -> {
-            StoreInfo info = StoreInfo.builder().id(TenantContext.current()).build();
-            return storeInfoRepository.save(info);
+        long id = TenantContext.current();
+        return storeInfoRepository.findById(id).orElseGet(() -> {
+            try {
+                return storeInfoRepository.save(StoreInfo.builder().id(id).build());
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                return storeInfoRepository.findById(id).orElseThrow(() -> e);
+            }
         });
     }
 
