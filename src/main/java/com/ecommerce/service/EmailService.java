@@ -336,6 +336,22 @@ public class EmailService {
         }
     }
 
+    /**
+     * MAIL_FROM's address with the name of the store the e-mail is for, so a stationery shop's
+     * customers do not get mail signed "Marea Textiles". "Marea Textiles <pedidos@…>" → "Papelería Demo <pedidos@…>".
+     */
+    String sender() {
+        return withDisplayName(fromEmail, storeName());
+    }
+
+    static String withDisplayName(String from, String name) {
+        if (from == null || from.isBlank()) return from;
+        int lt = from.indexOf('<'), gt = from.indexOf('>');
+        String address = lt >= 0 && gt > lt ? from.substring(lt + 1, gt).trim() : from.trim();
+        String safeName = name == null ? "" : name.replaceAll("[\\r\\n\"<>\\\\]", "").trim();
+        return safeName.isEmpty() ? address : "\"" + safeName + "\" <" + address + ">";
+    }
+
     private void sendEmail(String to, String subject, String htmlContent) throws MessagingException {
         sendEmail(to, subject, htmlContent, null);
     }
@@ -344,12 +360,12 @@ public class EmailService {
     private void sendEmail(String to, String subject, String htmlContent,
                            ResendClient.InlineImage inlineImage) throws MessagingException {
         if (resendClient.isConfigured()) {
-            resendClient.send(fromEmail, to, subject, htmlContent, inlineImage);
+            resendClient.send(sender(), to, subject, htmlContent, inlineImage);
             return;
         }
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-        helper.setFrom(fromEmail);
+        helper.setFrom(sender());
         helper.setTo(to);
         helper.setSubject(subject);
         helper.setText(htmlContent, true);

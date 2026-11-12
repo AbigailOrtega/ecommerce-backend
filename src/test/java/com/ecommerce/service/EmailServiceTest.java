@@ -158,7 +158,8 @@ class EmailServiceTest {
             verify(mailSender).send(realMessage);
             // The from header must match the SMTP-authenticated account;
             // a mismatch causes Gmail to reject the message silently.
-            assertThat(realMessage.getFrom()[0].toString())
+            // (the display name is the store's: see EmailSenderNameTest)
+            assertThat(((jakarta.mail.internet.InternetAddress) realMessage.getFrom()[0]).getAddress())
                     .isEqualTo("tienda@gmail.com");
         }
 
@@ -396,7 +397,7 @@ class EmailServiceTest {
         void sendsThroughResend() {
             emailService.sendPasswordResetEmail("ana@example.com", "Ana", "tok");
 
-            verify(resendClient).send(eq("tienda@gmail.com"), eq("ana@example.com"),
+            verify(resendClient).send(eq("\"Marea\" <tienda@gmail.com>"), eq("ana@example.com"),
                     anyString(), eq("<html>ok</html>"), isNull());
             verifyNoInteractions(mailSender);
         }
@@ -408,7 +409,7 @@ class EmailServiceTest {
             emailService.sendMarketingEmailBulk(java.util.List.of(testUser), "Promo", "Hola", img, "image/png");
 
             ArgumentCaptor<ResendClient.InlineImage> captor = ArgumentCaptor.forClass(ResendClient.InlineImage.class);
-            verify(resendClient).send(eq("tienda@gmail.com"), eq("ana@example.com"), eq("Promo"),
+            verify(resendClient).send(eq("\"Marea\" <tienda@gmail.com>"), eq("ana@example.com"), eq("Promo"),
                     anyString(), captor.capture());
             assertThat(captor.getValue().contentId()).isEqualTo("promoImage");
             assertThat(captor.getValue().bytes()).isEqualTo(img);
