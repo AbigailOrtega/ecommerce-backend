@@ -52,13 +52,18 @@ public class TestDataInitializer implements ApplicationRunner {
     private final ShippingConfigRepository shippingConfigRepository;
     private final StoreInfoRepository      storeInfoRepository;
     private final PostalCodeRepository     postalCodeRepository;
+    private final com.ecommerce.platform.PlatformAdminRepository platformAdminRepository;
 
     @Override
     public void run(ApplicationArguments args) {
         createUserIfAbsent("Test", "User",  "test@test.com",  "Test123!",  Role.CUSTOMER);
         createUserIfAbsent("Test", "Admin", "admin@test.com", "Admin123!", Role.ADMIN);
-        createUserIfAbsent("Super", "Admin", "super@test.com", "Super123!", Role.SUPER_ADMIN);
-        log.info("[e2e] Test users seeded: test@test.com (CUSTOMER), admin@test.com (ADMIN), super@test.com (SUPER_ADMIN)");
+        log.info("[e2e] Test users seeded: test@test.com (CUSTOMER), admin@test.com (ADMIN)");
+        if (platformAdminRepository.findByEmailIgnoreCase("super@test.com").isEmpty()) {
+            platformAdminRepository.save(com.ecommerce.platform.PlatformAdmin.builder()
+                    .email("super@test.com").password(passwordEncoder.encode("Super123!")).build());
+            log.info("[e2e] Platform super admin seeded: super@test.com");
+        }
 
         Category ropa    = createCategoryIfAbsent("Ropa",     "ropa");
         Category calzado = createCategoryIfAbsent("Calzado",  "calzado");

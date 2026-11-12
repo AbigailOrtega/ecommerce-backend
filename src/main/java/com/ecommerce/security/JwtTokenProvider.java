@@ -27,6 +27,9 @@ public class JwtTokenProvider {
 
     public static final String TYPE_ACCESS = "access";
     public static final String TYPE_REFRESH = "refresh";
+    /** A super admin's session on the platform's domain: never accepted by a store (JwtAuthFilter wants "access"). */
+    public static final String TYPE_PLATFORM = "platform";
+    private static final long PLATFORM_TOKEN_EXPIRATION_MS = 8L * 60 * 60 * 1000;
 
     @Value("${app.jwt.secret}")
     private String jwtSecret;
@@ -62,6 +65,30 @@ public class JwtTokenProvider {
                 .expiration(new Date(now.getTime() + expiration))
                 .signWith(getSigningKey())
                 .compact();
+    }
+
+    /** A super admin's session (8 hours); it ends early when the password changes. */
+    public String generatePlatformToken(String email, String passwordHash) {
+        Date now = new Date();
+        return Jwts.builder()
+                .subject(email)
+                .claim("type", TYPE_PLATFORM)
+                .claim("pwd", fingerprint(passwordHash))
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + PLATFORM_TOKEN_EXPIRATION_MS))
+                .signWith(getSigningKey())
+                .compact();
+    }
+
+    public boolean isPlatformToken(Claims claims) {
+        return TYPE_PLATFORM.equals(claims.get("type", String.class));
+    }
+
+    /** Whether a platform token was issued for the password the account has now. */
+    public boolean isCurrentForPassword(Claims claims, String passwordHash) {
+        String pwd = claims.get("pwd", String.class);
+        return pwd != null && MessageDigest.isEqual(pwd.getBytes(StandardCharsets.UTF_8),
+                fingerprint(passwordHash).getBytes(StandardCharsets.UTF_8));
     }
 
     /** Claims of a correctly signed, unexpired token; empty otherwise. */
@@ -110,7 +137,11 @@ public class JwtTokenProvider {
     }
 
     private static String passwordFingerprint(User user) {
-        String hash = user.getPassword() != null ? user.getPassword() : "";
+        return fingerprint(user.getPassword());
+    }
+
+    private static String fingerprint(String passwordHash) {
+        String hash = passwordHash != null ? passwordHash : "";
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(hash.getBytes(StandardCharsets.UTF_8));
             return Base64.getUrlEncoder().withoutPadding().encodeToString(digest).substring(0, 16);

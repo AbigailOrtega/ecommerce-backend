@@ -170,6 +170,21 @@ public class EmailService {
         }
     }
 
+    /** A super admin's link to set (or reset) the platform password: from the platform, not a store. */
+    @Async
+    public void sendPlatformPasswordEmail(String email, String link) {
+        try {
+            Context context = new Context();
+            context.setVariable("firstName", "");
+            context.setVariable("resetLink", link);
+            String html = render("email/password-reset", context);
+            sendEmailAs(withDisplayName(fromEmail, "Plataforma de tiendas"), email, "Tu contraseña de la plataforma", html, null);
+            log.info("Platform password email sent to: {}", email);
+        } catch (Exception e) {
+            log.error("Failed to send platform password email to: {}", email, e);
+        }
+    }
+
     @Async
     public void sendPickupRescheduleEmail(String toEmail, String firstName, String orderNumber,
             String locationName, LocalDate pickupDate, String timeSlotLabel, String reason, String manageToken) {
@@ -359,13 +374,18 @@ public class EmailService {
     // Resend (HTTPS) when RESEND_API_KEY is set, because Render's free plan blocks SMTP; SMTP otherwise.
     private void sendEmail(String to, String subject, String htmlContent,
                            ResendClient.InlineImage inlineImage) throws MessagingException {
+        sendEmailAs(sender(), to, subject, htmlContent, inlineImage);
+    }
+
+    private void sendEmailAs(String from, String to, String subject, String htmlContent,
+                             ResendClient.InlineImage inlineImage) throws MessagingException {
         if (resendClient.isConfigured()) {
-            resendClient.send(sender(), to, subject, htmlContent, inlineImage);
+            resendClient.send(from, to, subject, htmlContent, inlineImage);
             return;
         }
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-        helper.setFrom(sender());
+        helper.setFrom(from);
         helper.setTo(to);
         helper.setSubject(subject);
         helper.setText(htmlContent, true);

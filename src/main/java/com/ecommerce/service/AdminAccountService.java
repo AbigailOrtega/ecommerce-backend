@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,7 +34,7 @@ public class AdminAccountService {
     /** Makes {@code email} admin, but only while the store has none. Returns whether it did. */
     @Transactional
     public boolean bootstrap(String email) {
-        if (adminCount() > 0) return false;
+        if (userRepository.countByRole(Role.ADMIN) > 0) return false;
         makeAdmin(normalize(email), "Admin", "Tienda");
         log.info("First admin set up from ADMIN_EMAIL: {}", normalize(email));
         return true;
@@ -49,7 +48,7 @@ public class AdminAccountService {
     public User invite(String email, String firstName, String lastName, String invitedBy) {
         String normalized = normalize(email);
         userRepository.findFirstByEmailIgnoreCase(normalized)
-                .filter(u -> u.getRole().isStoreAdmin())
+                .filter(u -> u.getRole() == Role.ADMIN)
                 .ifPresent(u -> { throw new BadRequestException("Esta cuenta ya es admin"); });
         User user = makeAdmin(normalized, firstName, lastName);
         log.info("Admin access granted to {} by {}", normalized, invitedBy);
@@ -63,7 +62,7 @@ public class AdminAccountService {
     @Transactional
     public User inviteOrResend(String email, String firstName, String lastName) {
         String normalized = normalize(email);
-        Optional<User> admin = userRepository.findFirstByEmailIgnoreCase(normalized).filter(u -> u.getRole().isStoreAdmin());
+        Optional<User> admin = userRepository.findFirstByEmailIgnoreCase(normalized).filter(u -> u.getRole() == Role.ADMIN);
         if (admin.isEmpty()) return makeAdmin(normalized, firstName, lastName);
         User user = admin.get();
         String token = UUID.randomUUID().toString();
@@ -80,16 +79,13 @@ public class AdminAccountService {
     public User revoke(Long userId, String revokedBy) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
-        if (user.getRole() == Role.SUPER_ADMIN) {
-            throw new BadRequestException("El super admin no se quita desde aquí");
-        }
         if (user.getRole() != Role.ADMIN) {
             throw new BadRequestException("Esta cuenta no es admin");
         }
         if (user.getEmail().equalsIgnoreCase(revokedBy)) {
             throw new BadRequestException("No puedes quitarte el acceso de admin a ti misma(o)");
         }
-        if (adminCount() <= 1) {
+        if (userRepository.countByRole(Role.ADMIN) <= 1) {
             throw new BadRequestException("La tienda necesita al menos un admin");
         }
         user.setRole(Role.CUSTOMER);
@@ -123,10 +119,6 @@ public class AdminAccountService {
         userRepository.save(user);
         emailService.sendAdminInvitationEmail(user.getEmail(), user.getFirstName(), token);
         return user;
-    }
-
-    private long adminCount() {
-        return userRepository.countByRole(Role.ADMIN) + userRepository.countByRole(Role.SUPER_ADMIN);
     }
 
     private static String normalize(String email) {

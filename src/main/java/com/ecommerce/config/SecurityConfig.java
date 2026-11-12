@@ -66,7 +66,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/webhooks/paypal").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/marketing/unsubscribe").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/analytics/pageview").permitAll()
-                // the platform's API: PlatformController answers 404 off the platform's domain, then requires a super admin
+                // the platform's API: 404 off the platform's domain; its own super admin sessions (PlatformAuthService), not a store's
                 .requestMatchers("/api/platform/**").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 // Customers post reviews under /api/products; every other catalog write is admin-only
