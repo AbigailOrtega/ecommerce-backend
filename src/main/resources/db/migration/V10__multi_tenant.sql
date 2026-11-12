@@ -44,17 +44,48 @@ BEGIN
     END LOOP;
 END $$;
 
--- Slugs, SKUs, coupon codes and e-mails only need to be unique within a store
-ALTER TABLE categories DROP CONSTRAINT categories_slug_key;
+-- Slugs, SKUs, coupon codes and e-mails only need to be unique within a store. The old one-column
+-- unique constraints are found by column, not by name: databases first built by Hibernate named
+-- them uk_<hash>, the baseline <table>_<column>_key.
+DO $$
+DECLARE
+    target record;
+    c record;
+BEGIN
+    FOR target IN SELECT * FROM (VALUES
+        ('categories', 'slug'), ('coupons', 'code'), ('products', 'sku'), ('products', 'slug'), ('users', 'email')
+    ) AS v(tbl, col) LOOP
+        -- unique constraints on exactly that column
+        FOR c IN
+            SELECT con.conname
+            FROM pg_constraint con
+            JOIN pg_class rel ON rel.oid = con.conrelid
+            JOIN pg_namespace ns ON ns.oid = rel.relnamespace AND ns.nspname = current_schema()
+            JOIN pg_attribute att ON att.attrelid = rel.oid AND att.attnum = con.conkey[1]
+            WHERE con.contype = 'u' AND rel.relname = target.tbl
+              AND array_length(con.conkey, 1) = 1 AND att.attname = target.col
+        LOOP
+            EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', target.tbl, c.conname);
+        END LOOP;
+        -- and plain unique indexes on it (not backing a constraint)
+        FOR c IN
+            SELECT idx.relname
+            FROM pg_index i
+            JOIN pg_class idx ON idx.oid = i.indexrelid
+            JOIN pg_class rel ON rel.oid = i.indrelid
+            JOIN pg_namespace ns ON ns.oid = rel.relnamespace AND ns.nspname = current_schema()
+            JOIN pg_attribute att ON att.attrelid = rel.oid AND att.attnum = i.indkey[0]
+            WHERE i.indisunique AND NOT i.indisprimary AND rel.relname = target.tbl
+              AND i.indnatts = 1 AND att.attname = target.col
+              AND NOT EXISTS (SELECT 1 FROM pg_constraint con WHERE con.conindid = i.indexrelid)
+        LOOP
+            EXECUTE format('DROP INDEX %I', c.relname);
+        END LOOP;
+    END LOOP;
+END $$;
+
 ALTER TABLE categories ADD CONSTRAINT uk_categories_tenant_slug UNIQUE (tenant_id, slug);
-
-ALTER TABLE coupons DROP CONSTRAINT coupons_code_key;
 ALTER TABLE coupons ADD CONSTRAINT uk_coupons_tenant_code UNIQUE (tenant_id, code);
-
-ALTER TABLE products DROP CONSTRAINT products_sku_key;
 ALTER TABLE products ADD CONSTRAINT uk_products_tenant_sku UNIQUE (tenant_id, sku);
-ALTER TABLE products DROP CONSTRAINT products_slug_key;
 ALTER TABLE products ADD CONSTRAINT uk_products_tenant_slug UNIQUE (tenant_id, slug);
-
-ALTER TABLE users DROP CONSTRAINT users_email_key;
 ALTER TABLE users ADD CONSTRAINT uk_users_tenant_email UNIQUE (tenant_id, email);

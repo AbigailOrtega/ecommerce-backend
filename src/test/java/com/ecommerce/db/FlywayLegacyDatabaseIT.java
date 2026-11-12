@@ -39,6 +39,12 @@ class FlywayLegacyDatabaseIT {
         jdbc.execute("ALTER TABLE orders DROP CONSTRAINT orders_status_check");
         jdbc.execute("ALTER TABLE orders ADD CONSTRAINT orders_status_check CHECK (status IN ('PENDING', 'CONFIRMED'))");
         jdbc.execute("DROP INDEX idx_orders_user_id");
+        // Hibernate named its unique constraints uk_<hash> (prod), not V1's <table>_<column>_key
+        jdbc.execute("ALTER TABLE categories RENAME CONSTRAINT categories_slug_key TO ukoa77yh4ckm4cq1enqgdlhxbg1");
+        jdbc.execute("ALTER TABLE users RENAME CONSTRAINT users_email_key TO uk6dotkott2kjsp8vw4d0m25fb7");
+        jdbc.execute("ALTER TABLE products DROP CONSTRAINT products_slug_key");
+        jdbc.execute("CREATE UNIQUE INDEX ukostq1ec3toafnjok09y9l7dox ON products (slug)");
+        jdbc.update("INSERT INTO categories (id, name, slug) VALUES (1, 'Faldas', 'faldas')");
         // an order placed at 12:00 in Mexico City, stored by the UTC server as 18:00
         jdbc.update("INSERT INTO orders (id, order_number, status, total_amount, pickup_cancelled, shipping_address, "
                 + "shipping_city, shipping_state, shipping_zip_code, shipping_country, created_at, updated_at) "
@@ -56,5 +62,14 @@ class FlywayLegacyDatabaseIT {
         assertThatNoException().isThrownBy(() -> jdbc.update("UPDATE orders SET status = 'SHIPMENT_PENDING' WHERE id = 1"));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM pg_indexes WHERE indexname = 'idx_orders_user_id'", Integer.class))
                 .isEqualTo(1);
+        // V10: existing rows are store #1's; slugs and e-mails are unique per store whatever the old names were
+        assertThat(jdbc.queryForObject("SELECT tenant_id FROM categories WHERE id = 1", Long.class)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("SELECT tenant_id FROM orders WHERE id = 1", Long.class)).isEqualTo(1L);
+        jdbc.update("INSERT INTO tenants (id, slug, name) VALUES (2, 'papeleria', 'Papelería')");
+        assertThatNoException().as("same slug in another store")
+                .isThrownBy(() -> jdbc.update("INSERT INTO categories (id, name, slug, tenant_id) VALUES (2, 'Faldas', 'faldas', 2)"));
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> jdbc.update("INSERT INTO categories (id, name, slug, tenant_id) VALUES (3, 'Otra', 'faldas', 1)"))
+                .as("same slug in the same store").isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 }
