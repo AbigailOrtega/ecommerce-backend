@@ -67,7 +67,14 @@ public class TenantResolver {
                     ? Resolution.of(tenant.getId())
                     : Resolution.fail(STORE_SUSPENDED, "Esta tienda no está disponible por el momento");
         }
-        if (defaultTenantId != null) return Resolution.of(defaultTenantId);
+        if (defaultTenantId != null) {
+            // local fallback (production has none): a suspended default store is off here too
+            Optional<Tenant> fallback = tenantRepository.findById(defaultTenantId);
+            if (fallback.isPresent() && fallback.get().getStatus() != Tenant.Status.ACTIVE) {
+                return Resolution.fail(STORE_SUSPENDED, "Esta tienda no está disponible por el momento");
+            }
+            return Resolution.of(defaultTenantId);
+        }
         return Resolution.fail(STORE_NOT_FOUND, "Tienda no encontrada");
     }
 

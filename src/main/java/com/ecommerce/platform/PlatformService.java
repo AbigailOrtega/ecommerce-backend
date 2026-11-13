@@ -96,9 +96,6 @@ public class PlatformService {
     }
 
     public StoreSummary setStatus(Long id, Tenant.Status status) {
-        if (id == TenantContext.DEFAULT_TENANT && status == Tenant.Status.SUSPENDED) {
-            throw new BadRequestException("La tienda #1 no se puede suspender");
-        }
         Tenant tenant = tenantRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Store", "id", id));
         tenant.setStatus(status);
         tenantRepository.save(tenant);

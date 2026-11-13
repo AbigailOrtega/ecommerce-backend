@@ -50,7 +50,8 @@ spring:
 
 # JWT Configuration
 app:
-  # one backend for every store (see com.ecommerce.tenant): hosts no store claims are served as this one
+  # one backend for every store (see com.ecommerce.tenant): hosts no store claims are served as this
+  # one locally (localhost); production sets none, so a domain no store claims gets "Tienda no encontrada"
   tenancy:
     default-tenant-id: ${DEFAULT_TENANT_ID:1}
   # encrypts each store's Stripe/PayPal/Skydropx secrets in the database (openssl rand -base64 32)
@@ -297,6 +298,9 @@ springdoc:
 
 
 app:
+  # every store, Marea too, only on its own domains (tenant_domains): no store for unknown hosts
+  tenancy:
+    default-tenant-id: ${DEFAULT_TENANT_ID:0}
   rate-limit:
     # client IP header confirmed (see ClientIp); per-IP limits on unless RATE_LIMIT_PER_IP_ENABLED=false
     per-ip-enabled: ${RATE_LIMIT_PER_IP_ENABLED:true}

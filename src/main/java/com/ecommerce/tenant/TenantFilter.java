@@ -43,6 +43,11 @@ public class TenantFilter extends OncePerRequestFilter {
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain chain) throws ServletException, IOException {
+        if (request.getRequestURI().startsWith("/actuator/")) {
+            // health checks come straight to the server, addressed to no store
+            chain.doFilter(request, response);
+            return;
+        }
         String host = requestHost(request);
         if (!platformHost.isEmpty() && platformHost.equals(host) && !request.getRequestURI().startsWith("/api/platform/")) {
             // the platform's domain is no store (not even #1): a store's API does not exist there

@@ -36,7 +36,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Two stores on one backend: each request belongs to the store of the host it came through
  * (X-Store-Host, sent by the frontend), and nothing of one store can be seen or changed from another.
- * Marea is store #1, served for any host no store claims (localhost here).
+ * Marea is store #1, served locally for any host no store claims (localhost here; production has
+ * no such fallback).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
@@ -184,5 +185,27 @@ class TenantIsolationIT {
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(String.valueOf(res.getBody())).contains("no está disponible");
         assertThat(res.getBody()).containsEntry("code", "STORE_SUSPENDED"); // the frontend shows its "not available" page on it
+    }
+
+    @Test
+    @DisplayName("Marea (#1) can be suspended like any store; health checks still answer")
+    void suspendedDefaultStore() {
+        Tenant marea = tenantRepository.findById(TenantContext.DEFAULT_TENANT).orElseThrow();
+        marea.setStatus(Tenant.Status.SUSPENDED);
+        tenantRepository.save(marea);
+        tenantResolver.evictAll();
+        try {
+            ResponseEntity<Map> res = call(HttpMethod.GET, "/api/products", null, null, null);
+            assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(res.getBody()).containsEntry("code", "STORE_SUSPENDED");
+
+            assertThat(call(HttpMethod.GET, "/actuator/health", "nobody-" + tag + ".test", null, null).getStatusCode())
+                    .as("health checks are addressed to no store").isEqualTo(HttpStatus.OK);
+        } finally {
+            marea.setStatus(Tenant.Status.ACTIVE);
+            tenantRepository.save(marea);
+            tenantResolver.evictAll();
+        }
+        assertThat(call(HttpMethod.GET, "/api/products", null, null, null).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 }
