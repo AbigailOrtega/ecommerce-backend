@@ -20,10 +20,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class TenantResolver {
 
-    /** What a host resolves to: a store id, or empty with the reason. */
-    public record Resolution(Long tenantId, String error) {
-        static Resolution of(long id) { return new Resolution(id, null); }
-        static Resolution fail(String error) { return new Resolution(null, error); }
+    /** Why a host has no store, for the frontend to tell apart (a suspended store shows its own page). */
+    public static final String STORE_SUSPENDED = "STORE_SUSPENDED";
+    public static final String STORE_NOT_FOUND = "STORE_NOT_FOUND";
+
+    /** What a host resolves to: a store id, or empty with a code and the reason. */
+    public record Resolution(Long tenantId, String code, String error) {
+        static Resolution of(long id) { return new Resolution(id, null, null); }
+        static Resolution fail(String code, String error) { return new Resolution(null, code, error); }
         public boolean ok() { return tenantId != null; }
     }
 
@@ -61,10 +65,10 @@ public class TenantResolver {
             Tenant tenant = match.get().getTenant();
             return tenant.getStatus() == Tenant.Status.ACTIVE
                     ? Resolution.of(tenant.getId())
-                    : Resolution.fail("Esta tienda no está disponible por el momento");
+                    : Resolution.fail(STORE_SUSPENDED, "Esta tienda no está disponible por el momento");
         }
         if (defaultTenantId != null) return Resolution.of(defaultTenantId);
-        return Resolution.fail("Tienda no encontrada");
+        return Resolution.fail(STORE_NOT_FOUND, "Tienda no encontrada");
     }
 
     /** Forgets cached lookups, e.g. after a domain is added or a store suspended. */

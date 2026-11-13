@@ -183,5 +183,6 @@ class TenantIsolationIT {
         ResponseEntity<Map> res = call(HttpMethod.GET, "/api/products", papeleria, null, null);
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(String.valueOf(res.getBody())).contains("no está disponible");
+        assertThat(res.getBody()).containsEntry("code", "STORE_SUSPENDED"); // the frontend shows its "not available" page on it
     }
 }

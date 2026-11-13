@@ -55,7 +55,8 @@ public class TenantFilter extends OncePerRequestFilter {
         if (!resolution.ok()) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write("{\"success\":false,\"message\":\"" + resolution.error() + "\"}");
+            response.getWriter().write("{\"success\":false,\"code\":\"" + resolution.code()
+                    + "\",\"message\":\"" + resolution.error() + "\"}");
             return;
         }
 
